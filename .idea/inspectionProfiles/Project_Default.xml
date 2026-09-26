@@ -1,0 +1,44 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="JavadocDeclaration" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ADDITIONAL_TAGS" value="date" />
+    </inspection_tool>
+    <inspection_tool class="VulnerableLibrariesLocal" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="isIgnoringEnabled" value="true" />
+      <option name="ignoredModules">
+        <list>
+          <option value="order-service" />
+          <option value="order-service" />
+          <option value="order-service" />
+          <option value="gateway-service" />
+          <option value="gateway-service" />
+          <option value="gateway-service" />
+          <option value="gateway-service" />
+        </list>
+      </option>
+      <option name="ignoredPackages">
+        <list>
+          <option value="org.springframework:spring-web:6.2.11" />
+          <option value="org.springframework.boot:spring-boot-autoconfigure:3.5.6" />
+          <option value="org.apache.commons:commons-lang3:3.17.0" />
+          <option value="com.fasterxml.jackson.core:jackson-core:2.19.2" />
+          <option value="org.apache.tomcat.embed:tomcat-embed-core:10.1.46" />
+          <option value="org.springframework:spring-webmvc:6.2.11" />
+          <option value="org.bouncycastle:bcprov-jdk18on:1.80" />
+        </list>
+      </option>
+      <option name="ignoredReasons">
+        <list>
+          <option value="不可利用" />
+          <option value="进行中" />
+          <option value="其他" />
+          <option value="不可利用" />
+          <option value="进行中" />
+          <option value="进行中" />
+          <option value="不可利用" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

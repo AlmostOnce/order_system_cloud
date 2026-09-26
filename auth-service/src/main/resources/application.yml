@@ -1,0 +1,72 @@
+server:
+  # 认证服务端口。
+  port: 8084
+
+# 启用 Sentinel 对 OpenFeign 的熔断降级适配，使 FeignClient 上配置的 FallbackFactory 生效。
+feign:
+  sentinel:
+    enabled: true
+
+spring:
+  application:
+    # 注册到 Nacos 的服务名称。
+    name: auth-service
+
+  cloud:
+    nacos:
+      discovery:
+        # Nacos 服务地址。
+        server-addr: 127.0.0.1:8850
+
+        # Nacos 登录账号。
+        username: nacos
+
+        # Nacos 登录密码。
+        password: root
+
+  data:
+    redis:
+      # IDEA 本机启动时连接本机 Redis；Docker 启动时可通过 REDIS_HOST 改为 redis。
+      host: ${REDIS_HOST:127.0.0.1}
+
+      # Redis 默认端口。
+      port: ${REDIS_PORT:6379}
+
+      # Redis 密码，优先读取环境变量，冒号后为本机开发默认值。
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+
+      # 当前开发环境使用 Redis 的 0 号逻辑库。
+      database: 0
+
+      # Redis 连接超时时间。
+      connect-timeout: 2s
+
+      # Redis 命令执行超时时间。
+      timeout: 2s
+
+security:
+  jwt:
+    # JWT 签发方。
+    issuer: "http://localhost:8084"
+
+    # RSA 密钥编号。
+    key-id: "order-system-rsa-key-2026"
+
+    # RSA 私钥路径。
+    private-key-location: "file:/home/user/.config/order-system/keys/jwt-private.pem"
+
+    # RSA 公钥路径。
+    public-key-location: "file:/home/user/.config/order-system/keys/jwt-public.pem"
+
+    # Refresh Token 有效期，单位为秒，当前为 30 天。
+    refresh-token-ttl-seconds: 2592000
+
+    # Access Token 黑名单 Key 前缀，认证服务、Gateway 和业务服务必须保持一致。
+    blacklist-key-prefix: "auth:access-token:blacklist:"
+
+management:
+  endpoints:
+    web:
+      # 暴露健康检查接口。
+      exposure:
+        include: health,info

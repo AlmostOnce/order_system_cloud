@@ -1,0 +1,88 @@
+feign:
+  sentinel:
+    # 开启 OpenFeign 的 Sentinel 支持。
+    enabled: true
+
+server:
+  port: 8081
+
+spring:
+  data:
+    redis:
+      # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3307/order_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: order_user
+    password: order_password_dev_2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  application:
+    name: order-service
+
+  cloud:
+    sentinel:
+      datasource:
+        degrade:
+          nacos:
+            # Nacos API 地址。
+            server-addr: 127.0.0.1:8850
+
+            # Nacos 登录账号。
+            username: nacos
+
+            # Nacos 登录密码。
+            password: root
+
+            # Nacos 配置 Data ID。
+            data-id: order-service-degrade-rules
+
+            # Nacos 配置分组。
+            group-id: SENTINEL_GROUP
+
+            # 规则格式。
+            data-type: json
+
+            # 规则类型。
+            rule-type: degrade
+      enabled: true
+      eager: true
+      transport:
+        # Sentinel Dashboard 地址。
+        dashboard: 127.0.0.1:8858
+
+        # 当前订单服务与 Dashboard 通信的端口。
+        port: 8719
+    openfeign:
+      client:
+        config:
+          default:
+            # 建立连接超时时间，单位：毫秒。
+            connectTimeout: 2000
+
+            # 等待远程服务响应超时时间，单位：毫秒。
+            readTimeout: 3000
+
+            # 开发环境记录基本调用日志。
+            loggerLevel: basic
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8850
+        username: nacos
+        password: root
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+security:
+  jwt:
+    issuer: http://localhost:8084
+    public-key-location: file:/home/user/.config/order-system/keys/jwt-public.pem
+    blacklist-key-prefix: "auth:access-token:blacklist:"

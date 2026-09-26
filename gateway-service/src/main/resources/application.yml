@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service
+
+  data:
+    redis:
+      # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+  config:
+    import: optional:nacos:gateway-service.yaml
+
+  cloud:
+    nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:change-me-after-nacos-initialization}
+
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
+        enabled: true
+        username: ${spring.cloud.nacos.username}
+        password: ${spring.cloud.nacos.password}
+
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
+        username: ${spring.cloud.nacos.username}
+        password: ${spring.cloud.nacos.password}
+
+gateway:
+  rate-limit:
+    login:
+      # 每秒向令牌桶补充 1 个令牌。
+      replenish-rate: 1
+      # 令牌桶最多保存 50 个令牌。
+      burst-capacity: 50
+      # 每次登录请求消耗 10 个令牌：允许短时连续 5 次，之后平均每 10 秒 1 次。
+      requested-tokens: 10
+
+security:
+  jwt:
+    issuer: http://localhost:8084
+    public-key-location: file:/home/user/.config/order-system/keys/jwt-public.pem
+    blacklist-key-prefix: "auth:access-token:blacklist:"

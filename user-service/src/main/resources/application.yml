@@ -1,0 +1,33 @@
+server:
+  # 用户服务端口。
+  port: 8083
+
+spring:
+  datasource:
+    # 用户服务只连接自己的数据库。
+    url: jdbc:mysql://127.0.0.1:3307/user_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: user_service
+    password: user_password_dev_2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  application:
+    # 注册到 Nacos 的服务名称。
+    name: user-service
+
+  cloud:
+    nacos:
+      discovery:
+        # 本项目 Nacos 服务地址。
+        server-addr: 127.0.0.1:8850
+
+        # Nacos 登录账号。
+        username: nacos
+
+        # Nacos 登录密码。
+        password: root
+
+management:
+  endpoints:
+    web:
+      # 暴露健康检查接口。
+      exposure:
+        include: health,info
