@@ -2,8 +2,10 @@ package com.hbue.ordering.order.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
+import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 
 import java.util.List;
@@ -48,6 +50,27 @@ public interface OrderService extends IService<OrderDO> {
             Long userId,
             String idempotencyKey,
             OrderCreateRequest request
+    );
+
+    /**
+     * 顾客取消自己尚未支付的订单。
+     *
+     * @param userId 当前登录顾客 ID
+     * @param orderId 订单 ID
+     * @return 订单状态变更结果
+     */
+    OrderStatusVO cancelOrder(Long userId, Long orderId);
+
+    /**
+     * 管理员按合法履约顺序推进订单状态。
+     *
+     * @param orderId 订单 ID
+     * @param targetStatus 目标状态
+     * @return 订单状态变更结果
+     */
+    OrderStatusVO updateStatusByAdmin(
+            Long orderId,
+            OrderStatus targetStatus
     );
 
 

@@ -6,6 +6,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -45,5 +46,30 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
     OrderDO selectByUserIdAndIdempotencyKey(
             @Param("userId") Long userId,
             @Param("idempotencyKey") String idempotencyKey
+    );
+
+    /**
+     * 使用旧状态和乐观锁版本号原子更新订单状态。
+     *
+     * @param orderId 订单 ID
+     * @param expectedStatus 读取时的原状态
+     * @param expectedVersion 读取时的版本号
+     * @param targetStatus 目标状态
+     * @return 更新行数；未匹配到原状态或版本时返回 0
+     */
+    @Update("""
+            UPDATE orders
+            SET status = #{targetStatus},
+                updated_at = CURRENT_TIMESTAMP,
+                version = version + 1
+            WHERE order_id = #{orderId}
+              AND status = #{expectedStatus}
+              AND version = #{expectedVersion}
+            """)
+    int updateStatusIfVersionMatches(
+            @Param("orderId") Long orderId,
+            @Param("expectedStatus") String expectedStatus,
+            @Param("expectedVersion") Integer expectedVersion,
+            @Param("targetStatus") String targetStatus
     );
 }

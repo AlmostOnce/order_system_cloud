@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,6 +81,64 @@ class OrderPersistenceServiceTest {
 
         assertEquals(CommonErrorCode.INTERNAL_ERROR.code(), exception.getErrorCode().code());
         verify(orderItemMapper, never()).insert(any(OrderItemDO.class));
+    }
+
+    /**
+     * 订单状态更新必须按订单 ID、旧状态和版本号执行条件更新。
+     */
+    @Test
+    void shouldUpdateStatusOnlyWhenCurrentStatusAndVersionMatch() {
+        when(orderMapper.updateStatusIfVersionMatches(
+                81L,
+                "待支付",
+                3,
+                "已取消"
+        )).thenReturn(1);
+        OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
+                orderMapper,
+                orderItemMapper
+        );
+
+        boolean updated = persistenceService.updateStatusIfUnchanged(
+                81L,
+                "待支付",
+                3,
+                "已取消"
+        );
+
+        assertTrue(updated);
+        verify(orderMapper).updateStatusIfVersionMatches(
+                81L,
+                "待支付",
+                3,
+                "已取消"
+        );
+    }
+
+    /**
+     * 条件更新未命中时必须报告失败，供业务层返回并发冲突。
+     */
+    @Test
+    void shouldReportStatusUpdateConflictWhenNoRowMatches() {
+        when(orderMapper.updateStatusIfVersionMatches(
+                81L,
+                "待支付",
+                3,
+                "已取消"
+        )).thenReturn(0);
+        OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
+                orderMapper,
+                orderItemMapper
+        );
+
+        boolean updated = persistenceService.updateStatusIfUnchanged(
+                81L,
+                "待支付",
+                3,
+                "已取消"
+        );
+
+        assertFalse(updated);
     }
 
     @Test

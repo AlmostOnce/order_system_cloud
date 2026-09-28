@@ -24,4 +24,20 @@ public interface OrderPersistenceService {
             OrderDO order,
             List<OrderItemDO> items
     );
+
+    /**
+     * 仅当订单状态和版本号都未变化时更新状态。
+     *
+     * @param orderId 订单 ID
+     * @param expectedStatus 读取时的原状态
+     * @param expectedVersion 读取时的版本号
+     * @param targetStatus 目标状态
+     * @return 更新成功时返回 true；状态或版本已变化时返回 false
+     */
+    boolean updateStatusIfUnchanged(
+            Long orderId,
+            String expectedStatus,
+            Integer expectedVersion,
+            String targetStatus
+    );
 }

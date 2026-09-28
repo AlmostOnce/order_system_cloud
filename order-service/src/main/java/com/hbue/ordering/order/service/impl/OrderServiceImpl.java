@@ -6,6 +6,7 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
+import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
@@ -13,6 +14,7 @@ import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
@@ -206,6 +208,138 @@ public class OrderServiceImpl
         }
 
         return OrderDetailVO.from(orderDO, userBasicVO, orderItems);
+    }
+
+    /**
+     * 顾客取消自己尚未支付的订单。
+     *
+     * @param userId 当前登录顾客 ID
+     * @param orderId 订单 ID
+     * @return 订单状态变更结果
+     */
+    @Override
+    public OrderStatusVO cancelOrder(Long userId, Long orderId) {
+        OrderDO orderDO = getOrderForStatusChange(orderId);
+        if (userId == null || !userId.equals(orderDO.getUserId())) {
+            // 对其他用户的订单按不存在处理，避免泄露订单信息。
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "订单不存在"
+            );
+        }
+
+        OrderStatus currentStatus = getCurrentStatus(orderDO);
+        if (currentStatus != OrderStatus.PENDING_PAYMENT
+                || !currentStatus.canTransitionTo(OrderStatus.CANCELLED)) {
+            throw invalidStatusTransition();
+        }
+
+        return persistStatusTransition(orderDO, OrderStatus.CANCELLED);
+    }
+
+    /**
+     * 管理员按合法履约顺序推进订单状态。
+     *
+     * @param orderId 订单 ID
+     * @param targetStatus 目标状态
+     * @return 订单状态变更结果
+     */
+    @Override
+    public OrderStatusVO updateStatusByAdmin(
+            Long orderId,
+            OrderStatus targetStatus
+    ) {
+        if (targetStatus == null) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "订单目标状态不能为空"
+            );
+        }
+
+        OrderDO orderDO = getOrderForStatusChange(orderId);
+        OrderStatus currentStatus = getCurrentStatus(orderDO);
+        if (!currentStatus.canBeAdvancedByAdminTo(targetStatus)) {
+            throw invalidStatusTransition();
+        }
+
+        return persistStatusTransition(orderDO, targetStatus);
+    }
+
+    /**
+     * 查询待变更状态的订单；订单不存在时返回统一 404。
+     *
+     * @param orderId 订单 ID
+     * @return 订单持久化对象
+     */
+    private OrderDO getOrderForStatusChange(Long orderId) {
+        OrderDO orderDO = getById(orderId);
+        if (orderDO == null) {
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "订单不存在"
+            );
+        }
+        return orderDO;
+    }
+
+    /**
+     * 将数据库中的状态值转换为订单状态枚举。
+     *
+     * @param orderDO 订单持久化对象
+     * @return 当前订单状态
+     */
+    private OrderStatus getCurrentStatus(OrderDO orderDO) {
+        OrderStatus currentStatus = OrderStatus.findByLabel(
+                orderDO.getStatus()
+        );
+        if (currentStatus == null || orderDO.getVersion() == null) {
+            // 数据库存量状态或版本号不符合约定时按内部数据异常处理。
+            throw new BusinessException(
+                    CommonErrorCode.INTERNAL_ERROR,
+                    "订单状态数据异常"
+            );
+        }
+        return currentStatus;
+    }
+
+    /**
+     * 执行带旧状态及版本号条件的原子状态更新。
+     *
+     * @param orderDO 已读取的订单
+     * @param targetStatus 已校验的目标状态
+     * @return 订单状态变更结果
+     */
+    private OrderStatusVO persistStatusTransition(
+            OrderDO orderDO,
+            OrderStatus targetStatus
+    ) {
+        boolean updated = orderPersistenceService.updateStatusIfUnchanged(
+                orderDO.getOrderId(),
+                orderDO.getStatus(),
+                orderDO.getVersion(),
+                targetStatus.getLabel()
+        );
+        if (!updated) {
+            // 其他请求已先完成迁移，避免用旧状态覆盖新状态。
+            throw invalidStatusTransition();
+        }
+
+        return OrderStatusVO.builder()
+                .orderId(orderDO.getOrderId())
+                .status(targetStatus.getLabel())
+                .build();
+    }
+
+    /**
+     * 创建统一的订单状态冲突异常。
+     *
+     * @return 状态不合法或并发更新冲突异常
+     */
+    private BusinessException invalidStatusTransition() {
+        return new BusinessException(
+                CommonErrorCode.CONFLICT,
+                "订单当前状态不允许执行该操作"
+        );
     }
 
     /**

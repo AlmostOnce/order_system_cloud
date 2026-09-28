@@ -3,9 +3,11 @@ package com.hbue.ordering.order.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
+import com.hbue.ordering.order.dto.request.OrderStatusUpdateRequest;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderStatusVO;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -116,5 +118,52 @@ public class OrderController {
 
         // 返回订单详情。
         return ApiResponse.success(orderDetailVO);
+    }
+
+    /**
+     * 顾客取消自己尚未支付的订单。
+     *
+     * @param jwt 当前登录顾客 JWT
+     * @param orderId 订单 ID
+     * @return 变更后的订单状态
+     */
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @PatchMapping("/{orderId}/cancel")
+    public ApiResponse<OrderStatusVO> cancelOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("orderId") Long orderId
+    ) {
+        // 从 JWT 中获取当前登录顾客 ID。
+        Long userId = Long.valueOf(jwt.getSubject());
+
+        // Service 校验订单归属、订单状态并执行原子状态更新。
+        OrderStatusVO statusVO = orderService.cancelOrder(userId, orderId);
+
+        // 返回状态更新结果。
+        return ApiResponse.success(statusVO);
+    }
+
+    /**
+     * 管理员按合法履约顺序推进订单状态。
+     *
+     * @param jwt 当前登录管理员 JWT
+     * @param orderId 订单 ID
+     * @param request 目标订单状态
+     * @return 变更后的订单状态
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/admin/{orderId}/status")
+    public ApiResponse<OrderStatusVO> updateStatusByAdmin(
+            @PathVariable("orderId") Long orderId,
+            @Valid @RequestBody OrderStatusUpdateRequest request
+    ) {
+        // Service 校验合法迁移并执行原子状态更新。
+        OrderStatusVO statusVO = orderService.updateStatusByAdmin(
+                orderId,
+                request.getStatus()
+        );
+
+        // 返回状态更新结果。
+        return ApiResponse.success(statusVO);
     }
 }

@@ -67,4 +67,21 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
         return order;
     }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean updateStatusIfUnchanged(
+            Long orderId,
+            String expectedStatus,
+            Integer expectedVersion,
+            String targetStatus
+    ) {
+        // 状态和版本号同时匹配，才允许数据库执行状态迁移。
+        return orderMapper.updateStatusIfVersionMatches(
+                orderId,
+                expectedStatus,
+                expectedVersion,
+                targetStatus
+        ) == 1;
+    }
 }

@@ -7,7 +7,7 @@ spring:
     # 商品服务只连接自己的数据库。
     url: ${PRODUCT_DB_URL:jdbc:mysql://127.0.0.1:3307/product_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
     username: ${PRODUCT_DB_USERNAME:product_service}
-    password: ${PRODUCT_DB_PASSWORD}
+    password: ${PRODUCT_DB_PASSWORD:product_password_dev_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   data:
@@ -15,7 +15,7 @@ spring:
       # JWT 注销状态与其他服务共用 Redis 黑名单。
       host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
       database: 0
       connect-timeout: 2s
       timeout: 2s
@@ -29,7 +29,7 @@ spring:
         # 本机运行时连接 Docker 暴露的 Nacos API 端口。
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
         username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD}
+        password: ${NACOS_PASSWORD:root}
 
 mybatis-plus:
   configuration:
