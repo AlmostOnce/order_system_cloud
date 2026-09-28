@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-09-26
+更新时间：2026-09-28
 
 ### 已完成
 
@@ -141,11 +141,47 @@
 - 已确认客户端幂等键约定：每个新的下单意图生成新键，即使订单内容完全相同也如此；同一次请求重试必须复用原键和原请求内容。相同键与相同内容返回原订单，相同键与不同内容返回 HTTP 409。键由客户端生成，后端不会自动发起重试。
 - `mvn -pl order-service,common-web -am test` 在显式指定 Byte Buddy Agent 后通过，共执行 16 项测试；`git diff --check` 通过。
 
+### 2026-09-28 本次完成
+
+- 在 Docker MySQL 持久化库中创建 `product_db`，包含 `dining_windows`、`product_categories`、`products` 三张表；菜品和分类均归属单个窗口。
+- 在 `order_db` 创建 `order_items`，保存下单时的菜品编码、名称、单价、数量和行金额快照，并在订单库内关联 `orders`。
+- 新增商品目录和订单明细迁移文件及数据库说明；商品库与订单库分开迁移，商品库由具备建库权限的账号初始化。
+- 根据实际 `orders.order_id` 为 `BIGINT UNSIGNED` 修正订单明细外键字段类型，并同步修正全新建库用的 V1 建表定义。
+- 两份迁移均在 Docker MySQL 执行并重复执行成功；已从 `information_schema` 核对数据库、表、字段及外键。
+- 新增 `product-service` Maven 子模块，配置 8086 端口、Nacos 注册、商品库数据源、MyBatis-Plus 和 MySQL 驱动。
+- 新增窗口、分类、菜品三个 DO 及对应 Mapper；未创建 HTTP Controller 或业务 API。
+- 为本地 MySQL 创建独立 `product_service` 账号，仅授予 `product_db` 权限；凭据保存在被 Git 忽略的本机 `.env`。
+- 使用本机配置启动后，服务已成功注册到 Nacos；数据库账号已实际连接 `product_db` 并读取到三张表。
+- `mvn -pl product-service -am -DskipTests package` 构建成功；没有新增业务测试。
+- 新增 `product-api` 公共契约模块，提供商品批量核价请求/响应及 Feign 客户端。
+- `product-service` 新增仅供后端调用的 `POST /internal/products/quote`：校验窗口启用状态、菜品所属窗口和在售状态，返回当前商品价格。
+- 商品核价接口采用与其他业务服务一致的 RSA JWT、CUSTOMER 角色和 Redis Access Token 黑名单校验；订单服务的 Feign 拦截器透传 Authorization。
+- `POST /orders` 改为接收 `windowId`、`items[{productId, quantity}]` 和可选备注，不再接受客户端价格或订单总额；最多 100 行且同一菜品 ID 不可重复。
+- 订单服务通过商品服务核价，计算订单总额，并将商品编码、名称、单价、数量和行金额快照与订单头放在同一事务中保存；创建响应和单笔订单详情包含明细快照。
+- 幂等摘要覆盖窗口、排序后的菜品 ID/数量和备注；菜品顺序变化不影响摘要，价格由服务端核算且不影响重放匹配。
+- 新增订单下单/重放/409/并发唯一键和商品核价单元测试；为 `product-service` 配置 Surefire 3.5.4，确保 JUnit 5 测试实际执行。
+- 构建时发现并修正 `common-web` 统一响应类引用的错误包名。
+- `mvn -pl order-service,product-service -am test` 通过：订单服务 9 项测试、商品服务 3 项测试均实际执行并通过。
+- 商品服务新增顾客菜单查询：可列出启用窗口，并按窗口返回启用分类、在售菜品和未分类在售菜品；停用窗口返回 404，停用分类及下架菜品不展示。
+- 菜单读取接口要求 CUSTOMER JWT，新增 `GET /products/windows` 和 `GET /products/windows/{windowId}/menu`。
+- 新增窗口菜单服务测试，覆盖分类分组、未分类商品、停用窗口和非法窗口 ID。
+- `mvn -pl product-service -am test` 通过，商品服务共执行 6 项测试。
+- 新增可重复执行的本地商品目录 seed SQL，含正常、未分类、下架和停用分类样例。
+- 新增并发布 Nacos Gateway 商品路由 `/api/products/** → lb://product-service`，同时将完整路由配置保存到 `docs/nacos/gateway-service.yaml`。
+- 已将演示目录数据写入本机 `product_db`，并通过真实 Gateway + JWT 验证窗口列表、菜单过滤及 `order-service → product-service → MySQL` 下单明细快照链路；示例订单总额为 37.00 元。
+- 端到端验证创建的临时用户、订单和订单明细已清理，Access Token/Refresh Token 已注销；演示商品目录保留在本机商品库。
+- 商品服务新增 ADMIN 专用目录管理接口，覆盖窗口、分类、菜品的查询、新增、全量更新、停用/下架；接口响应使用独立 VO，不直接暴露 DO。
+- 窗口和分类停用、菜品下架均为软状态更新；数据库唯一键冲突映射为 HTTP 409，菜品分类归属窗口由服务端校验。
+- 商品核价同步检查分类启用状态，避免停用分类下仍在售的菜品绕过菜单过滤创建订单。
+- 新增目录管理业务测试、ADMIN 权限约定测试和停用分类核价测试；商品服务全模块 17 项测试通过。
+- 新增商品目录管理接口和管理员角色要求文档。当前没有授予 ADMIN 角色的 HTTP 管理流程，部署前需由可信运维流程配置管理员身份。
+- 已将本机 MySQL `product_service` 账号密码与被 Git 忽略的 `.env` 配置同步更新，并通过 MySQL TCP 登录执行 `SELECT 1` 验证成功；密码明文未写入项目文档。
+- 订单头与订单明细的原子持久化逻辑已拆分为 `OrderPersistenceService` 接口和 `OrderPersistenceServiceImpl` 实现类；事务边界保留在实现方法，订单业务层继续依赖接口。
+
 ## 当前下一步
 
-1. 迁移已完成。下一步通过 Gateway 对 `POST /orders` 做接口级验证：同键同内容返回同一订单、同键不同内容返回 409、新键同内容创建另一笔订单；使用专用测试账号和请求数据，避免清理或改动已有业务数据。
-2. 当前仓库尚无前端工程。前端接入后，为每次新的下单意图生成并暂存新键及原请求内容；结果不确定时用相同键和内容重试，订单成功或确定失败后结束该次操作。届时也实现 Refresh Token 请求单飞。
-3. 当前登录限流只限制 IP 请求频率，不按失败次数锁账号；更细的账号/IP 失败计数只有确有需要时再评估。Nginx 仍按部署阶段规划接入。
+1. 设计并实现订单状态流转，再接入支付；先定义合法状态迁移和支付回调幂等规则。
+2. 后续补管理员身份初始化/授权流程；登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
 
 ### 缓存防护规划
 
@@ -199,9 +235,9 @@ Gateway 集群
   ↓
 gateway-service
   ↓
-order-service ── OpenFeign ──> user-service
-  ↓                              ↓
-order_db                      user_db
+order-service ── OpenFeign ──> user-service ──> user_db
+   ├── order_db
+   └── OpenFeign ──> product-service ──> product_db
 ```
 
 - Gateway 负责外部请求路由，不负责业务调用。

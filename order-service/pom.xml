@@ -44,6 +44,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- 商品服务核价接口契约。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>product-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Web 接口 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -15,7 +15,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
 @EnableFeignClients(
-        basePackages = "com.hbue.ordering.user.api.client",
+        basePackages = {
+                "com.hbue.ordering.user.api.client",
+                "com.hbue.ordering.product.api.client"
+        },
         defaultConfiguration = FeignTokenRelayConfiguration.class
 )
 public class OrderServiceApplication {

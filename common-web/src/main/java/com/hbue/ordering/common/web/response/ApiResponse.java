@@ -1,7 +1,7 @@
 package com.hbue.order.common.web.response;
 
-import com.hbue.order.common.core.error.CommonErrorCode;
-import com.hbue.order.common.core.error.ErrorCode;
+import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.common.core.error.ErrorCode;
 
 import java.util.Objects;
 

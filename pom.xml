@@ -20,7 +20,9 @@
         <module>common-core</module>
         <module>user-service</module>
         <module>user-api</module>
+        <module>product-api</module>
         <module>auth-service</module>
+        <module>product-service</module>
     </modules>
 
     <properties>

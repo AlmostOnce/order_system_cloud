@@ -13,7 +13,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  * Feign Token 透传配置。
  *
  * <p>负责将客户端请求中的 Authorization 请求头，
- * 透传到下游用户服务。</p>
+ * 透传到下游服务（用户服务和商品服务）。</p>
  *
  * <p>该配置只放在具体业务服务中，
  * 不放入 user-api 契约模块，避免契约模块反向依赖业务服务。</p>

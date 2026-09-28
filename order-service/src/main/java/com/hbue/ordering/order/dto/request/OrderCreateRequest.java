@@ -1,43 +1,38 @@
 package com.hbue.ordering.order.dto.request;
 
-import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.math.BigDecimal;
+import java.util.List;
 
 /**
- * 创建订单请求对象。
- *
- * <p>该对象只接收客户端允许提交的订单字段。
- * 用户 ID 从当前登录用户的 JWT 中获取，
- * 不允许客户端直接提交。</p>
+ * 创建订单请求对象。金额由服务端根据当前商品价格计算。
  *
  * @author order-system
- * @date 2026-09-21
+ * @date 2026-09-28
  */
 @Data
 public class OrderCreateRequest {
 
-    /**
-     * 窗口 ID。
-     */
+    /** 每个订单允许提交的最大菜品行数。 */
+    public static final int MAX_ITEM_COUNT = 100;
+
+    /** 订单所属窗口 ID。 */
     @NotNull(message = "窗口 ID 不能为空")
     @Positive(message = "窗口 ID 必须大于 0")
     private Long windowId;
 
-    /**
-     * 订单总金额。
-     */
-    @NotNull(message = "订单金额不能为空")
-    @DecimalMin(value = "0.01", message = "订单金额必须大于 0")
-    private BigDecimal totalAmount;
+    /** 订单菜品清单，菜品 ID 不可重复。 */
+    @NotEmpty(message = "订单至少需要一个菜品")
+    @Size(max = MAX_ITEM_COUNT, message = "订单菜品不能超过 100 项")
+    @Valid
+    private List<OrderItemCreateRequest> items;
 
-    /**
-     * 订单备注。
-     */
+    /** 订单备注。 */
     @Size(max = 255, message = "订单备注不能超过 255 个字符")
     private String remark;
 }
