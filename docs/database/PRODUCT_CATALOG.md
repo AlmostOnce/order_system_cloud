@@ -83,7 +83,7 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 
 ## 目录管理接口
 
-目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。全部接口要求有效 JWT 且角色为 `ADMIN`；普通注册账号默认为 `CUSTOMER`。当前项目没有提供授予管理员角色的 HTTP 接口，部署前需要由可信的运维流程配置管理员身份。
+目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。全部接口要求有效 JWT 且角色为 `SYSTEM_ADMIN`；普通注册账号默认为 `CUSTOMER`。当前项目没有提供授予管理员角色的 HTTP 接口，部署前需要由可信的运维流程配置管理员身份。
 
 | 方法 | Gateway 路径 | 说明 |
 |---|---|---|

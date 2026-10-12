@@ -7,7 +7,7 @@ TOKEN=internal_order_token_dev_2026
 SECRET=mock_channel_secret_dev_2026
 
 echo "== A. 直接调用订单内部接口推进订单1（待支付→已支付）=="
-curl -s -X PATCH "http://$HOST_IP:9091/internal/orders/1/paid" -H "X-Internal-Token: $TOKEN"
+curl -s -X PATCH "http://$HOST_IP:8081/internal/orders/1/paid" -H "X-Internal-Token: $TOKEN"
 echo; echo
 
 echo "== B. 重放支付1的成功回调（验证幂等，notify_count 应 +1）=="

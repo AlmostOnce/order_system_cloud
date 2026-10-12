@@ -214,6 +214,22 @@
 - 验证过程中修复三个问题：`spring-cloud-openfeign-core` 不携带 feign-slf4j（改用 `spring-cloud-starter-openfeign`）；Feign 默认 HttpURLConnection 不支持 PATCH（引入 `feign-okhttp` 并启用）；`OrderInternalVO.from(null)` 空指针（先判空再转换，随下次重启生效）。
 - 数据落库核对：两笔支付均 SUCCESS、金额与订单一致、`notify_count` 符合预期；两订单状态"已支付"、version 正常递增。
 
+#### 当前设备本地端口恢复（未提交）
+
+- 为匹配当前设备已运行的 Docker 容器，将本地工作区配置恢复到旧端口：MySQL `3307`、Redis `6379`、Nacos 控制台/API/gRPC `8082/8850/9850/9851`；Gateway/order/user/auth/product 分别为 `8080/8081/8083/8084/8086`，Sentinel Dashboard/通信端口为 `8858/8719`。
+- 新增的 `payment-service` 没有旧端口记录，继续使用 `9101`；数据库、Redis、Nacos 和 JWT issuer 地址已对齐到当前设备旧端口。
+- 当前设备的 MySQL 原先缺少 `payment_db` 和 `payment_service` 账号；已执行现有幂等迁移，创建 `payment_db.payments` 表，并授予 `payment_service` 账号仅访问 `payment_db` 的权限。已验证该账号可登录并读取 `payments` 表。
+- 本段配置修改仅在当前工作区，尚未提交或推送；不要将其合并到另一台仍需使用 9090 段端口的设备。
+- 尚未重启 Docker 容器或应用；Docker 命名数据卷未删除。
+
+#### 权限角色规划（已确认，待实现）
+
+- 目标角色沿用原点餐系统业务划分：`CUSTOMER`（顾客）、`STALL_MANAGER`（档口负责人/店主）、`RESTAURANT_MANAGER`（餐厅经理）、`GENERAL_MANAGER`（总经理）、`SYSTEM_ADMIN`（系统管理员）。
+- `SYSTEM_ADMIN` 统一作为平台管理员编码；商品目录文档不再使用宽泛的 `ADMIN`。
+- 角色说明可执行的操作类别；具体授权还必须限定 `window_id`、`restaurant_id` 等数据范围。
+- 当前代码和本机用户数据仅实际使用 `CUSTOMER`；本次待开发的第一步是用显式环境变量在 `user-service` 安全引导首个 `SYSTEM_ADMIN`，普通注册继续固定为 `CUSTOMER`。
+- 当前 `users.role_code` 是单值字符串字段。多角色兼任及档口/餐厅范围关联暂不提前实现，待相关业务接口需要时再设计关联表和服务端授权。
+
 ## 当前下一步
 
 1. 后续补管理员身份初始化/授权流程；登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。

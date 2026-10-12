@@ -4,7 +4,7 @@ set -e
 # WSL2 NAT 模式下 127.0.0.1 是 WSL 自身，Windows 宿主需经默认网关访问
 HOST_IP=$(ip route show default | awk '{print $3}')
 [ -z "$HOST_IP" ] && HOST_IP=127.0.0.1
-GW=http://$HOST_IP:9090
+GW=http://$HOST_IP:8080
 PAY=http://$HOST_IP:9101
 USERNAME="payuser$(date +%s)"
 PHONE="139$(date +%N | tr -d '\n' | cut -c1-8)"

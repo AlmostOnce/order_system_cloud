@@ -1,5 +1,5 @@
 server:
-  port: 9090
+  port: 8080
 
 spring:
   application:
@@ -9,7 +9,7 @@ spring:
     redis:
       # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。
       host: ${REDIS_HOST:127.0.0.1}
-      port: ${REDIS_PORT:9096}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:order_redis_dev_2026}
       database: 0
       connect-timeout: 2s
@@ -24,13 +24,13 @@ spring:
       password: ${NACOS_PASSWORD:change-me-after-nacos-initialization}
 
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
         enabled: true
         username: ${spring.cloud.nacos.username}
         password: ${spring.cloud.nacos.password}
 
       config:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
         username: ${spring.cloud.nacos.username}
         password: ${spring.cloud.nacos.password}
 
@@ -46,6 +46,6 @@ gateway:
 
 security:
   jwt:
-    issuer: http://localhost:9094
+    issuer: http://localhost:8084
     public-key-location: file:/home/user/.config/order-system/keys/jwt-public.pem
     blacklist-key-prefix: "auth:access-token:blacklist:"

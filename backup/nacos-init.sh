@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Nacos v3 初始化：创建 nacos/root 管理员 + 发布网关路由配置
 set -e
-NACOS=http://127.0.0.1:9097/nacos
+NACOS=http://127.0.0.1:8850/nacos
 
 echo "== 0. 等待 Nacos 就绪 =="
 for i in $(seq 1 60); do
