@@ -266,6 +266,48 @@ public class OrderServiceImpl
     }
 
     /**
+     * 支付回调驱动的内部订单推进：待支付到已支付。
+     *
+     * <p>并发场景下两个回调同时到达时，乐观锁只允许一个赢家；
+     * 输家回读订单，若订单已被推进为已支付则按幂等成功处理。</p>
+     *
+     * @param orderId 订单 ID
+     * @return 订单状态变更结果
+     */
+    @Override
+    public OrderStatusVO markOrderPaid(Long orderId) {
+        OrderDO orderDO = getOrderForStatusChange(orderId);
+        OrderStatus currentStatus = getCurrentStatus(orderDO);
+
+        if (currentStatus == OrderStatus.PAID) {
+            // 重复的支付成功通知按幂等成功处理。
+            return OrderStatusVO.builder()
+                    .orderId(orderId)
+                    .status(currentStatus.getLabel())
+                    .build();
+        }
+        if (currentStatus != OrderStatus.PENDING_PAYMENT
+                || !currentStatus.canTransitionTo(OrderStatus.PAID)) {
+            throw invalidStatusTransition();
+        }
+
+        try {
+            return persistStatusTransition(orderDO, OrderStatus.PAID);
+        } catch (BusinessException conflictException) {
+            // 并发回调竞争失败时回读订单：已被推进为已支付则幂等成功。
+            OrderDO latestOrder = getById(orderId);
+            if (latestOrder != null
+                    && OrderStatus.PAID.getLabel().equals(latestOrder.getStatus())) {
+                return OrderStatusVO.builder()
+                        .orderId(orderId)
+                        .status(OrderStatus.PAID.getLabel())
+                        .build();
+            }
+            throw conflictException;
+        }
+    }
+
+    /**
      * 查询待变更状态的订单；订单不存在时返回统一 404。
      *
      * @param orderId 订单 ID

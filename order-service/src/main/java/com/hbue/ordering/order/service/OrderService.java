@@ -73,6 +73,18 @@ public interface OrderService extends IService<OrderDO> {
             OrderStatus targetStatus
     );
 
+    /**
+     * 支付回调驱动的内部订单推进：待支付到已支付。
+     *
+     * <p>该接口仅由支付服务在渠道回调验签与金额校验通过后调用，
+     * 顾客与管理员均无权直接标记订单已支付；
+     * 重复通知（订单已是已支付）按幂等成功处理。</p>
+     *
+     * @param orderId 订单 ID
+     * @return 订单状态变更结果
+     */
+    OrderStatusVO markOrderPaid(Long orderId);
+
 
     /**
      * 查询当前用户的订单列表。

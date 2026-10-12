@@ -4,21 +4,21 @@ feign:
     enabled: true
 
 server:
-  port: 8081
+  port: 9091
 
 spring:
   data:
     redis:
       # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。
       host: ${REDIS_HOST:127.0.0.1}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:9096}
       password: ${REDIS_PASSWORD:order_redis_dev_2026}
       database: 0
       connect-timeout: 2s
       timeout: 2s
 
   datasource:
-    url: jdbc:mysql://127.0.0.1:3307/order_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://127.0.0.1:9095/order_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: order_user
     password: order_password_dev_2026
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -31,7 +31,7 @@ spring:
         degrade:
           nacos:
             # Nacos API 地址。
-            server-addr: 127.0.0.1:8850
+            server-addr: 127.0.0.1:9097
 
             # Nacos 登录账号。
             username: nacos
@@ -54,10 +54,10 @@ spring:
       eager: true
       transport:
         # Sentinel Dashboard 地址。
-        dashboard: 127.0.0.1:8858
+        dashboard: 127.0.0.1:9099
 
         # 当前订单服务与 Dashboard 通信的端口。
-        port: 8719
+        port: 9100
     openfeign:
       client:
         config:
@@ -72,7 +72,7 @@ spring:
             loggerLevel: basic
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8850
+        server-addr: 127.0.0.1:9097
         username: nacos
         password: root
 
@@ -83,6 +83,11 @@ management:
         include: health,info
 security:
   jwt:
-    issuer: http://localhost:8084
+    issuer: http://localhost:9094
     public-key-location: file:/home/user/.config/order-system/keys/jwt-public.pem
     blacklist-key-prefix: "auth:access-token:blacklist:"
+
+payment:
+  internal:
+    # 支付服务调用订单内部接口的共享密钥，与 payment-service 的 application.yml 保持一致。
+    order-token: ${INTERNAL_ORDER_TOKEN:internal_order_token_dev_2026}

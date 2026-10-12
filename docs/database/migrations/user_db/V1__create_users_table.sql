@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS users (
+    user_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL,
+    role_code VARCHAR(20) NOT NULL DEFAULT 'CUSTOMER',
+    phone VARCHAR(20) NULL,
+    balance DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    password_hash VARCHAR(100) NOT NULL,
+    avatar_url VARCHAR(255) NULL,
+    status TINYINT NOT NULL DEFAULT 1,
+    version INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME NULL,
+    PRIMARY KEY (user_id),
+    UNIQUE KEY uk_users_username (username),
+    UNIQUE KEY uk_users_phone (phone)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;

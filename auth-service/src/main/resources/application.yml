@@ -1,6 +1,6 @@
 server:
   # 认证服务端口。
-  port: 8084
+  port: 9094
 
 # 启用 Sentinel 对 OpenFeign 的熔断降级适配，使 FeignClient 上配置的 FallbackFactory 生效。
 feign:
@@ -16,7 +16,7 @@ spring:
     nacos:
       discovery:
         # Nacos 服务地址。
-        server-addr: 127.0.0.1:8850
+        server-addr: 127.0.0.1:9097
 
         # Nacos 登录账号。
         username: nacos
@@ -30,7 +30,7 @@ spring:
       host: ${REDIS_HOST:127.0.0.1}
 
       # Redis 默认端口。
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:9096}
 
       # Redis 密码，优先读取环境变量，冒号后为本机开发默认值。
       password: ${REDIS_PASSWORD:order_redis_dev_2026}
@@ -47,7 +47,7 @@ spring:
 security:
   jwt:
     # JWT 签发方。
-    issuer: "http://localhost:8084"
+    issuer: "http://localhost:9094"
 
     # RSA 密钥编号。
     key-id: "order-system-rsa-key-2026"

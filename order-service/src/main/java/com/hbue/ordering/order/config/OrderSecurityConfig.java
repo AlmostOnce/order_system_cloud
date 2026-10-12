@@ -117,6 +117,11 @@ public class OrderSecurityConfig {
                         .requestMatchers("/actuator/health")
                         .permitAll()
 
+                        // 支付服务内部接口无用户 JWT，安全由
+                        // InternalTokenVerifier 的共享密钥校验保证。
+                        .requestMatchers("/internal/orders/**")
+                        .permitAll()
+
                         // 其他接口必须携带有效 JWT。
                         .anyRequest()
                         .authenticated()

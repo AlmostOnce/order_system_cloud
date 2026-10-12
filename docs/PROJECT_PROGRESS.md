@@ -184,10 +184,41 @@
 - 状态更新通过数据库条件更新同时匹配旧状态和 `version`，成功后递增版本号并更新 `updated_at`；并发更新失败返回 HTTP 409。当前订单表已有 `version` 字段，无需新增数据库迁移。
 - 新增订单状态迁移、顾客订单归属、管理员权限契约和并发冲突测试；订单服务 26 项测试通过，全项目 `mvn test` 构建通过。
 
+### 2026-10-12 本次完成
+
+#### 开发环境迁移（Windows 原生 + WSL2）
+
+- 本机端口整体迁移至 9090 段避让并行项目：gateway `9090`、order `9091`、user `9092`、product `9093`、auth `9094`、MySQL `9095`、Redis `9096`、Nacos API `9097`、Nacos 控制台 `9098`、Sentinel `9099/9100`、payment `9101`。
+- Docker 由 Docker Desktop 迁移为 Ubuntu-24.04（WSL2）内的 docker.io 引擎；数据卷完整保留，systemd 开机自启，容器 `restart: unless-stopped` 自动拉起。
+- Nacos 升级为 v3.0.3（v1 API 已移除）：管理员 `nacos/root`；网关路由配置 `gateway-service.yaml` 与 Sentinel 降级规则已重新发布并回读验证。
+- 工具链统一为 JDK 21（系统默认）；根 pom 的 lombok 升至 1.18.48 并配置 `<proc>full</proc>`，兼容 JDK 21/25 双版本编译。
+- JWT RSA 密钥对生成于 `E:\home\user\.config\order-system\keys\`；`.env` 补齐 user_db 与 payment 相关变量。
+
+#### 支付模块（payment-service）
+
+- 新增 `payment-service` Maven 子模块（端口 `9101`），接入 Nacos 注册、JWT 资源服务器（CUSTOMER 角色 + Redis 黑名单）、MyBatis-Plus 与独立数据库 `payment_db`；数据库账号 `payment_service` 仅授权本库。
+- 新建 `payments` 表迁移：金额为下单快照；`active_flag` 虚拟生成列 + `UNIQUE(order_id, active_flag)` 保证单订单仅一笔进行中支付单；`notify_count`/`last_notify_at` 记录回调轨迹。
+- 顾客侧接口（CUSTOMER）：`POST /api/payments`（同订单存在进行中支付单时幂等返回）、`GET /api/payments/{paymentId}`、`GET /api/payments/order/{orderId}`；非本人订单按 404 处理防泄露。
+- 支付渠道采用策略模式：`PaymentChannel` 接口 + `MOCK` 模拟渠道实现；回调入口 `POST /internal/payments/notify` 使用 HMAC-SHA256 验签（规范化串 + ±300 秒时间戳窗口 + 常量时间比较）。
+- 回调幂等双重防护：支付侧 `WHERE status='CREATED'` 条件更新（重复通知幂等返回，终态通知忽略），订单侧复用乐观锁条件更新；仅条件更新的赢家调用订单推进，Feign 推进失败仅记日志、支付单保持 SUCCESS 不回滚。
+- 服务间内部调用采用两种鉴权模式并存：商品核价透传用户 JWT（"代表用户"），支付→订单使用 `X-Internal-Token` 共享密钥（"系统事件"，无用户上下文）。
+- order-service 新增 `OrderInternalController`（`GET /internal/orders/{orderId}`、`PATCH /internal/orders/{orderId}/paid`）与 `markOrderPaid`：重复标记按幂等成功处理，乐观锁竞争失败后回读兜底。
+- dev profile 提供模拟收银台 `/mock/channel/checkout/{paymentNo}` 与确认支付 `/mock/channel/pay/{paymentNo}`（可指定 `outcome`、`paidAmount` 演练失败与金额不符场景）；渠道异步回调由虚拟线程发起，3 次固定退避重试。
+- 网关新增 `/api/payments/** → lb://payment-service` 路由（已发布 Nacos 并验证）；`INTERNAL_ORDER_TOKEN`、`PAYMENT_CHANNEL_SECRET` 等密钥经 `.env` 注入。
+- 全项目 `mvn test` 通过，共 128 项测试（payment 35 + order 33 + 其余模块）。
+
+#### 端到端验证结果（真实链路）
+
+- 完整链路验证通过：注册 → 登录 → 下单（待支付 18.50）→ 创建支付单（MOCK 渠道）→ 模拟确认支付 → 渠道带签名回调 → 验签 → 支付单 SUCCESS → Feign 推进订单为"已支付"。
+- 回调重放幂等验证：重放同一成功回调返回成功且不产生二次推进，`notify_count` 由 1 增至 2；篡改签名重放返回 401"回调验签失败"。
+- 验证过程中修复三个问题：`spring-cloud-openfeign-core` 不携带 feign-slf4j（改用 `spring-cloud-starter-openfeign`）；Feign 默认 HttpURLConnection 不支持 PATCH（引入 `feign-okhttp` 并启用）；`OrderInternalVO.from(null)` 空指针（先判空再转换，随下次重启生效）。
+- 数据落库核对：两笔支付均 SUCCESS、金额与订单一致、`notify_count` 符合预期；两订单状态"已支付"、version 正常递增。
+
 ## 当前下一步
 
-1. 设计支付接入及回调幂等方案，再由支付成功事件将订单从待支付推进为已支付；不得由客户端或管理员直接设置支付成功状态。
-2. 后续补管理员身份初始化/授权流程；登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
+1. 后续补管理员身份初始化/授权流程；登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
+2. 缓存防护（穿透/击穿/雪崩 + 布隆过滤器）按下方规划实施，优先覆盖商品菜单等热点读路径。
+3. 支付模块可选增强：渠道关闭支付单的定时对账、auto-confirm 开启后的自动化演练、FAILED/CLOSED 分支的界面化演示。
 
 ### 缓存防护规划
 

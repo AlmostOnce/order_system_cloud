@@ -1,0 +1,74 @@
+server:
+  # 支付服务本机端口。
+  port: 9101
+
+spring:
+  datasource:
+    # 支付服务只连接自己的数据库。
+    url: ${PAYMENT_DB_URL:jdbc:mysql://127.0.0.1:9095/payment_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${PAYMENT_DB_USERNAME:payment_service}
+    password: ${PAYMENT_DB_PASSWORD:payment_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      # JWT 注销状态与其他服务共用 Redis 黑名单。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+  application:
+    name: payment-service
+
+  cloud:
+    nacos:
+      discovery:
+        # 本机运行时连接 Docker 暴露的 Nacos API 端口。
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+
+    openfeign:
+      # 默认的 HttpURLConnection 不支持 PATCH，改用 OkHttp 作为底层客户端。
+      okhttp:
+        enabled: true
+      client:
+        config:
+          default:
+            # 订单服务内部调用的超时约束。
+            connect-timeout: 2000
+            read-timeout: 3000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+payment:
+  channel:
+    # 渠道回调签名密钥，模拟渠道生成端与验签端共用。
+    secret: ${PAYMENT_CHANNEL_SECRET:mock_channel_secret_dev_2026}
+    # 模拟渠道回调 payment-service 的地址。
+    notify-url: ${PAYMENT_MOCK_NOTIFY_URL:http://127.0.0.1:9101/internal/payments/notify}
+    # 模拟收银台页面的基础地址（仅 dev 直连，不经 Gateway）。
+    checkout-base-url: ${PAYMENT_MOCK_CHECKOUT_BASE_URL:http://127.0.0.1:9101}
+    # 创建支付单后是否自动延迟发起模拟支付（默认关闭，手动确认为主）。
+    auto-confirm-enabled: ${PAYMENT_MOCK_AUTO_CONFIRM:false}
+    auto-confirm-delay-ms: 2000
+  internal:
+    # payment-service 调用订单服务内部接口的共享密钥，与 order-service 保持一致。
+    order-token: ${INTERNAL_ORDER_TOKEN:internal_order_token_dev_2026}
