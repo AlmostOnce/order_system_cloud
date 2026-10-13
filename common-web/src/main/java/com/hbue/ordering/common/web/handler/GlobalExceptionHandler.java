@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -175,6 +176,32 @@ public class GlobalExceptionHandler {
 
         // 返回 HTTP 500。
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+
+    /**
+     * 处理方法级鉴权拒绝异常。
+     *
+     * <p>过滤链上的鉴权失败由各服务的 AccessDeniedHandler 处理；方法级
+     * {@code @PreAuthorize} 未通过时抛出的是 AccessDeniedException，
+     * 它会进入 MVC 异常处理链，必须在这里转换成 403，否则会被兜底成 500。</p>
+     *
+     * @param exception 鉴权拒绝异常
+     * @return 无权限响应
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(
+            AccessDeniedException exception) {
+
+        // 鉴权失败属于可预期结果，只记录 warn 且不打印堆栈。
+        log.warn("方法级鉴权未通过，拒绝访问：{}", exception.getMessage());
+
+        // 构造无权限响应。
+        ApiResponse<Void> response = ApiResponse.failure(
+                CommonErrorCode.FORBIDDEN
+        );
+
+        // 返回 HTTP 403。
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
     /**

@@ -4,6 +4,7 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -83,6 +84,26 @@ class GlobalExceptionHandlerTest {
     }
 
     /**
+     * 验证方法级鉴权拒绝返回 HTTP 403，而不是系统内部错误。
+     *
+     * @throws Exception MockMvc 请求执行异常
+     */
+    @Test
+    void shouldReturnForbiddenWhenMethodAuthorizationIsDenied()
+            throws Exception {
+        // 方法级 @PreAuthorize 未通过时抛出的异常会进入 MVC 异常处理链。
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(new RequestBodyController())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        // 鉴权拒绝必须对客户端呈现 403 和统一错误码。
+        mockMvc.perform(get("/test/access-denied"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMON_403"));
+    }
+
+    /**
      * 用于模拟要求 JSON 请求体的接口。
      */
     @RestController
@@ -128,6 +149,17 @@ class GlobalExceptionHandlerTest {
                     CommonErrorCode.CONFLICT,
                     "请求与已有订单冲突"
             );
+        }
+
+        /**
+         * 模拟方法级鉴权未通过。
+         *
+         * @return 此接口不会正常返回
+         */
+        @GetMapping("/test/access-denied")
+        public String accessDenied() {
+            // 方法级 @PreAuthorize 未通过时由 Spring Security 抛出该异常。
+            throw new AccessDeniedException("Access Denied");
         }
     }
 }
