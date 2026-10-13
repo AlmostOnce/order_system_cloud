@@ -1,0 +1,79 @@
+package com.hbue.ordering.user.controller;
+
+import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.user.api.vo.UserBasicVO;
+import com.hbue.ordering.user.dto.request.UserRoleUpdateRequest;
+import com.hbue.ordering.user.service.UserService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 用户角色分配接口。
+ *
+ * <p>角色是技术身份，仅 {@code SYSTEM_ADMIN} 可分配；该接口只写
+ * {@code users.role_code}，不涉及数据范围。技术角色还受硬约束：禁止修改本人
+ * 角色编码（对外表现为 403），避免自我提权绕过职责分离。</p>
+ *
+ * @author order-system
+ * @date 2026-10-13
+ */
+@Validated
+@RestController
+@RequestMapping("/users")
+@PreAuthorize("hasRole('SYSTEM_ADMIN')")
+public class UserRoleAdministrationController {
+
+    /** 用户业务服务。 */
+    private final UserService userService;
+
+    /**
+     * 创建用户角色分配接口。
+     *
+     * @param userService 用户业务服务
+     */
+    public UserRoleAdministrationController(UserService userService) {
+        this.userService = userService;
+    }
+
+    /**
+     * 修改指定用户的角色编码。
+     *
+     * @param jwt 当前登录操作者 JWT
+     * @param userId 目标用户 ID
+     * @param request 目标角色编码
+     * @return 变更后的用户基础信息
+     */
+    @PutMapping("/{userId}/role")
+    public ApiResponse<UserBasicVO> assignRole(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("userId") @Positive Long userId,
+            @Valid @RequestBody UserRoleUpdateRequest request
+    ) {
+        return ApiResponse.success(
+                userService.assignRole(
+                        operatorId(jwt),
+                        userId,
+                        request.getRoleCode()
+                )
+        );
+    }
+
+    /**
+     * 从 JWT 中取出当前操作者 ID。
+     *
+     * @param jwt 当前登录操作者 JWT
+     * @return 操作者用户 ID
+     */
+    private Long operatorId(Jwt jwt) {
+        return Long.valueOf(jwt.getSubject());
+    }
+}

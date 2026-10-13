@@ -51,6 +51,10 @@ public interface UserMapper extends BaseMapper<UserDO> {
     /**
      * 根据用户名或手机号查询用户。
      *
+     * <p>用于注册查重：只要用户名或手机号任一命中即视为已注册。
+     * 需要区分是哪个字段命中时，改用 {@link #selectByUsername(String)}
+     * 与 {@link #selectByPhone(String)} 分别精确查询。</p>
+     *
      * @param username 用户名
      * @param phone 手机号
      * @return 已存在的用户
@@ -59,7 +63,10 @@ public interface UserMapper extends BaseMapper<UserDO> {
         SELECT
             user_id,
             username,
-            phone
+            role_code,
+            phone,
+            status,
+            deleted_at
         FROM users
         WHERE username = #{username}
            OR phone = #{phone}
@@ -70,7 +77,74 @@ public interface UserMapper extends BaseMapper<UserDO> {
             @Param("phone") String phone
     );
 
+    /**
+     * 按用户名精确查询用户。
+     *
+     * <p>引导流程先用它判断"目标用户名是否就是待引导账号"，与手机号分开查询，
+     * 避免 {@code username OR phone} 的合并查询无法区分是用户名命中还是手机号命中。</p>
+     *
+     * @param username 用户名
+     * @return 用户持久化对象，不存在时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            username,
+            role_code,
+            phone,
+            status,
+            deleted_at
+        FROM users
+        WHERE username = #{username}
+        LIMIT 1
+        """)
+    UserDO selectByUsername(@Param("username") String username);
 
+    /**
+     * 按手机号精确查询用户。
+     *
+     * <p>引导流程用它判断手机号是否已被其他账号占用：被占用时必须显式报错，
+     * 不能让引导账号静默缺失（否则数据范围授予链的信任根建不出来却无人察觉）。</p>
+     *
+     * @param phone 手机号
+     * @return 用户持久化对象，不存在时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            username,
+            role_code,
+            phone,
+            status,
+            deleted_at
+        FROM users
+        WHERE phone = #{phone}
+        LIMIT 1
+        """)
+    UserDO selectByPhone(@Param("phone") String phone);
+
+    /**
+     * 按用户 ID 查询未删除的用户（不限制状态）。
+     *
+     * <p>账号启用/禁用需要读到一个已停用账号才能把它重新启用，
+     * 因此这里不能复用 {@link #selectAvailableById(Long, Integer)}（它只返回启用账号）。</p>
+     *
+     * @param userId 用户 ID
+     * @return 用户持久化对象，不存在或已删除时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            username,
+            role_code,
+            phone,
+            status,
+            deleted_at
+        FROM users
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        """)
+    UserDO selectNotDeletedById(@Param("userId") Long userId);
 
     /**
      * 根据用户名查询登录用户。

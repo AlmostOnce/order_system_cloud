@@ -1,0 +1,45 @@
+package com.hbue.ordering.user.dto.request;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 覆盖式设置用户数据范围的请求。
+ *
+ * <p>该请求只写 {@code user_data_scopes}，不修改 {@code users.role_code}；
+ * 角色变更走独立的角色分配接口，避免一次操作同时改变身份与范围。</p>
+ *
+ * @author order-system
+ * @date 2026-10-13
+ */
+@Data
+public class UserScopeSaveRequest {
+
+    /**
+     * 新的范围列表；为空或 null 表示清空该用户的全部范围。
+     */
+    @Valid
+    private List<ScopeItem> scopes;
+
+    /**
+     * 单条数据范围。
+     */
+    @Data
+    public static class ScopeItem {
+
+        /**
+         * 范围类型：WINDOW / RESTAURANT / PLATFORM。
+         */
+        @NotBlank(message = "范围类型不能为空")
+        private String scopeType;
+
+        /**
+         * 范围引用：WINDOW 为档口 ID、RESTAURANT 为餐厅 ID、
+         * PLATFORM 可省略（服务端统一规范化为 0）。
+         */
+        private Long scopeRef;
+    }
+}

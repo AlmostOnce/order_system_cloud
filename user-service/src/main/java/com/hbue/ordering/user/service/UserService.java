@@ -37,4 +37,77 @@ public interface UserService extends IService<UserDO> {
      * @return 校验成功的用户基础信息
      */
     UserBasicVO authenticate(UserPasswordVerifyCommand command);
+
+    /**
+     * 安全引导系统管理员账号。
+     *
+     * <p>已存在启用且未删除的 {@code SYSTEM_ADMIN} 时跳过且不做任何修改，
+     * 避免环境变量覆盖已有账号；用户名或手机号被其他账号占用时拒绝引导。</p>
+     *
+     * @param username 管理员用户名
+     * @param phone 管理员手机号
+     * @param rawPassword 管理员明文密码
+     * @return 是否实际创建了新账号
+     */
+    boolean bootstrapSystemAdmin(
+            String username,
+            String phone,
+            String rawPassword
+    );
+
+    /**
+     * 安全引导初始总经理账号，并写入其全平台数据范围。
+     *
+     * <p>总经理是数据范围授予链的根（见角色权限设计 §3.5），必须带外产生。
+     * 账号与其 {@code PLATFORM} 范围在同一本地事务内提交，避免出现
+     * "有总经理但没有范围"的半个状态。</p>
+     *
+     * @param username 总经理用户名
+     * @param phone 总经理手机号
+     * @param rawPassword 总经理明文密码
+     * @return 是否实际创建了新账号
+     */
+    boolean bootstrapGeneralManager(
+            String username,
+            String phone,
+            String rawPassword
+    );
+
+    /**
+     * 修改指定用户的角色编码。
+     *
+     * <p>角色分配是技术角色的职责，只写 {@code users.role_code}，不涉及数据范围。
+     * 受硬约束①保护：禁止修改本人角色编码（自我提权），对外表现为 403；
+     * 目标角色必须是 {@link com.hbue.ordering.common.core.role.RoleCode}
+     * 中已定义的编码，否则返回 400；目标用户不存在返回 404。</p>
+     *
+     * @param operatorId 操作者用户 ID
+     * @param targetUserId 目标用户 ID
+     * @param roleCode 目标角色编码
+     * @return 变更后的用户基础信息
+     */
+    UserBasicVO assignRole(
+            Long operatorId,
+            Long targetUserId,
+            String roleCode
+    );
+
+    /**
+     * 启用或禁用指定账号。
+     *
+     * <p>账号生命周期是技术角色的职责（角色权限设计 §3.3），只改
+     * {@code users.status}，不触碰业务数据。受硬约束③保护：禁止禁用
+     * **最后一个处于启用状态的** {@code SYSTEM_ADMIN}（对外表现为 409），
+     * 避免系统进入"无人可管理"的死局。目标用户不存在返回 404，
+     * 目标状态不是 0/1 返回 400。</p>
+     *
+     * @param operatorId 操作者用户 ID
+     * @param targetUserId 目标用户 ID
+     * @param status 目标状态：1 启用，0 禁用
+     */
+    void updateUserStatus(
+            Long operatorId,
+            Long targetUserId,
+            Integer status
+    );
 }

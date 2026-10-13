@@ -1,17 +1,23 @@
 package com.hbue.ordering.user.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.role.RoleCode;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
+import com.hbue.ordering.user.service.UserDataScopeService;
 import com.hbue.ordering.user.service.UserService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,24 +39,72 @@ public class UserServiceImpl
     private static final Integer USER_STATUS_ENABLED = 1;
 
     /**
+     * 用户停用状态。
+     */
+    private static final Integer USER_STATUS_DISABLED = 0;
+
+    /**
      * 默认用户角色。
      */
     private static final String DEFAULT_ROLE_CODE = "CUSTOMER";
+
+    /**
+     * 系统管理员角色。
+     */
+    private static final String SYSTEM_ADMIN_ROLE_CODE = "SYSTEM_ADMIN";
+
+    /**
+     * 总经理角色。
+     */
+    private static final String GENERAL_MANAGER_ROLE_CODE = "GENERAL_MANAGER";
 
     /**
      * 默认账户余额。
      */
     private static final BigDecimal DEFAULT_BALANCE = BigDecimal.ZERO;
 
+    /**
+     * 角色分配的审计动作。
+     */
+    private static final String ACTION_ROLE_ASSIGN = "USER_ROLE_ASSIGN";
+
+    /**
+     * 角色分配的审计目标类型。
+     */
+    private static final String TARGET_TYPE_USER = "USER";
+
+    /**
+     * 账号状态变更的审计动作。
+     */
+    private static final String ACTION_STATUS_UPDATE = "USER_STATUS_UPDATE";
+
     private final PasswordEncoder passwordEncoder;
+
+    /**
+     * 用户数据范围业务服务，用于为初始总经理写入全平台范围。
+     */
+    private final UserDataScopeService userDataScopeService;
+
+    /**
+     * 管理操作审计记录器。
+     */
+    private final ManagementAuditLogger auditLogger;
 
     /**
      * 创建用户业务服务。
      *
      * @param passwordEncoder 密码加密器
+     * @param userDataScopeService 用户数据范围业务服务
+     * @param auditLogger 管理操作审计记录器
      */
-    public UserServiceImpl(PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(
+            PasswordEncoder passwordEncoder,
+            UserDataScopeService userDataScopeService,
+            ManagementAuditLogger auditLogger
+    ) {
         this.passwordEncoder = passwordEncoder;
+        this.userDataScopeService = userDataScopeService;
+        this.auditLogger = auditLogger;
     }
 
     /**
@@ -181,6 +235,305 @@ public class UserServiceImpl
         return buildUserBasicVO(userDO);
     }
 
+
+    /**
+     * 安全引导系统管理员账号。
+     *
+     * @param username 管理员用户名
+     * @param phone 管理员手机号
+     * @param rawPassword 管理员明文密码
+     * @return 是否实际创建了新账号
+     */
+    @Override
+    public boolean bootstrapSystemAdmin(
+            String username,
+            String phone,
+            String rawPassword
+    ) {
+        return createBootstrapAccount(
+                username,
+                phone,
+                rawPassword,
+                SYSTEM_ADMIN_ROLE_CODE
+        ) != null;
+    }
+
+    /**
+     * 安全引导初始总经理账号，并写入其全平台数据范围。
+     *
+     * <p>账号与范围在同一本地事务内提交：写 user_data_scopes 失败时整体回滚，
+     * 不会留下"有总经理但没有范围"的半个状态。</p>
+     *
+     * @param username 总经理用户名
+     * @param phone 总经理手机号
+     * @param rawPassword 总经理明文密码
+     * @return 是否实际创建了新账号
+     */
+    @Override
+    @Transactional
+    public boolean bootstrapGeneralManager(
+            String username,
+            String phone,
+            String rawPassword
+    ) {
+        UserDO createdUser = createBootstrapAccount(
+                username,
+                phone,
+                rawPassword,
+                GENERAL_MANAGER_ROLE_CODE
+        );
+        if (createdUser == null) {
+            return false;
+        }
+
+        // 初始总经理是数据范围授予链的根，必须同时具备全平台范围。
+        userDataScopeService.grantPlatformScope(createdUser.getUserId());
+        return true;
+    }
+
+    /**
+     * 修改指定用户的角色编码。
+     *
+     * @param operatorId 操作者用户 ID
+     * @param targetUserId 目标用户 ID
+     * @param roleCode 目标角色编码
+     * @return 变更后的用户基础信息
+     */
+    @Override
+    public UserBasicVO assignRole(
+            Long operatorId,
+            Long targetUserId,
+            String roleCode
+    ) {
+        if (operatorId == null) {
+            throw new BusinessException(
+                    CommonErrorCode.UNAUTHORIZED,
+                    "未登录或登录已过期"
+            );
+        }
+        if (targetUserId == null) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "用户 ID 不能为空"
+            );
+        }
+
+        // 硬约束①：禁止修改本人角色编码，避免技术角色自我提权。
+        if (operatorId.equals(targetUserId)) {
+            throw new BusinessException(
+                    CommonErrorCode.FORBIDDEN,
+                    "禁止修改本人角色编码"
+            );
+        }
+
+        // 角色白名单校验：只接受 RoleCode 中已定义的编码。
+        RoleCode targetRole = RoleCode.findByCode(roleCode);
+        if (targetRole == null) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "角色编码不合法：" + roleCode
+            );
+        }
+
+        // 只操作启用且未删除的账号。
+        UserDO targetUser = baseMapper.selectAvailableById(
+                targetUserId,
+                USER_STATUS_ENABLED
+        );
+        if (targetUser == null) {
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "用户不存在"
+            );
+        }
+
+        String beforeRoleCode = targetUser.getRoleCode();
+        if (!targetRole.getCode().equals(beforeRoleCode)) {
+            // 只写 role_code，不触碰任何业务数据范围。
+            UpdateWrapper<UserDO> update = new UpdateWrapper<>();
+            update.eq("user_id", targetUserId)
+                    .set("role_code", targetRole.getCode())
+                    .set("updated_at", LocalDateTime.now());
+            update(null, update);
+            targetUser.setRoleCode(targetRole.getCode());
+        }
+
+        auditLogger.record(
+                operatorId,
+                ACTION_ROLE_ASSIGN,
+                TARGET_TYPE_USER,
+                targetUserId,
+                beforeRoleCode,
+                targetRole.getCode(),
+                true
+        );
+
+        return buildUserBasicVO(targetUser);
+    }
+
+    /**
+     * 启用或禁用指定账号。
+     *
+     * @param operatorId 操作者用户 ID
+     * @param targetUserId 目标用户 ID
+     * @param status 目标状态：1 启用，0 禁用
+     */
+    @Override
+    public void updateUserStatus(
+            Long operatorId,
+            Long targetUserId,
+            Integer status
+    ) {
+        if (operatorId == null) {
+            throw new BusinessException(
+                    CommonErrorCode.UNAUTHORIZED,
+                    "未登录或登录已过期"
+            );
+        }
+        if (targetUserId == null) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "用户 ID 不能为空"
+            );
+        }
+        if (!USER_STATUS_ENABLED.equals(status)
+                && !USER_STATUS_DISABLED.equals(status)) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "账号状态只能是 0（禁用）或 1（启用）"
+            );
+        }
+
+        // 账号状态变更需要读到已停用账号，因此按"未删除"而不按"启用"查询。
+        UserDO targetUser = baseMapper.selectNotDeletedById(targetUserId);
+        if (targetUser == null) {
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "用户不存在"
+            );
+        }
+
+        Integer beforeStatus = targetUser.getStatus();
+        if (status.equals(beforeStatus)) {
+            // 目标状态与当前一致：幂等返回，不写库也不审计。
+            return;
+        }
+
+        // 硬约束③：禁止禁用最后一个启用的系统管理员，避免"无人可管理"。
+        if (USER_STATUS_DISABLED.equals(status)
+                && SYSTEM_ADMIN_ROLE_CODE.equals(targetUser.getRoleCode())) {
+            Long enabledAdmins = baseMapper.selectCount(
+                    new QueryWrapper<UserDO>()
+                            .eq("role_code", SYSTEM_ADMIN_ROLE_CODE)
+                            .eq("status", USER_STATUS_ENABLED)
+                            .isNull("deleted_at")
+            );
+            if (enabledAdmins != null && enabledAdmins <= 1) {
+                throw new BusinessException(
+                        CommonErrorCode.CONFLICT,
+                        "禁止禁用最后一个启用的系统管理员"
+                );
+            }
+        }
+
+        UpdateWrapper<UserDO> update = new UpdateWrapper<>();
+        update.eq("user_id", targetUserId)
+                .set("status", status)
+                .set("updated_at", LocalDateTime.now());
+        update(null, update);
+
+        auditLogger.record(
+                operatorId,
+                ACTION_STATUS_UPDATE,
+                TARGET_TYPE_USER,
+                targetUserId,
+                String.valueOf(beforeStatus),
+                String.valueOf(status),
+                true
+        );
+    }
+
+    /**
+     * 按固定角色安全创建引导账号。
+     *
+     * <p>三种结果：目标账号已是启用且未删除的目标角色时返回 {@code null} 表示跳过；
+     * 用户名被其他账号占用、手机号被任何其他账号占用、或目标角色处于禁用/删除状态时
+     * 抛出冲突；其余情况创建账号并返回持久化对象。</p>
+     *
+     * @param username 引导用户名
+     * @param phone 引导手机号
+     * @param rawPassword 引导明文密码
+     * @param roleCode 固定角色编码
+     * @return 新建的用户持久化对象；已存在目标角色时返回 null
+     */
+    private UserDO createBootstrapAccount(
+            String username,
+            String phone,
+            String rawPassword,
+            String roleCode
+    ) {
+        // 参数为空时不做任何写库动作。
+        if (username == null
+                || username.isBlank()
+                || phone == null
+                || phone.isBlank()
+                || rawPassword == null
+                || rawPassword.isBlank()) {
+            return null;
+        }
+
+        // 先按用户名精确查重：命中时区分"已是目标角色"与"被其他角色占用"。
+        UserDO existingByUsername = baseMapper.selectByUsername(username);
+        if (existingByUsername != null) {
+            boolean sameActiveRole = roleCode.equals(existingByUsername.getRoleCode())
+                    && USER_STATUS_ENABLED.equals(existingByUsername.getStatus())
+                    && existingByUsername.getDeletedAt() == null;
+            if (sameActiveRole) {
+                // 已存在启用且未删除的目标账号：跳过且不覆盖密码。
+                return null;
+            }
+            // 禁止通过引导把已被占用的账号自动提权。
+            throw new BusinessException(
+                    CommonErrorCode.CONFLICT,
+                    "引导账号的用户名已被其他账号占用"
+            );
+        }
+
+        // 再按手机号精确查重：手机号被其他账号占用时显式报错。
+        // 这里不能静默跳过——手机号被占会导致引导账号建不出来，
+        // 而数据范围授予链的信任根缺失却无人察觉。
+        UserDO existingByPhone = baseMapper.selectByPhone(phone);
+        if (existingByPhone != null) {
+            throw new BusinessException(
+                    CommonErrorCode.CONFLICT,
+                    "引导账号的手机号已被其他账号占用"
+            );
+        }
+
+        // 组装引导账号，除角色外与普通注册保持一致。
+        UserDO userDO = new UserDO();
+        userDO.setUsername(username);
+        userDO.setPhone(phone);
+        userDO.setRoleCode(roleCode);
+        userDO.setBalance(DEFAULT_BALANCE);
+        userDO.setPasswordHash(passwordEncoder.encode(rawPassword));
+        userDO.setStatus(USER_STATUS_ENABLED);
+        userDO.setVersion(0);
+
+        LocalDateTime now = LocalDateTime.now();
+        userDO.setCreatedAt(now);
+        userDO.setUpdatedAt(now);
+
+        try {
+            // 保存引导账号。
+            save(userDO);
+        } catch (DuplicateKeyException exception) {
+            // 并发引导时由唯一索引兜底，视为账号已存在。
+            return null;
+        }
+
+        return userDO;
+    }
 
     /**
      * 将用户持久化对象转换为用户基础信息。

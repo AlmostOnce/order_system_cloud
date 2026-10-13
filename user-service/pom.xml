@@ -27,6 +27,44 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- 商品服务公共契约：范围授予时校验档口/餐厅真实存在。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>product-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Access Token 黑名单校验与数据范围缓存 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>common-redis</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- OpenFeign 通过服务名调用时使用的负载均衡组件 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!-- 保护管理接口：角色门禁与请求认证 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- OAuth2 Resource Server，用于校验 JWT -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- JWT 和 RSA 公钥校验能力 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
+
         <!-- BCrypt 密码加密能力 -->
         <dependency>
             <groupId>org.springframework.security</groupId>
