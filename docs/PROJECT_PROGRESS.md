@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-09-28
+更新时间：2026-10-13
 
 ### 已完成
 
@@ -222,19 +222,64 @@
 - 本段配置修改仅在当前工作区，尚未提交或推送；不要将其合并到另一台仍需使用 9090 段端口的设备。
 - 尚未重启 Docker 容器或应用；Docker 命名数据卷未删除。
 
-#### 权限角色规划（已确认，待实现）
+#### 权限角色规划（已确认，第一步已实现）
 
 - 目标角色沿用原点餐系统业务划分：`CUSTOMER`（顾客）、`STALL_MANAGER`（档口负责人/店主）、`RESTAURANT_MANAGER`（餐厅经理）、`GENERAL_MANAGER`（总经理）、`SYSTEM_ADMIN`（系统管理员）。
 - `SYSTEM_ADMIN` 统一作为平台管理员编码；商品目录文档不再使用宽泛的 `ADMIN`。
 - 角色说明可执行的操作类别；具体授权还必须限定 `window_id`、`restaurant_id` 等数据范围。
 - 当前代码和本机用户数据仅实际使用 `CUSTOMER`；本次待开发的第一步是用显式环境变量在 `user-service` 安全引导首个 `SYSTEM_ADMIN`，普通注册继续固定为 `CUSTOMER`。
 - 当前 `users.role_code` 是单值字符串字段。多角色兼任及档口/餐厅范围关联暂不提前实现，待相关业务接口需要时再设计关联表和服务端授权。
+- **已实现（2026-10-13，第一步 SYSTEM_ADMIN 引导）**：新增 `user-service` 的 `AdminBootstrapRunner`（`ApplicationRunner`），启动时读取显式环境变量 `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD`；仅当用户名不存在时创建 `role_code=SYSTEM_ADMIN` 账号（BCrypt 加密），**已存在则跳过且绝不覆盖角色与密码**；未配置或密码长度不足 8 位时跳过并记日志，普通注册仍固定 `CUSTOMER`。`.env` / `.env.example` 已补充该变量；新增 `AdminBootstrapRunnerTest`、`UserServiceImplBootstrapTest` 单测。后续管理员登录后 JWT `roles` claim 自然携带 `SYSTEM_ADMIN`（资源服务器映射 `ROLE_SYSTEM_ADMIN`）。
+- **引导实测（2026-10-13）**：全量 `mvn test` 通过（新增 8 项）；真实启动验证：未配置环境变量→跳过；首次配置→`user_db.users` 落库 `admin/SYSTEM_ADMIN`（user_id=4）；同账号换密码重启→"已存在，本次引导未做任何修改"；经网关真实登录 `admin` 返回 JWT `"roles":["SYSTEM_ADMIN"]`。注：user-service 的 boot 插件未绑定 repackage，`mvn install` 产物不可 `java -jar` 直接运行（IDEA 主类启动不受影响）。
+
+### 2026-10-13 本次完成
+
+#### 角色权限体系第二阶段（manager）
+
+- 落地双维度授权：角色门禁（`@PreAuthorize` 粗粒度）+ 数据范围校验（Service 层细粒度）。角色统一为 `CUSTOMER` / `STALL_MANAGER` / `RESTAURANT_MANAGER` / `GENERAL_MANAGER` / `SYSTEM_ADMIN`，代码中原有的宽泛 `ADMIN` 引用全部移除。
+- 数据范围模型：`user_data_scopes(scope_type, scope_ref)`，`scope_type` 取 `WINDOW` / `RESTAURANT` / `PLATFORM`；**不进 JWT**，user-service 是唯一事实来源，Redis 缓存键 `authz:user-scope:{userId}`（TTL 300s）+ 变更主动失效。
+- `product-service`：新增餐厅模型与内部窗口/餐厅查询接口；档口与菜单管理改为按数据范围校验，角色门禁由 `ADMIN` 改为 `hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')`。
+- `order-service`：新增 `DefaultDataScopeService`；履约推进接口改名 `advanceOrderStatus`、路径改为 `/{orderId}/status`，角色改 `hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')`；越权订单按**私有数据返回 404**（不泄露存在性）。
+- `user-service`：新增数据范围授予接口 `GET/PUT /users/{userId}/scopes`、`DELETE /users/{userId}/scopes/{scopeId}`（归**餐厅经理〔限本餐厅〕+ 总经理〔全平台〕**，`SYSTEM_ADMIN` 不再拥有数据范围分配权），以及角色分配接口 `PUT /users/{userId}/role`（仅 `SYSTEM_ADMIN`）。
+- 授予规则采用"**授予者只能授出自己已具备的范围**"：由操作者范围快照判定，因此只有本身持有 `PLATFORM` 的总经理才能继续授予 `PLATFORM`，餐厅经理不行；无需读取角色码。
+- 硬约束落地：禁止修改本人角色编码（403，防自我提权）；`SYSTEM_ADMIN` 不得推进订单状态与改商品目录（**改角色与数据范围校验同时上线**，避免"拿一个洞换另一个洞"）。
+- 失败语义统一：未认证 401 / 角色不具备 403 / 私有数据越权 404 / 公开资源越权 403 / 状态机冲突 409 / 范围引用不存在 400 / product-service 不可用 503。内部调用统一 `X-Internal-Token` 共享密钥（`INTERNAL_SCOPE_TOKEN`）。
+- 管理操作审计：记录 `actorUserId` / `roleCode` / `action` / `targetType` / `targetId` / `before` / `after` / `result`（当前落结构化日志，通道 `AUDIT`）。
+- 新增测试：`UserScopeAdministrationServiceImplTest`（9 项）、`UserServiceImplAssignRoleTest`（4 项）；同时更新 product/order/user 受影响的既有测试（构造器参数、角色断言、方法改名等）。
+- 验证：`mvn -B -pl user-service -am test` → 27 项全通过；`mvn -B test` → **13 个模块全部 BUILD SUCCESS**，无失败无错误。
+- 修复过程中的一个坑：`assignRole` 原用 `LambdaUpdateWrapper`，单元测试中因缺少 MyBatis 上下文报 `can not find lambda cache for this entity`，已改用字符串列名的 `UpdateWrapper`（与项目其他 Service 一致，也符合"少用 Lambda"规范）。
+
+#### 数据库缺失项补齐（已建服务范围）
+
+- 新增清单文档 `docs/database/SERVICE_DATABASE_INVENTORY.md`：服务 × 数据库 × 表 × 账号 × 迁移脚本 × 内部接口与共享密钥，并区分"已建"与"待建"。
+- 核对发现两条**已写好脚本但本机未执行**的迁移（属已建服务的运行时依赖），已在本机 MySQL 执行：`user_db/V2`（`user_data_scopes` 表）、`product_db/V2`（`restaurants` 表 + `dining_windows.restaurant_id`，并插入默认餐厅 `R0001 默认餐厅`）。
+- 新增并执行 `user_db/V3__add_pay_password_and_balance_records.sql`：`users.pay_password_hash`（余额支付**独立于登录密码**的支付密码）与 `balance_records` 余额流水表（唯一键 `(user_id, biz_type, biz_ref, change_type)` 保证记账幂等）；支付密码失败计数与锁定改用 Redis 带 TTL 计数器，不落库。
+- 核对后本机 MySQL 现状：**4 库 10 表**（order_db: orders/order_items；user_db: users/user_data_scopes/balance_records；product_db: dining_windows/product_categories/products/restaurants；payment_db: payments）。
+- 记录的遗留隐患：`user_db` 缺 `CREATE DATABASE` 脚本；`user_service` / `product_service` 账号只存在于 `backup/db-accounts-fix.sh` 未入迁移目录；`product_db/V2` 的 `ALTER` 不幂等；`order-service` 数据源地址与密码写死、未走环境变量（**待统一**）。
+- 仍未开始：阶段 B/C 未建服务的库（`stock_db`、`comment_db`+MongoDB、`file_db`、`cart_db`、ES 索引、可选 `notification_db`）与 `order_db.undo_log` 补表；余额充值/支付的业务代码也尚未实现。
+
+#### 餐厅（食堂）管理接口与档口字段补全
+
+- 对照旧单体项目 `order-sys-back` 的 `canteen` / `windows` 设计补全结构：`product_db/V4` 给 `restaurants` 补 `location` / `phone` / `image_url` / `notice` / `sort_order`（不含 `business_hours`），`product_db/V5` 给 `dining_windows` 补 `image_url` / `is_open`。`is_open`（营业口径临时开关）与 `status`（管理口径启用/停用）语义分离。
+- 新增餐厅管理接口（角色门禁 `RESTAURANT_MANAGER` / `GENERAL_MANAGER`）：`GET/POST /products/admin/restaurants`、`PUT/DELETE /products/admin/restaurants/{id}`。列表按 `sort_order ASC, restaurant_id ASC` 返回。
+- `sort_order` 与餐厅编码属**平台口径**：只有持全平台范围的总经理可新建、停用、调整；餐厅经理只能改本餐厅的名称/位置/电话/门面图/公告，动编码或排序返回 403。餐厅下仍有启用档口时停用餐厅返回 409。
+- 新增测试：`RestaurantAdministrationServiceImplTest`（8 项）+ `RestaurantAdministrationControllerTest`（1 项）。
+
+#### 端到端验收（Phase 1 第 7、8 步）与两处修复
+
+- 真机跑通设计文档 §10 验收表（WSL docker 中间件 + 5 个服务实跑）：`STALL_MANAGER` 推进本档口订单 200、推进他人档口订单 **404**、调范围授予接口 403；`SYSTEM_ADMIN` 改角色 200、推进订单 403、调范围授予接口 403；`GENERAL_MANAGER` 授予档口范围 200 且缓存失效；餐厅接口 GM 新建 200 / RM 改本餐厅电话 200 / RM 改 `sort_order` 403。
+- **缺陷 1（已修）**：角色不具备时，方法级 `@PreAuthorize` 抛出的 `AuthorizationDeniedException` 未被 `GlobalExceptionHandler` 覆盖，被兜底成 **500**（应为 403）。已在 `common-web` 增加 `@ExceptionHandler(AccessDeniedException.class)` → `403 COMMON_403` 并补单元测试；复验三条由 500 变为 403。
+- **缺陷 2（已修）**：`.env` 仍是旧的两名变量 `ADMIN_BOOTSTRAP_USERNAME/PASSWORD`，与代码及设计要求的七个 `USER_*` 变量不一致且总开关未开，导致**初始总经理引导从未执行**（信任根缺失）。已更新 `.env` 为新变量名并开启开关，同时修正 `SERVICE_DATABASE_INVENTORY.md` 中的旧变量名。
+- **引导判重已收紧（本次）**：原先用 `username OR phone` 的合并查询判重，手机号被他人占用时会误判成"目标账号已存在"并静默跳过，导致信任根建不出来却无人察觉。现拆成 `selectByUsername` + `selectByPhone` 两次精确查询：用户名命中且已是目标角色 → 幂等跳过；用户名命中但角色不同 → 409（禁止借引导提权）；**手机号被其他账号占用 → 409 显式报错**（宁可启动失败也不让信任根静默缺失）。`UserServiceImplBootstrapTest` 增至 8 项（新增"手机号被他人占用"用例）。
+- **验收临时数据已清理（本次）**：删除临时账号 `gm01` 及其 `PLATFORM` 范围、验收插入的订单 `order_id=4`、验收新建的餐厅 `R0002`，并还原 `R0001` 的 `phone`/`location`。清理后重启 `user-service`，引导**成功创建** `general_manager`（user_id=8）及其 `PLATFORM` 范围，登录验证通过（JWT `roles=["GENERAL_MANAGER"]`）。保留 `stall01`（WINDOW:1）、`rm01`（RESTAURANT:1）作为 Phase 1 第 8 步要求的可登录测试账号。
+- **环境提醒**：本次发现 IDEA 内运行的是过期代码（进程 09:0x 启动、`target/classes` 12:06 才编译，对新端点一律 500）——改完代码必须在 IDEA 内重启服务；根 pom 未继承 `spring-boot-starter-parent`，`mvn install` 产物是瘦 jar，命令行启动需再执行 `spring-boot:repackage`。
 
 ## 当前下一步
 
-1. 后续补管理员身份初始化/授权流程；登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
+1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"；未覆盖的是账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"（409）。登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
 2. 缓存防护（穿透/击穿/雪崩 + 布隆过滤器）按下方规划实施，优先覆盖商品菜单等热点读路径。
 3. 支付模块可选增强：渠道关闭支付单的定时对账、auto-confirm 开启后的自动化演练、FAILED/CLOSED 分支的界面化演示。
+4. ~~引导账号判重收紧与验收临时数据清理~~ **已完成（2026-10-13）**：判重改为用户名/手机号分开精确查询、手机号被占显式报错；临时数据已清理，`general_manager` 引导创建成功并验证可登录。
 
 ### 缓存防护规划
 
