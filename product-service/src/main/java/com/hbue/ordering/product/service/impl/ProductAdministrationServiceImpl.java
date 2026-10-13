@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
+import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
 import com.hbue.ordering.product.dto.request.ProductCategorySaveRequest;
 import com.hbue.ordering.product.dto.request.ProductSaveRequest;
 import com.hbue.ordering.product.dto.request.WindowSaveRequest;
@@ -27,6 +29,9 @@ import java.util.List;
 /**
  * 窗口、分类和菜品管理业务实现。
  *
+ * <p>所有方法在执行前都按 {@code operatorId} 做数据范围校验：
+ * 档口与菜单属于公开资源，越权统一返回 403（不隐藏存在性）。</p>
+ *
  * @author order-system
  * @date 2026-09-28
  */
@@ -49,32 +54,43 @@ public class ProductAdministrationServiceImpl
     /** 菜品数据 Mapper。 */
     private final ProductMapper productMapper;
 
+    /** 数据范围判定服务。 */
+    private final DataScopeService dataScopeService;
+
     /**
      * 创建目录管理服务。
      *
      * @param diningWindowMapper 窗口数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper 菜品数据 Mapper
+     * @param dataScopeService 数据范围判定服务
      */
     public ProductAdministrationServiceImpl(
             DiningWindowMapper diningWindowMapper,
             ProductCategoryMapper productCategoryMapper,
-            ProductMapper productMapper
+            ProductMapper productMapper,
+            DataScopeService dataScopeService
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
+        this.dataScopeService = dataScopeService;
     }
 
     /** {@inheritDoc} */
     @Override
-    public List<WindowAdminVO> listWindows() {
+    public List<WindowAdminVO> listWindows(Long operatorId) {
         List<DiningWindowDO> windows = diningWindowMapper.selectList(
                 new QueryWrapper<DiningWindowDO>().orderByAsc("window_id")
         );
+
+        // 只返回操作者范围内的档口；全平台范围返回全部。
+        UserScopeSnapshot scopes = dataScopeService.loadScopes(operatorId);
         List<WindowAdminVO> results = new ArrayList<>();
         for (DiningWindowDO window : windows) {
-            results.add(toWindowVO(window));
+            if (withinScope(scopes, window)) {
+                results.add(toWindowVO(window));
+            }
         }
         return results;
     }
@@ -82,13 +98,26 @@ public class ProductAdministrationServiceImpl
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public WindowAdminVO createWindow(WindowSaveRequest request) {
+    public WindowAdminVO createWindow(
+            Long operatorId,
+            WindowSaveRequest request
+    ) {
         requireRequest(request);
+
+        // 只能在自己管辖的餐厅下新建档口；越权返回 403。
+        dataScopeService.checkRestaurantAccess(
+                operatorId,
+                request.getRestaurantId()
+        );
+
         DiningWindowDO window = new DiningWindowDO();
+        window.setRestaurantId(request.getRestaurantId());
         window.setWindowCode(request.getWindowCode());
         window.setWindowName(request.getWindowName());
         window.setLocation(request.getLocation());
+        window.setImageUrl(request.getImageUrl());
         window.setStatus(request.getStatus());
+        window.setIsOpen(request.getIsOpen());
         try {
             diningWindowMapper.insert(window);
         } catch (DuplicateKeyException exception) {
@@ -103,16 +132,31 @@ public class ProductAdministrationServiceImpl
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public WindowAdminVO updateWindow(Long windowId, WindowSaveRequest request) {
+    public WindowAdminVO updateWindow(
+            Long operatorId,
+            Long windowId,
+            WindowSaveRequest request
+    ) {
         validateId(windowId, "窗口");
         requireRequest(request);
+
+        // 目标档口必须落在操作者范围内，改挂餐厅也不能越界。
+        dataScopeService.checkWindowAccess(operatorId, windowId);
+        dataScopeService.checkRestaurantAccess(
+                operatorId,
+                request.getRestaurantId()
+        );
         requireWindow(windowId);
+
         UpdateWrapper<DiningWindowDO> update = new UpdateWrapper<>();
         update.eq("window_id", windowId)
+                .set("restaurant_id", request.getRestaurantId())
                 .set("window_code", request.getWindowCode())
                 .set("window_name", request.getWindowName())
                 .set("location", request.getLocation())
-                .set("status", request.getStatus());
+                .set("image_url", request.getImageUrl())
+                .set("status", request.getStatus())
+                .set("is_open", request.getIsOpen());
         try {
             diningWindowMapper.update(null, update);
         } catch (DuplicateKeyException exception) {
@@ -124,8 +168,9 @@ public class ProductAdministrationServiceImpl
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public void disableWindow(Long windowId) {
+    public void disableWindow(Long operatorId, Long windowId) {
         validateId(windowId, "窗口");
+        dataScopeService.checkWindowAccess(operatorId, windowId);
         DiningWindowDO window = requireWindow(windowId);
         if (Integer.valueOf(0).equals(window.getStatus())) {
             return;
@@ -137,8 +182,12 @@ public class ProductAdministrationServiceImpl
 
     /** {@inheritDoc} */
     @Override
-    public List<ProductCategoryAdminVO> listCategories(Long windowId) {
+    public List<ProductCategoryAdminVO> listCategories(
+            Long operatorId,
+            Long windowId
+    ) {
         validateId(windowId, "窗口");
+        dataScopeService.checkWindowAccess(operatorId, windowId);
         requireWindow(windowId);
         List<ProductCategoryDO> categories = productCategoryMapper.selectList(
                 new QueryWrapper<ProductCategoryDO>()
@@ -157,11 +206,13 @@ public class ProductAdministrationServiceImpl
     @Override
     @Transactional
     public ProductCategoryAdminVO createCategory(
+            Long operatorId,
             Long windowId,
             ProductCategorySaveRequest request
     ) {
         validateId(windowId, "窗口");
         requireRequest(request);
+        dataScopeService.checkWindowAccess(operatorId, windowId);
         requireWindow(windowId);
         ProductCategoryDO category = new ProductCategoryDO();
         category.setWindowId(windowId);
@@ -185,12 +236,18 @@ public class ProductAdministrationServiceImpl
     @Override
     @Transactional
     public ProductCategoryAdminVO updateCategory(
+            Long operatorId,
             Long categoryId,
             ProductCategorySaveRequest request
     ) {
         validateId(categoryId, "分类");
         requireRequest(request);
-        requireCategory(categoryId);
+        ProductCategoryDO existingCategory = requireCategory(categoryId);
+        dataScopeService.checkWindowAccess(
+                operatorId,
+                existingCategory.getWindowId()
+        );
+
         UpdateWrapper<ProductCategoryDO> update = new UpdateWrapper<>();
         update.eq("category_id", categoryId)
                 .set("category_name", request.getCategoryName())
@@ -207,9 +264,10 @@ public class ProductAdministrationServiceImpl
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public void disableCategory(Long categoryId) {
+    public void disableCategory(Long operatorId, Long categoryId) {
         validateId(categoryId, "分类");
         ProductCategoryDO category = requireCategory(categoryId);
+        dataScopeService.checkWindowAccess(operatorId, category.getWindowId());
         if (Integer.valueOf(0).equals(category.getStatus())) {
             return;
         }
@@ -220,8 +278,9 @@ public class ProductAdministrationServiceImpl
 
     /** {@inheritDoc} */
     @Override
-    public List<ProductAdminVO> listProducts(Long windowId) {
+    public List<ProductAdminVO> listProducts(Long operatorId, Long windowId) {
         validateId(windowId, "窗口");
+        dataScopeService.checkWindowAccess(operatorId, windowId);
         requireWindow(windowId);
         List<ProductDO> products = productMapper.selectList(
                 new QueryWrapper<ProductDO>()
@@ -239,17 +298,24 @@ public class ProductAdministrationServiceImpl
 
     /** {@inheritDoc} */
     @Override
-    public ProductAdminVO getProduct(Long productId) {
+    public ProductAdminVO getProduct(Long operatorId, Long productId) {
         validateId(productId, "菜品");
-        return toProductVO(requireProduct(productId));
+        ProductDO product = requireProduct(productId);
+        dataScopeService.checkWindowAccess(operatorId, product.getWindowId());
+        return toProductVO(product);
     }
 
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public ProductAdminVO createProduct(Long windowId, ProductSaveRequest request) {
+    public ProductAdminVO createProduct(
+            Long operatorId,
+            Long windowId,
+            ProductSaveRequest request
+    ) {
         validateId(windowId, "窗口");
         requireRequest(request);
+        dataScopeService.checkWindowAccess(operatorId, windowId);
         requireWindow(windowId);
         validateCategoryForProduct(
                 windowId,
@@ -275,12 +341,17 @@ public class ProductAdministrationServiceImpl
     @Override
     @Transactional
     public ProductAdminVO updateProduct(
+            Long operatorId,
             Long productId,
             ProductSaveRequest request
     ) {
         validateId(productId, "菜品");
         requireRequest(request);
         ProductDO existingProduct = requireProduct(productId);
+        dataScopeService.checkWindowAccess(
+                operatorId,
+                existingProduct.getWindowId()
+        );
         validateCategoryForProduct(
                 existingProduct.getWindowId(),
                 request.getCategoryId(),
@@ -308,15 +379,33 @@ public class ProductAdministrationServiceImpl
     /** {@inheritDoc} */
     @Override
     @Transactional
-    public void disableProduct(Long productId) {
+    public void disableProduct(Long operatorId, Long productId) {
         validateId(productId, "菜品");
         ProductDO product = requireProduct(productId);
+        dataScopeService.checkWindowAccess(operatorId, product.getWindowId());
         if (Integer.valueOf(0).equals(product.getSaleStatus())) {
             return;
         }
         UpdateWrapper<ProductDO> update = new UpdateWrapper<>();
         update.eq("product_id", productId).set("sale_status", 0);
         productMapper.update(null, update);
+    }
+
+    /**
+     * 判断档口是否落在给定范围快照内。
+     *
+     * <p>主管档口、所属餐厅、全平台范围均视为落在范围内。</p>
+     *
+     * @param scopes 范围快照
+     * @param window 档口数据
+     * @return 落在范围内时返回 true
+     */
+    private boolean withinScope(
+            UserScopeSnapshot scopes,
+            DiningWindowDO window
+    ) {
+        return scopes.coversWindow(window.getWindowId())
+                || scopes.coversRestaurant(window.getRestaurantId());
     }
 
     /**
@@ -470,10 +559,13 @@ public class ProductAdministrationServiceImpl
     private WindowAdminVO toWindowVO(DiningWindowDO window) {
         return new WindowAdminVO(
                 window.getWindowId(),
+                window.getRestaurantId(),
                 window.getWindowCode(),
                 window.getWindowName(),
                 window.getLocation(),
+                window.getImageUrl(),
                 window.getStatus(),
+                window.getIsOpen(),
                 window.getCreatedAt(),
                 window.getUpdatedAt()
         );

@@ -14,13 +14,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class ProductAdministrationControllerTest {
 
-    /** 管理接口必须整体限制为 ADMIN 角色。 */
+    /** 管理接口必须整体限制为档口负责人与餐厅经理角色。 */
     @Test
-    void shouldRestrictAllAdministrationEndpointsToAdminRole() {
+    void shouldRestrictAllAdministrationEndpointsToBusinessRoles() {
         PreAuthorize authorization = ProductAdministrationController.class
                 .getAnnotation(PreAuthorize.class);
 
         assertNotNull(authorization);
-        assertEquals("hasRole('ADMIN')", authorization.value());
+        assertEquals(
+                "hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')",
+                authorization.value()
+        );
     }
 }

@@ -27,6 +27,12 @@ public class DiningWindowDO {
     private Long windowId;
 
     /**
+     * 所属餐厅 ID。
+     */
+    @TableField("restaurant_id")
+    private Long restaurantId;
+
+    /**
      * 窗口编码。
      */
     @TableField("window_code")
@@ -45,10 +51,22 @@ public class DiningWindowDO {
     private String location;
 
     /**
+     * 窗口图片地址。
+     */
+    @TableField("image_url")
+    private String imageUrl;
+
+    /**
      * 窗口状态：1 启用，0 停用。
      */
     @TableField("status")
     private Integer status;
+
+    /**
+     * 是否营业：1 营业，0 休息；与启用状态相互独立。
+     */
+    @TableField("is_open")
+    private Integer isOpen;
 
     /**
      * 创建时间。

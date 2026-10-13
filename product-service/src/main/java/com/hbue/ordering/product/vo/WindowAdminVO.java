@@ -20,6 +20,9 @@ public class WindowAdminVO {
     /** 窗口 ID。 */
     private Long windowId;
 
+    /** 所属餐厅 ID。 */
+    private Long restaurantId;
+
     /** 窗口编码。 */
     private String windowCode;
 
@@ -29,8 +32,14 @@ public class WindowAdminVO {
     /** 窗口位置。 */
     private String location;
 
+    /** 窗口图片地址。 */
+    private String imageUrl;
+
     /** 窗口状态：1 启用，0 停用。 */
     private Integer status;
+
+    /** 是否营业：1 营业，0 休息。 */
+    private Integer isOpen;
 
     /** 创建时间。 */
     private LocalDateTime createdAt;

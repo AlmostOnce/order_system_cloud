@@ -3,6 +3,7 @@ package com.hbue.ordering.product.service.impl;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.product.dto.request.ProductCategorySaveRequest;
 import com.hbue.ordering.product.dto.request.ProductSaveRequest;
 import com.hbue.ordering.product.dto.request.WindowSaveRequest;
@@ -36,6 +37,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ProductAdministrationServiceImplTest {
 
+    /** 测试用操作者用户 ID。 */
+    private static final Long OPERATOR_ID = 99L;
+
     @Mock
     private DiningWindowMapper diningWindowMapper;
 
@@ -45,11 +49,14 @@ class ProductAdministrationServiceImplTest {
     @Mock
     private ProductMapper productMapper;
 
+    @Mock
+    private DataScopeService dataScopeService;
+
     @Test
     void shouldSoftDisableWindowInsteadOfDeletingIt() {
         when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
 
-        service().disableWindow(7L);
+        service().disableWindow(OPERATOR_ID, 7L);
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         ArgumentCaptor<UpdateWrapper<DiningWindowDO>> captor =
@@ -65,7 +72,7 @@ class ProductAdministrationServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service().createWindow(windowRequest())
+                () -> service().createWindow(OPERATOR_ID, windowRequest())
         );
 
         assertEquals(CommonErrorCode.CONFLICT.code(), exception.getErrorCode().code());
@@ -77,7 +84,7 @@ class ProductAdministrationServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service().createCategory(9L, categoryRequest())
+                () -> service().createCategory(OPERATOR_ID, 9L, categoryRequest())
         );
 
         assertEquals(CommonErrorCode.NOT_FOUND.code(), exception.getErrorCode().code());
@@ -91,7 +98,7 @@ class ProductAdministrationServiceImplTest {
         category.setStatus(1);
         when(productCategoryMapper.selectById(12L)).thenReturn(category);
 
-        service().disableCategory(12L);
+        service().disableCategory(OPERATOR_ID, 12L);
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         ArgumentCaptor<UpdateWrapper<ProductCategoryDO>> captor =
@@ -114,7 +121,11 @@ class ProductAdministrationServiceImplTest {
             return 1;
         });
 
-        ProductAdminVO result = service().createProduct(7L, productRequest(12L));
+        ProductAdminVO result = service().createProduct(
+                OPERATOR_ID,
+                7L,
+                productRequest(12L)
+        );
 
         assertEquals(31L, result.getProductId());
         assertEquals(7L, result.getWindowId());
@@ -134,7 +145,7 @@ class ProductAdministrationServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service().createProduct(7L, productRequest(12L))
+                () -> service().createProduct(OPERATOR_ID, 7L, productRequest(12L))
         );
 
         assertEquals(CommonErrorCode.BAD_REQUEST.code(), exception.getErrorCode().code());
@@ -151,7 +162,7 @@ class ProductAdministrationServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service().createProduct(7L, productRequest(12L))
+                () -> service().createProduct(OPERATOR_ID, 7L, productRequest(12L))
         );
 
         assertEquals(CommonErrorCode.BAD_REQUEST.code(), exception.getErrorCode().code());
@@ -165,7 +176,7 @@ class ProductAdministrationServiceImplTest {
         product.setSaleStatus(1);
         when(productMapper.selectById(31L)).thenReturn(product);
 
-        service().disableProduct(31L);
+        service().disableProduct(OPERATOR_ID, 31L);
 
         @SuppressWarnings({"rawtypes", "unchecked"})
         ArgumentCaptor<UpdateWrapper<ProductDO>> captor =
@@ -178,7 +189,8 @@ class ProductAdministrationServiceImplTest {
         return new ProductAdministrationServiceImpl(
                 diningWindowMapper,
                 productCategoryMapper,
-                productMapper
+                productMapper,
+                dataScopeService
         );
     }
 
@@ -194,6 +206,7 @@ class ProductAdministrationServiceImplTest {
 
     private WindowSaveRequest windowRequest() {
         WindowSaveRequest request = new WindowSaveRequest();
+        request.setRestaurantId(1L);
         request.setWindowCode("W-7");
         request.setWindowName("测试窗口");
         request.setLocation("一楼");

@@ -24,6 +24,25 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- 用户服务公共契约，用于查询数据范围事实。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>user-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!-- OpenFeign 远程调用，用于查询 user-service 的数据范围。 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
+        <!-- OpenFeign 通过服务名调用时使用的负载均衡组件。 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
         <!-- 统一异常和 HTTP 响应处理。 -->
         <dependency>
             <groupId>com.hbue.ordering</groupId>
