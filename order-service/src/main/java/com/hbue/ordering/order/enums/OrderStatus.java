@@ -69,15 +69,15 @@ public enum OrderStatus {
     }
 
     /**
-     * 判断管理员能否执行当前状态到目标状态的履约推进。
+     * 判断商家能否执行当前状态到目标状态的履约推进。
      *
-     * <p>支付状态只能由后续支付结果通知推进，管理员不能手动标记已支付；
-     * 顾客取消也不属于管理员履约操作。</p>
+     * <p>支付状态只能由后续支付结果通知推进，商家不能手动标记已支付；
+     * 顾客取消也不属于商家履约操作。</p>
      *
      * @param targetStatus 目标状态
-     * @return 管理员可以执行时返回 true
+     * @return 可以执行时返回 true
      */
-    public boolean canBeAdvancedByAdminTo(OrderStatus targetStatus) {
+    public boolean canBeAdvancedByManagerTo(OrderStatus targetStatus) {
         return this != PENDING_PAYMENT
                 && targetStatus != CANCELLED
                 && canTransitionTo(targetStatus);

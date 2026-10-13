@@ -2,6 +2,8 @@ package com.hbue.ordering.order.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
@@ -49,6 +51,12 @@ class OrderMarkOrderPaidTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private DataScopeService dataScopeService;
+
+    @Mock
+    private ManagementAuditLogger auditLogger;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -57,7 +65,9 @@ class OrderMarkOrderPaidTest {
                 userServiceClient,
                 productServiceClient,
                 orderPersistenceService,
-                orderItemMapper
+                orderItemMapper,
+                dataScopeService,
+                auditLogger
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
     }

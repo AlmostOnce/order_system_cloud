@@ -62,13 +62,18 @@ public interface OrderService extends IService<OrderDO> {
     OrderStatusVO cancelOrder(Long userId, Long orderId);
 
     /**
-     * 管理员按合法履约顺序推进订单状态。
+     * 商家按合法履约顺序推进订单状态。
      *
+     * <p>调用方必须持有 STALL_MANAGER 或 RESTAURANT_MANAGER 角色；
+     * 订单属私有数据，目标订单不在操作者数据范围内时按不存在处理（404）。</p>
+     *
+     * @param operatorId 当前登录操作者 ID
      * @param orderId 订单 ID
      * @param targetStatus 目标状态
      * @return 订单状态变更结果
      */
-    OrderStatusVO updateStatusByAdmin(
+    OrderStatusVO advanceOrderStatus(
+            Long operatorId,
             Long orderId,
             OrderStatus targetStatus
     );

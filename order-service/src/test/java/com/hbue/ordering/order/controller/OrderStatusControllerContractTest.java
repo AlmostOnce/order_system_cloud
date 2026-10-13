@@ -40,21 +40,22 @@ class OrderStatusControllerContractTest {
     }
 
     /**
-     * 管理员状态接口必须使用独立路径并限制为管理员角色。
+     * 商家状态接口必须限制为档口负责人与餐厅经理角色。
      *
      * @throws NoSuchMethodException 接口方法不存在时抛出
      */
     @Test
-    void shouldExposeAdminStatusEndpoint() throws NoSuchMethodException {
+    void shouldExposeManagerStatusEndpoint() throws NoSuchMethodException {
         Method method = OrderController.class.getMethod(
-                "updateStatusByAdmin",
+                "advanceOrderStatus",
+                org.springframework.security.oauth2.jwt.Jwt.class,
                 Long.class,
                 OrderStatusUpdateRequest.class
         );
 
-        assertEquals("/admin/{orderId}/status",
+        assertEquals("/{orderId}/status",
                 method.getAnnotation(PatchMapping.class).value()[0]);
-        assertEquals("hasRole('ADMIN')",
+        assertEquals("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')",
                 method.getAnnotation(PreAuthorize.class).value());
     }
 }

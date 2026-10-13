@@ -27,20 +27,20 @@ class OrderStatusTest {
     }
 
     /**
-     * 管理员只能按履约顺序推进状态，不能代替支付回调标记已支付。
+     * 商家只能按履约顺序推进状态，不能代替支付回调标记已支付。
      */
     @Test
-    void shouldAllowAdminFulfillmentTransitionsButNotPaymentTransition() {
+    void shouldAllowManagerFulfillmentTransitionsButNotPaymentTransition() {
         assertTrue(OrderStatus.PAID
-                .canBeAdvancedByAdminTo(OrderStatus.PREPARING));
+                .canBeAdvancedByManagerTo(OrderStatus.PREPARING));
         assertTrue(OrderStatus.PREPARING
-                .canBeAdvancedByAdminTo(OrderStatus.WAITING_FOR_PICKUP));
+                .canBeAdvancedByManagerTo(OrderStatus.WAITING_FOR_PICKUP));
         assertTrue(OrderStatus.WAITING_FOR_PICKUP
-                .canBeAdvancedByAdminTo(OrderStatus.COMPLETED));
+                .canBeAdvancedByManagerTo(OrderStatus.COMPLETED));
         assertFalse(OrderStatus.PENDING_PAYMENT
-                .canBeAdvancedByAdminTo(OrderStatus.PAID));
+                .canBeAdvancedByManagerTo(OrderStatus.PAID));
         assertFalse(OrderStatus.PAID
-                .canBeAdvancedByAdminTo(OrderStatus.COMPLETED));
+                .canBeAdvancedByManagerTo(OrderStatus.COMPLETED));
     }
 
     /**

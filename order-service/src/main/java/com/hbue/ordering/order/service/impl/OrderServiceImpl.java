@@ -3,7 +3,9 @@ package com.hbue.ordering.order.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.order.enums.OrderStatus;
@@ -62,6 +64,12 @@ public class OrderServiceImpl
     private static final BigDecimal MAX_ORDER_AMOUNT =
             new BigDecimal("99999999.99");
 
+    /** 审计动作：商家推进订单状态。 */
+    private static final String ORDER_STATUS_ADVANCE = "ORDER_STATUS_ADVANCE";
+
+    /** 审计目标类型：订单。 */
+    private static final String ORDER_TARGET_TYPE = "ORDER";
+
     /** 用户服务远程客户端。 */
     private final UserServiceClient userServiceClient;
 
@@ -74,6 +82,12 @@ public class OrderServiceImpl
     /** 订单明细 Mapper。 */
     private final OrderItemMapper orderItemMapper;
 
+    /** 数据范围判定服务。 */
+    private final DataScopeService dataScopeService;
+
+    /** 管理操作审计日志记录器。 */
+    private final ManagementAuditLogger auditLogger;
+
     /**
      * 创建订单业务服务。
      *
@@ -81,17 +95,23 @@ public class OrderServiceImpl
      * @param productServiceClient 商品服务核价客户端
      * @param orderPersistenceService 订单原子持久化服务
      * @param orderItemMapper 订单明细 Mapper
+     * @param dataScopeService 数据范围判定服务
+     * @param auditLogger 管理操作审计日志记录器
      */
     public OrderServiceImpl(
             UserServiceClient userServiceClient,
             ProductServiceClient productServiceClient,
             OrderPersistenceService orderPersistenceService,
-            OrderItemMapper orderItemMapper
+            OrderItemMapper orderItemMapper,
+            DataScopeService dataScopeService,
+            ManagementAuditLogger auditLogger
     ) {
         this.userServiceClient = userServiceClient;
         this.productServiceClient = productServiceClient;
         this.orderPersistenceService = orderPersistenceService;
         this.orderItemMapper = orderItemMapper;
+        this.dataScopeService = dataScopeService;
+        this.auditLogger = auditLogger;
     }
 
     /**
@@ -238,14 +258,19 @@ public class OrderServiceImpl
     }
 
     /**
-     * 管理员按合法履约顺序推进订单状态。
+     * 商家按合法履约顺序推进订单状态。
      *
+     * <p>先做细粒度数据范围校验：订单属私有数据，越权与不存在对外表现一致，
+     * 统一返回 404；再校验状态机（待支付→已支付由支付回调独占，此处必然拒绝）。</p>
+     *
+     * @param operatorId 当前登录操作者 ID
      * @param orderId 订单 ID
      * @param targetStatus 目标状态
      * @return 订单状态变更结果
      */
     @Override
-    public OrderStatusVO updateStatusByAdmin(
+    public OrderStatusVO advanceOrderStatus(
+            Long operatorId,
             Long orderId,
             OrderStatus targetStatus
     ) {
@@ -257,12 +282,46 @@ public class OrderServiceImpl
         }
 
         OrderDO orderDO = getOrderForStatusChange(orderId);
+
+        // 订单属私有数据：不在操作者范围内时按不存在处理，避免探测订单是否存在。
+        if (!dataScopeService.canAccessWindow(
+                operatorId,
+                orderDO.getWindowId()
+        )) {
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "订单不存在"
+            );
+        }
+
         OrderStatus currentStatus = getCurrentStatus(orderDO);
-        if (!currentStatus.canBeAdvancedByAdminTo(targetStatus)) {
+        if (!currentStatus.canBeAdvancedByManagerTo(targetStatus)) {
+            auditLogger.record(
+                    operatorId,
+                    ORDER_STATUS_ADVANCE,
+                    ORDER_TARGET_TYPE,
+                    orderId,
+                    currentStatus.getLabel(),
+                    targetStatus.getLabel(),
+                    false
+            );
             throw invalidStatusTransition();
         }
 
-        return persistStatusTransition(orderDO, targetStatus);
+        OrderStatusVO statusVO = persistStatusTransition(
+                orderDO,
+                targetStatus
+        );
+        auditLogger.record(
+                operatorId,
+                ORDER_STATUS_ADVANCE,
+                ORDER_TARGET_TYPE,
+                orderId,
+                currentStatus.getLabel(),
+                targetStatus.getLabel(),
+                true
+        );
+        return statusVO;
     }
 
     /**

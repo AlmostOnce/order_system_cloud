@@ -2,7 +2,9 @@ package com.hbue.ordering.order.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
@@ -64,6 +66,12 @@ class OrderServiceImplTest {
     @Mock
     private OrderItemMapper orderItemMapper;
 
+    @Mock
+    private DataScopeService dataScopeService;
+
+    @Mock
+    private ManagementAuditLogger auditLogger;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -72,7 +80,9 @@ class OrderServiceImplTest {
                 userServiceClient,
                 productServiceClient,
                 orderPersistenceService,
-                orderItemMapper
+                orderItemMapper,
+                dataScopeService,
+                auditLogger
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
     }

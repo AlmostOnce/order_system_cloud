@@ -2,6 +2,8 @@ package com.hbue.ordering.order.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.scope.DataScopeService;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
@@ -34,6 +36,8 @@ class OrderStatusServiceTest {
 
     private static final Long ORDER_ID = 701L;
     private static final Long CUSTOMER_ID = 37L;
+    private static final Long OPERATOR_ID = 55L;
+    private static final Long WINDOW_ID = 3L;
 
     @Mock
     private UserServiceClient userServiceClient;
@@ -50,6 +54,12 @@ class OrderStatusServiceTest {
     @Mock
     private OrderItemMapper orderItemMapper;
 
+    @Mock
+    private DataScopeService dataScopeService;
+
+    @Mock
+    private ManagementAuditLogger auditLogger;
+
     private OrderServiceImpl orderService;
 
     /**
@@ -61,7 +71,9 @@ class OrderStatusServiceTest {
                 userServiceClient,
                 productServiceClient,
                 orderPersistenceService,
-                orderItemMapper
+                orderItemMapper,
+                dataScopeService,
+                auditLogger
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
     }
@@ -155,13 +167,15 @@ class OrderStatusServiceTest {
     }
 
     /**
-     * 管理员可以将已支付订单推进到制作中。
+     * 商家可以将范围内的已支付订单推进到制作中。
      */
     @Test
     void shouldAdvancePaidOrderToPreparing() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(
                 order(CUSTOMER_ID, "已支付", 6)
         );
+        when(dataScopeService.canAccessWindow(OPERATOR_ID, WINDOW_ID))
+                .thenReturn(true);
         when(orderPersistenceService.updateStatusIfUnchanged(
                 ORDER_ID,
                 "已支付",
@@ -169,7 +183,8 @@ class OrderStatusServiceTest {
                 "制作中"
         )).thenReturn(true);
 
-        OrderStatusVO result = orderService.updateStatusByAdmin(
+        OrderStatusVO result = orderService.advanceOrderStatus(
+                OPERATOR_ID,
                 ORDER_ID,
                 OrderStatus.PREPARING
         );
@@ -184,24 +199,54 @@ class OrderStatusServiceTest {
     }
 
     /**
-     * 管理员不能跳过履约步骤或手动伪造支付成功。
+     * 订单不落在操作者范围内时按订单不存在处理，避免探测订单是否存在。
      */
     @Test
-    void shouldRejectSkippedAndPaymentStatusTransitionsByAdmin() {
+    void shouldHideOutOfScopeOrderWhenAdvancing() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(
                 order(CUSTOMER_ID, "已支付", 6)
         );
+        when(dataScopeService.canAccessWindow(OPERATOR_ID, WINDOW_ID))
+                .thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.advanceOrderStatus(
+                        OPERATOR_ID,
+                        ORDER_ID,
+                        OrderStatus.PREPARING
+                )
+        );
+
+        assertEquals(CommonErrorCode.NOT_FOUND.code(),
+                exception.getErrorCode().code());
+        verify(orderPersistenceService, never())
+                .updateStatusIfUnchanged(ORDER_ID, "已支付", 6, "制作中");
+    }
+
+    /**
+     * 商家不能跳过履约步骤或手动伪造支付成功。
+     */
+    @Test
+    void shouldRejectSkippedAndPaymentStatusTransitionsByManager() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(
+                order(CUSTOMER_ID, "已支付", 6)
+        );
+        when(dataScopeService.canAccessWindow(OPERATOR_ID, WINDOW_ID))
+                .thenReturn(true);
 
         BusinessException skippedTransition = assertThrows(
                 BusinessException.class,
-                () -> orderService.updateStatusByAdmin(
+                () -> orderService.advanceOrderStatus(
+                        OPERATOR_ID,
                         ORDER_ID,
                         OrderStatus.COMPLETED
                 )
         );
         BusinessException fakePayment = assertThrows(
                 BusinessException.class,
-                () -> orderService.updateStatusByAdmin(
+                () -> orderService.advanceOrderStatus(
+                        OPERATOR_ID,
                         ORDER_ID,
                         OrderStatus.PAID
                 )
@@ -216,13 +261,17 @@ class OrderStatusServiceTest {
     }
 
     /**
-     * 管理员请求缺少目标状态时必须在查询订单前返回参数错误。
+     * 商家请求缺少目标状态时必须在查询订单前返回参数错误。
      */
     @Test
-    void shouldRejectMissingAdminTargetStatus() {
+    void shouldRejectMissingManagerTargetStatus() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> orderService.updateStatusByAdmin(ORDER_ID, null)
+                () -> orderService.advanceOrderStatus(
+                        OPERATOR_ID,
+                        ORDER_ID,
+                        null
+                )
         );
 
         assertEquals(CommonErrorCode.BAD_REQUEST.code(),
@@ -286,6 +335,7 @@ class OrderStatusServiceTest {
         OrderDO orderDO = new OrderDO();
         orderDO.setOrderId(ORDER_ID);
         orderDO.setUserId(userId);
+        orderDO.setWindowId(WINDOW_ID);
         orderDO.setStatus(status);
         orderDO.setVersion(version);
         return orderDO;

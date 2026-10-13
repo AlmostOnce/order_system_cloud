@@ -144,21 +144,29 @@ public class OrderController {
     }
 
     /**
-     * 管理员按合法履约顺序推进订单状态。
+     * 商家按合法履约顺序推进订单状态。
      *
-     * @param jwt 当前登录管理员 JWT
+     * <p>只允许档口负责人与餐厅经理调用；技术角色不参与订单履约。
+     * Service 会校验订单是否落在操作者的数据范围内，越权按不存在处理。</p>
+     *
+     * @param jwt 当前登录操作者 JWT
      * @param orderId 订单 ID
      * @param request 目标订单状态
      * @return 变更后的订单状态
      */
-    @PreAuthorize("hasRole('ADMIN')")
-    @PatchMapping("/admin/{orderId}/status")
-    public ApiResponse<OrderStatusVO> updateStatusByAdmin(
+    @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')")
+    @PatchMapping("/{orderId}/status")
+    public ApiResponse<OrderStatusVO> advanceOrderStatus(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable("orderId") Long orderId,
             @Valid @RequestBody OrderStatusUpdateRequest request
     ) {
-        // Service 校验合法迁移并执行原子状态更新。
-        OrderStatusVO statusVO = orderService.updateStatusByAdmin(
+        // 从 JWT 的 sub 声明中获取操作者用户 ID，供范围校验与审计使用。
+        Long operatorId = Long.valueOf(jwt.getSubject());
+
+        // Service 校验数据范围与合法迁移并执行原子状态更新。
+        OrderStatusVO statusVO = orderService.advanceOrderStatus(
+                operatorId,
                 orderId,
                 request.getStatus()
         );
