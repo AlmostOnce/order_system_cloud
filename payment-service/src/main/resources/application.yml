@@ -5,7 +5,7 @@ server:
 spring:
   datasource:
     # 支付服务只连接自己的数据库。
-    url: ${PAYMENT_DB_URL:jdbc:mysql://127.0.0.1:3307/payment_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    url: ${PAYMENT_DB_URL:jdbc:mysql://127.0.0.1:9095/payment_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
     username: ${PAYMENT_DB_USERNAME:payment_service}
     password: ${PAYMENT_DB_PASSWORD:payment_password_dev_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -14,7 +14,7 @@ spring:
     redis:
       # JWT 注销状态与其他服务共用 Redis 黑名单。
       host: ${REDIS_HOST:127.0.0.1}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT:9096}
       password: ${REDIS_PASSWORD:order_redis_dev_2026}
       database: 0
       connect-timeout: 2s
@@ -27,7 +27,7 @@ spring:
     nacos:
       discovery:
         # 本机运行时连接 Docker 暴露的 Nacos API 端口。
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8850}
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
         username: ${NACOS_USERNAME:nacos}
         password: ${NACOS_PASSWORD:root}
 
@@ -54,7 +54,7 @@ management:
 
 security:
   jwt:
-    issuer: ${JWT_ISSUER:http://localhost:8084}
+    issuer: ${JWT_ISSUER:http://localhost:9094}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
     blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
 

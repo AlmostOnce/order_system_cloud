@@ -13,7 +13,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     ports:
-      - "3307:3306"
+      - "9095:3306"
     volumes:
       - order-system-cloud-mysql-data:/var/lib/mysql
     healthcheck:
@@ -32,10 +32,10 @@ services:
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
     ports:
-      - "8082:8080"
-      - "8850:8848"
-      - "9850:9848"
-      - "9851:9849"
+      - "9098:8080"
+      - "9097:8848"
+      - "10097:9848"
+      - "10098:9849"
     volumes:
       - order-system-cloud-nacos-data:/home/nacos/data
       - order-system-cloud-nacos-logs:/home/nacos/logs
@@ -50,7 +50,7 @@ services:
       - --requirepass
       - ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
+      - "9096:6379"
     volumes:
       - order-system-cloud-redis-data:/data
     healthcheck:
@@ -78,7 +78,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8083:8080"
+      - "9090:8080"
 
 volumes:
   order-system-cloud-mysql-data:
