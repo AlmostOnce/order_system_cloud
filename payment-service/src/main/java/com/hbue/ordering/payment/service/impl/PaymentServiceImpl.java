@@ -1,14 +1,18 @@
 package com.hbue.ordering.payment.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.payment.channel.BalancePaymentChannel;
 import com.hbue.ordering.payment.channel.MockChannelNotifier;
 import com.hbue.ordering.payment.channel.PaymentChannel;
+import com.hbue.ordering.payment.channel.PaymentChannelRegistry;
 import com.hbue.ordering.payment.dto.OrderInternalDTO;
 import com.hbue.ordering.payment.dto.request.ChannelNotifyRequest;
 import com.hbue.ordering.payment.dto.request.MockPayRequest;
+import com.hbue.ordering.payment.dto.request.PaymentCreateRequest;
 import com.hbue.ordering.payment.enums.PaymentStatus;
 import com.hbue.ordering.payment.feign.OrderInternalClient;
 import com.hbue.ordering.payment.mapper.PaymentMapper;
@@ -17,9 +21,13 @@ import com.hbue.ordering.payment.service.PaymentService;
 import com.hbue.ordering.payment.vo.CheckoutInfoVO;
 import com.hbue.ordering.payment.vo.PaymentCreateVO;
 import com.hbue.ordering.payment.vo.PaymentStatusVO;
+import com.hbue.ordering.user.api.client.UserBalanceInternalClient;
+import com.hbue.ordering.user.api.dto.UserBalanceDeductCommand;
+import com.hbue.ordering.user.api.vo.UserBalanceDeductResultVO;
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +44,12 @@ import java.util.UUID;
  * 第一重为支付单"仅 CREATED 可标记结果"的条件更新，并发回调只产生一个赢家；
  * 第二重为订单服务侧的乐观锁状态推进，即便第一重失效也只允许一次生效。
  * 订单推进调用仅从条件更新赢家发出，天然单次。</p>
+ *
+ * <p>渠道编排：下单渠道由请求中的 channelCode 经 {@link PaymentChannelRegistry}
+ * 路由，渠道适配器只负责下单/验签，状态机与跨服务调用留在本类。
+ * 余额渠道（BALANCE）为同步结算渠道：创建支付单后立即调用 user-service
+ * 内部接口扣款（账务在 user-service 同库同事务完成，本服务不跨服务开事务），
+ * 扣款成功即标记支付成功并推进订单，不存在异步回调。</p>
  *
  * @author order-system
  * @date 2026-10-12
@@ -69,50 +83,78 @@ public class PaymentServiceImpl
     /** 统一成功码。 */
     private static final String SUCCESS_CODE = "COMMON_000";
 
+    /** 请求未指定渠道时的缺省渠道标识。 */
+    private static final String DEFAULT_CHANNEL_CODE = "MOCK";
+
+    /** 余额扣款流水的业务类型。 */
+    private static final String BALANCE_BIZ_TYPE = "PAYMENT";
+
     /** 订单服务内部客户端。 */
     private final OrderInternalClient orderInternalClient;
 
-    /** 支付渠道策略实现。 */
-    private final PaymentChannel paymentChannel;
+    /** 支付渠道注册表（按渠道标识路由）。 */
+    private final PaymentChannelRegistry channelRegistry;
 
     /** 模拟渠道通知发送器。 */
     private final MockChannelNotifier mockChannelNotifier;
+
+    /** 用户余额内部调用客户端。 */
+    private final UserBalanceInternalClient userBalanceInternalClient;
+
+    /** JSON 解析工具（解析下游失败响应体的业务提示）。 */
+    private final ObjectMapper objectMapper;
+
+    /** 用户服务内部接口共享密钥。 */
+    private final String internalScopeToken;
 
     /**
      * 创建支付业务服务。
      *
      * @param orderInternalClient 订单服务内部客户端
-     * @param paymentChannel 支付渠道策略实现
+     * @param channelRegistry 支付渠道注册表
      * @param mockChannelNotifier 模拟渠道通知发送器
+     * @param userBalanceInternalClient 用户余额内部调用客户端
+     * @param objectMapper JSON 解析工具
+     * @param internalScopeToken 用户服务内部接口共享密钥
      */
     public PaymentServiceImpl(
             OrderInternalClient orderInternalClient,
-            PaymentChannel paymentChannel,
-            MockChannelNotifier mockChannelNotifier
+            PaymentChannelRegistry channelRegistry,
+            MockChannelNotifier mockChannelNotifier,
+            UserBalanceInternalClient userBalanceInternalClient,
+            ObjectMapper objectMapper,
+            @Value("${internal.scope.token:}") String internalScopeToken
     ) {
         this.orderInternalClient = orderInternalClient;
-        this.paymentChannel = paymentChannel;
+        this.channelRegistry = channelRegistry;
         this.mockChannelNotifier = mockChannelNotifier;
+        this.userBalanceInternalClient = userBalanceInternalClient;
+        this.objectMapper = objectMapper;
+        this.internalScopeToken = internalScopeToken;
     }
 
     /**
-     * 为待支付订单创建支付单。
+     * 为待支付订单创建支付单并按渠道编排后续动作。
      *
      * @param userId 当前登录顾客 ID
-     * @param orderId 订单 ID
+     * @param request 创建支付单请求（含渠道标识与余额渠道的支付密码）
      * @return 支付单创建结果
      */
     @Override
-    public PaymentCreateVO createPayment(Long userId, Long orderId) {
+    public PaymentCreateVO createPayment(
+            Long userId,
+            PaymentCreateRequest request
+    ) {
+        PaymentChannel channel = channelRegistry.require(
+                resolveChannelCode(request)
+        );
+        Long orderId = request.getOrderId();
         OrderInternalDTO order = queryOrderInternal(orderId, userId);
 
         // 已有进行中支付单时幂等返回，避免重复创建。
         PaymentDO activePayment = baseMapper.selectActiveByOrderId(orderId);
         if (activePayment != null) {
-            return PaymentCreateVO.from(
-                    activePayment,
-                    paymentChannel.createPayment(activePayment)
-            );
+            return renderExistingPayment(activePayment, channel, request);
         }
 
         if (!ORDER_STATUS_PENDING_PAYMENT.equals(order.getStatus())) {
@@ -122,7 +164,7 @@ public class PaymentServiceImpl
             );
         }
 
-        PaymentDO paymentDO = buildPayment(order);
+        PaymentDO paymentDO = buildPayment(order, channel);
         try {
             save(paymentDO);
         } catch (DuplicateKeyException exception) {
@@ -132,16 +174,178 @@ public class PaymentServiceImpl
             if (concurrentPayment == null) {
                 throw exception;
             }
-            return PaymentCreateVO.from(
-                    concurrentPayment,
-                    paymentChannel.createPayment(concurrentPayment)
-            );
+            return renderExistingPayment(concurrentPayment, channel, request);
+        }
+
+        if (BalancePaymentChannel.CHANNEL_CODE.equals(channel.channelCode())) {
+            return settleWithBalance(paymentDO, channel, request.getPayPassword());
+        }
+        return PaymentCreateVO.from(
+                paymentDO,
+                channel.createPayment(paymentDO)
+        );
+    }
+
+    /**
+     * 解析请求中的渠道标识，缺省按 MOCK 处理。
+     *
+     * @param request 创建支付单请求
+     * @return 渠道标识
+     */
+    private String resolveChannelCode(PaymentCreateRequest request) {
+        String channelCode = request.getChannelCode();
+        return channelCode == null || channelCode.isBlank()
+                ? DEFAULT_CHANNEL_CODE
+                : channelCode;
+    }
+
+    /**
+     * 渲染已有进行中支付单的创建结果。
+     *
+     * <p>余额渠道无收银台凭证，且同一支付单号的扣款在 user-service 侧幂等，
+     * 因此重放时安全重试一次结算；其余渠道重新生成收银台凭证。</p>
+     *
+     * @param payment 已有支付单
+     * @param channel 请求渠道实现
+     * @param request 创建支付单请求
+     * @return 支付单创建结果
+     */
+    private PaymentCreateVO renderExistingPayment(
+            PaymentDO payment,
+            PaymentChannel channel,
+            PaymentCreateRequest request
+    ) {
+        if (BalancePaymentChannel.CHANNEL_CODE.equals(payment.getChannelCode())) {
+            return settleWithBalance(payment, channel, request.getPayPassword());
+        }
+        return PaymentCreateVO.from(payment, channel.createPayment(payment));
+    }
+
+    /**
+     * 余额渠道结算：扣款成功后标记支付单成功并推进订单。
+     *
+     * <p>扣款失败直接抛出业务异常，支付单保持 CREATED 供重试；
+     * 扣款成功但条件更新未命中（并发已有赢家或已终态）时不再推进订单，
+     * 仅回读支付单渲染结果。</p>
+     *
+     * @param paymentDO 待结算支付单
+     * @param channel 余额渠道实现
+     * @param payPassword 支付密码
+     * @return 支付单创建结果
+     */
+    private PaymentCreateVO settleWithBalance(
+            PaymentDO paymentDO,
+            PaymentChannel channel,
+            String payPassword
+    ) {
+        PaymentChannel.ChannelPaymentCreation creation =
+                channel.createPayment(paymentDO);
+        deductBalance(paymentDO, payPassword);
+
+        int updated = baseMapper.markSuccessIfCreated(
+                paymentDO.getPaymentNo(),
+                paymentDO.getAmount(),
+                creation.getChannelTradeNo()
+        );
+        if (updated == 1) {
+            advanceOrderPaid(paymentDO);
+            log.info("余额支付成功，paymentNo={}，orderId={}，金额={}",
+                    paymentDO.getPaymentNo(),
+                    paymentDO.getOrderId(),
+                    paymentDO.getAmount());
         }
 
         return PaymentCreateVO.from(
-                paymentDO,
-                paymentChannel.createPayment(paymentDO)
+                baseMapper.selectByPaymentNo(paymentDO.getPaymentNo()),
+                null
         );
+    }
+
+    /**
+     * 调用用户服务内部接口扣减余额。
+     *
+     * <p>余额不足、未设置支付密码、支付密码错误、密码锁定等业务拒绝
+     * 按下游返回的 HTTP 状态码映射为本地业务异常，原样透出提示；
+     * 连接失败或 5xx 统一按服务不可用处理，绝不吞掉失败把支付单标记成功。</p>
+     *
+     * @param paymentDO 支付单
+     * @param payPassword 支付密码
+     */
+    private void deductBalance(PaymentDO paymentDO, String payPassword) {
+        UserBalanceDeductCommand command = new UserBalanceDeductCommand();
+        command.setBizType(BALANCE_BIZ_TYPE);
+        command.setBizRef(paymentDO.getPaymentNo());
+        command.setAmount(paymentDO.getAmount());
+        command.setPayPassword(payPassword);
+        command.setRemark("余额支付订单：" + paymentDO.getOrderNo());
+
+        ApiResponse<UserBalanceDeductResultVO> response;
+        try {
+            response = userBalanceInternalClient.deduct(
+                    paymentDO.getUserId(),
+                    internalScopeToken,
+                    command
+            );
+        } catch (FeignException exception) {
+            throw mapBalanceFailure(exception);
+        }
+        if (response == null
+                || !SUCCESS_CODE.equals(response.getCode())
+                || response.getData() == null) {
+            throw new BusinessException(
+                    CommonErrorCode.SERVICE_UNAVAILABLE,
+                    "余额支付暂时不可用，请稍后重试"
+            );
+        }
+    }
+
+    /**
+     * 把用户服务余额扣款的失败响应映射为本地业务异常。
+     *
+     * @param exception Feign 异常
+     * @return 对应的业务异常
+     */
+    private BusinessException mapBalanceFailure(FeignException exception) {
+        CommonErrorCode errorCode = switch (exception.status()) {
+            case 400 -> CommonErrorCode.BAD_REQUEST;
+            case 404 -> CommonErrorCode.NOT_FOUND;
+            case 409 -> CommonErrorCode.CONFLICT;
+            case 429 -> CommonErrorCode.TOO_MANY_REQUESTS;
+            default -> CommonErrorCode.SERVICE_UNAVAILABLE;
+        };
+        return new BusinessException(
+                errorCode,
+                extractFailureMessage(exception, errorCode)
+        );
+    }
+
+    /**
+     * 从失败响应体中提取业务提示，解析失败时退回错误码默认文案。
+     *
+     * @param exception Feign 异常
+     * @param fallback 兜底错误码
+     * @return 提示文案
+     */
+    private String extractFailureMessage(
+            FeignException exception,
+            CommonErrorCode fallback
+    ) {
+        String body = exception.contentUTF8();
+        if (body != null && !body.isBlank()) {
+            try {
+                ApiResponse<?> response = objectMapper.readValue(
+                        body,
+                        ApiResponse.class
+                );
+                if (response.getMessage() != null
+                        && !response.getMessage().isBlank()) {
+                    return response.getMessage();
+                }
+            } catch (Exception parseException) {
+                log.warn("解析余额扣款失败响应体失败：{}", parseException.getMessage());
+            }
+        }
+        return fallback.message();
     }
 
     /**
@@ -177,7 +381,8 @@ public class PaymentServiceImpl
     }
 
     /**
-     * 处理渠道异步通知。
+     * 处理渠道异步通知：定位支付单、按成交渠道验签、金额校验、
+     * 幂等状态机、订单推进。
      *
      * @param request 渠道通知请求体
      * @param signature 渠道侧签名
@@ -189,14 +394,8 @@ public class PaymentServiceImpl
             ChannelNotifyRequest request,
             String signature
     ) {
-        if (!paymentChannel.verifyNotify(request, signature)) {
-            log.warn("渠道通知验签失败，paymentNo={}", request.getPaymentNo());
-            return ApiResponse.failure(
-                    CommonErrorCode.UNAUTHORIZED,
-                    "回调验签失败"
-            );
-        }
-
+        // 刻意先查单后验签：不同渠道的验签密钥与算法不同，
+        // 必须由支付单上记录的 channelCode 决定用哪个渠道实现验签。
         PaymentDO paymentDO = baseMapper.selectByPaymentNo(
                 request.getPaymentNo()
         );
@@ -205,6 +404,19 @@ public class PaymentServiceImpl
             return ApiResponse.failure(
                     CommonErrorCode.NOT_FOUND,
                     "支付单不存在"
+            );
+        }
+
+        PaymentChannel channel = channelRegistry.find(
+                paymentDO.getChannelCode()
+        );
+        if (channel == null || !channel.verifyNotify(request, signature)) {
+            log.warn("渠道通知验签失败，paymentNo={}，channelCode={}",
+                    request.getPaymentNo(),
+                    paymentDO.getChannelCode());
+            return ApiResponse.failure(
+                    CommonErrorCode.UNAUTHORIZED,
+                    "回调验签失败"
             );
         }
 
@@ -405,9 +617,13 @@ public class PaymentServiceImpl
      * 组装服务端控制的支付单持久化字段。
      *
      * @param order 订单内部信息
+     * @param channel 已路由的渠道实现
      * @return 新支付单持久化对象
      */
-    private PaymentDO buildPayment(OrderInternalDTO order) {
+    private PaymentDO buildPayment(
+            OrderInternalDTO order,
+            PaymentChannel channel
+    ) {
         LocalDateTime now = LocalDateTime.now();
         String time = now.format(PAYMENT_TIME_FORMAT);
         String random = UUID.randomUUID()
@@ -421,7 +637,7 @@ public class PaymentServiceImpl
         payment.setOrderId(order.getOrderId());
         payment.setOrderNo(order.getOrderNo());
         payment.setUserId(order.getUserId());
-        payment.setChannelCode(paymentChannel.channelCode());
+        payment.setChannelCode(channel.channelCode());
         // 金额取订单快照，绝不取客户端输入。
         payment.setAmount(order.getTotalAmount());
         payment.setStatus(INITIAL_PAYMENT_STATUS);

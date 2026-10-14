@@ -5,6 +5,7 @@ import com.hbue.ordering.payment.dto.request.PaymentCreateRequest;
 import com.hbue.ordering.payment.service.PaymentService;
 import com.hbue.ordering.payment.vo.PaymentCreateVO;
 import com.hbue.ordering.payment.vo.PaymentStatusVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-10-12
  */
 @RestController
+@Tag(name = "支付接口")
 @RequestMapping("/payments")
 public class PaymentController {
 
@@ -55,7 +57,7 @@ public class PaymentController {
     ) {
         Long userId = Long.valueOf(jwt.getSubject());
         return ApiResponse.success(
-                paymentService.createPayment(userId, request.getOrderId())
+                paymentService.createPayment(userId, request)
         );
     }
 

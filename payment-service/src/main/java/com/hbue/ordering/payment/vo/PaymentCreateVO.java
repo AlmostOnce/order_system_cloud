@@ -48,7 +48,7 @@ public class PaymentCreateVO {
      * 从支付单持久化对象与渠道下单结果构建视图。
      *
      * @param paymentDO 支付单持久化对象
-     * @param creation 渠道下单结果（首次创建与幂等重放均会重新生成）
+     * @param creation 渠道下单结果；同步结算渠道（余额）无收银台凭证，传 null
      * @return 创建结果视图
      */
     public static PaymentCreateVO from(
@@ -63,8 +63,10 @@ public class PaymentCreateVO {
                 .channelCode(paymentDO.getChannelCode())
                 .amount(paymentDO.getAmount())
                 .status(paymentDO.getStatus())
-                .checkoutUrl(creation.getCheckoutUrl())
-                .qrCodeContent(creation.getQrCodeContent())
+                .checkoutUrl(creation == null ? null : creation.getCheckoutUrl())
+                .qrCodeContent(
+                        creation == null ? null : creation.getQrCodeContent()
+                )
                 .build();
     }
 }

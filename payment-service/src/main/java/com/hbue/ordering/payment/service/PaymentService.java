@@ -3,6 +3,7 @@ package com.hbue.ordering.payment.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.hbue.ordering.payment.dto.request.ChannelNotifyRequest;
 import com.hbue.ordering.payment.dto.request.MockPayRequest;
+import com.hbue.ordering.payment.dto.request.PaymentCreateRequest;
 import com.hbue.ordering.payment.model.PaymentDO;
 import com.hbue.ordering.payment.vo.CheckoutInfoVO;
 import com.hbue.ordering.payment.vo.PaymentCreateVO;
@@ -20,14 +21,16 @@ public interface PaymentService extends IService<PaymentDO> {
     /**
      * 为待支付订单创建支付单。
      *
-     * <p>金额取订单快照，绝不取客户端输入；
+     * <p>金额取订单快照，绝不取客户端输入；渠道按请求中的 channelCode 路由，
+     * 缺省为 MOCK。余额渠道（BALANCE）在创建时同步完成扣款并直接置为成功，
+     * 其余渠道返回收银台凭证等待异步回调。
      * 同一订单已有进行中支付单时幂等返回。</p>
      *
      * @param userId 当前登录顾客 ID
-     * @param orderId 订单 ID
-     * @return 支付单创建结果（含模拟收银台地址）
+     * @param request 创建支付单请求（含渠道标识与余额渠道的支付密码）
+     * @return 支付单创建结果
      */
-    PaymentCreateVO createPayment(Long userId, Long orderId);
+    PaymentCreateVO createPayment(Long userId, PaymentCreateRequest request);
 
     /**
      * 查询支付单状态（校验归属，非本人按不存在处理）。

@@ -9,14 +9,17 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 /**
  * 支付服务启动类。
  *
- * <p>负责启动支付服务、扫描支付数据访问接口与订单服务内部客户端，并注册到 Nacos。</p>
+ * <p>负责启动支付服务、扫描支付数据访问接口与订单/用户服务内部客户端，并注册到 Nacos。</p>
  *
  * @author order-system
  * @date 2026-10-12
  */
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
-@EnableFeignClients
+@EnableFeignClients(basePackages = {
+        "com.hbue.ordering.payment",
+        "com.hbue.ordering.user.api.client"
+})
 @MapperScan("com.hbue.ordering.payment.mapper")
 public class PaymentServiceApplication {
 
