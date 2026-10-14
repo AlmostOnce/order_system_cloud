@@ -6,6 +6,7 @@ import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
 import com.hbue.ordering.auth.service.AuthService;
 import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
+import com.hbue.ordering.auth.service.LoginAttemptService;
 import com.hbue.ordering.auth.service.JwtTokenService;
 import com.hbue.ordering.auth.service.RefreshTokenService;
 import com.hbue.ordering.auth.service.RefreshTokenLockService;
@@ -26,8 +27,8 @@ import org.springframework.stereotype.Service;
  * 认证业务服务实现。
  *
  * <p>负责认证流程编排：账号资料与密码校验委托给 user-service，访问令牌由
- * RSA 私钥签发，Refresh Token 与 Access Token 黑名单由 Redis 服务维护。本类
- * 不持有用户表数据，也不把密码或完整令牌写入日志。</p>
+ * RSA 私钥签发，Refresh Token、Access Token 黑名单及登录失败锁定状态由 Redis
+ * 服务维护。本类不持有用户表数据，也不把密码或完整令牌写入日志。</p>
  *
  * @author order-system
  * @date 2026-09-21
@@ -45,6 +46,11 @@ public class AuthServiceImpl implements AuthService {
      * 用户服务远程调用客户端。
      */
     private final UserServiceClient userServiceClient;
+
+    /**
+     * 登录失败计数与账号临时锁定服务。
+     */
+    private final LoginAttemptService loginAttemptService;
 
     /**
      * JWT Token 服务。
@@ -70,6 +76,7 @@ public class AuthServiceImpl implements AuthService {
      * 创建认证业务服务。
      *
      * @param userServiceClient 用户服务远程调用客户端
+     * @param loginAttemptService 登录失败计数与账号临时锁定服务
      * @param jwtTokenService JWT Token 服务
      * @param refreshTokenService Refresh Token 服务
      * @param accessTokenBlacklistService Access Token 黑名单服务
@@ -77,12 +84,14 @@ public class AuthServiceImpl implements AuthService {
      */
     public AuthServiceImpl(
             UserServiceClient userServiceClient,
+            LoginAttemptService loginAttemptService,
             JwtTokenService jwtTokenService,
             RefreshTokenService refreshTokenService,
             AccessTokenBlacklistService accessTokenBlacklistService,
             RefreshTokenLockService refreshTokenLockService
     ) {
         this.userServiceClient = userServiceClient;
+        this.loginAttemptService = loginAttemptService;
         this.jwtTokenService = jwtTokenService;
         this.refreshTokenService = refreshTokenService;
         this.accessTokenBlacklistService = accessTokenBlacklistService;
@@ -94,10 +103,18 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param request 登录请求
      * @return 登录 Token
-     * @throws BusinessException 用户服务不可用、账号密码无效或 Token 存储失败时抛出
+     * @throws BusinessException 账号已锁定、凭据无效、依赖服务不可用或 Token 存储失败时抛出
      */
     @Override
     public LoginVO login(LoginRequest request) {
+        // 在调用用户服务前检查账号锁定状态，锁定期间不再执行密码校验。
+        if (loginAttemptService.isLocked(request.getUsername())) {
+            throw new BusinessException(
+                    CommonErrorCode.TOO_MANY_REQUESTS,
+                    "登录失败次数过多，请稍后重试"
+            );
+        }
+
         // 创建用户密码校验命令。
         UserPasswordVerifyCommand command =
                 new UserPasswordVerifyCommand();
@@ -124,9 +141,18 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
-        // 用户服务明确拒绝认证或没有返回用户信息时，统一返回登录失败。
+        // 用户服务明确拒绝认证或没有返回用户信息时，记录本次账号级失败次数。
         if (CommonErrorCode.UNAUTHORIZED.code().equals(response.getCode())
                 || response.getData() == null) {
+            // 达到配置阈值后返回 HTTP 429，后续请求会在调用用户服务前被锁定检查拦截。
+            if (loginAttemptService.recordFailure(request.getUsername())) {
+                throw new BusinessException(
+                        CommonErrorCode.TOO_MANY_REQUESTS,
+                        "登录失败次数过多，请稍后重试"
+                );
+            }
+
+            // 未达到锁定阈值时仍使用普通认证失败响应，不泄露账号是否存在。
             throw new BusinessException(
                     CommonErrorCode.UNAUTHORIZED,
                     "用户名或密码错误"
@@ -135,6 +161,9 @@ public class AuthServiceImpl implements AuthService {
 
         // 获取认证成功的用户信息。
         UserBasicVO userBasicVO = response.getData();
+
+        // 凭据校验成功后清除历史失败和锁定状态，新的失败窗口从零开始。
+        loginAttemptService.recordSuccess(request.getUsername());
 
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(

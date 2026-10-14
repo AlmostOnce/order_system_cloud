@@ -45,6 +45,16 @@ spring:
       timeout: 2s
 
 security:
+  login-attempt:
+    # 同一账号在失败窗口内允许的最大连续登录失败次数。
+    max-failures: ${AUTH_LOGIN_MAX_FAILURES:5}
+
+    # 失败次数从第一次失败开始累计的固定时间窗口。
+    failure-window: ${AUTH_LOGIN_FAILURE_WINDOW:15m}
+
+    # 达到失败次数阈值后，账号临时锁定的时长。
+    lock-duration: ${AUTH_LOGIN_LOCK_DURATION:15m}
+
   jwt:
     # JWT 签发方。
     issuer: "http://localhost:9094"

@@ -5,9 +5,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 
 /**
  * Redis 基础操作服务测试。
@@ -132,6 +136,33 @@ class RedisOperationsServiceTest {
 
         // 确认返回 Redis 查询到的 Hash 数据。
         assertSame(entries, result);
+    }
+
+    /**
+     * 带 TTL 的原子自增应通过 Redis 脚本完成并返回新计数。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void incrementWithExpirationShouldReturnAtomicCounterValue() {
+        when(stringRedisTemplate.<Long>execute(
+                any(RedisScript.class),
+                eq(List.of("sample:counter")),
+                eq("900000")
+        )).thenReturn(2L);
+
+        // 以原子方式增加计数，并在计数 Key 首次创建时设置 15 分钟过期时间。
+        Long count = redisOperationsService.increment(
+                "sample:counter",
+                Duration.ofMinutes(15)
+        );
+
+        // 确认 Redis 返回递增后的计数，供业务层判断是否达到限制阈值。
+        assertEquals(2L, count);
+        verify(stringRedisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of("sample:counter")),
+                eq("900000")
+        );
     }
 
     /**

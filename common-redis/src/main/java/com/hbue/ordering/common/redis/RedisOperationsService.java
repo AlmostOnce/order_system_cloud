@@ -1,9 +1,11 @@
 package com.hbue.ordering.common.redis;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,6 +23,22 @@ import java.util.Map;
  */
 @Component
 public class RedisOperationsService {
+
+    /**
+     * 原子增加计数并在首次创建时设置过期时间的 Lua 脚本。
+     *
+     * <p>将 INCR 与 PEXPIRE 放在同一条 Redis 脚本中执行，避免进程在两条命令之间
+     * 异常退出时留下永不过期的计数 Key。</p>
+     */
+    private static final DefaultRedisScript<Long> INCREMENT_WITH_TTL_SCRIPT =
+            new DefaultRedisScript<>(
+                    "local count = redis.call('INCR', KEYS[1]); "
+                            + "if count == 1 then "
+                            + "redis.call('PEXPIRE', KEYS[1], ARGV[1]); "
+                            + "end; "
+                            + "return count;",
+                    Long.class
+            );
 
     /**
      * Spring Data Redis 字符串操作模板。
@@ -119,6 +137,39 @@ public class RedisOperationsService {
     public Long increment(String key) {
         // 返回 Redis 对整数自增操作的结果。
         return stringRedisTemplate.opsForValue().increment(key);
+    }
+
+    /**
+     * 原子增加计数，并仅在计数 Key 首次创建时设置过期时间。
+     *
+     * <p>适用于登录失败次数等固定时间窗口计数。后续自增不会刷新 TTL，避免持续失败
+     * 不断延长计数窗口；自增和首次设置 TTL 由一段 Lua 脚本原子完成。</p>
+     *
+     * @param key Redis 计数 Key
+     * @param timeToLive 首次计数后的有效时长，至少为 1 毫秒
+     * @return 自增后的计数；Redis 未返回结果时为 null
+     * @throws IllegalArgumentException Key 为空或有效时长不足 1 毫秒时抛出
+     */
+    public Long increment(String key, Duration timeToLive) {
+        // 参数不合法时立即失败，防止 Redis 收到无效 Key 或无法生效的 TTL。
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("Redis Key 不能为空");
+        }
+        if (timeToLive == null
+                || timeToLive.isNegative()
+                || timeToLive.isZero()
+                || timeToLive.toMillis() < 1L) {
+            throw new IllegalArgumentException(
+                    "Redis Key 的有效时长必须至少为 1 毫秒"
+            );
+        }
+
+        // Lua 保证 INCR 和首次 PEXPIRE 不会被其它请求或进程中断拆开。
+        return stringRedisTemplate.execute(
+                INCREMENT_WITH_TTL_SCRIPT,
+                List.of(key),
+                String.valueOf(timeToLive.toMillis())
+        );
     }
 
     /**

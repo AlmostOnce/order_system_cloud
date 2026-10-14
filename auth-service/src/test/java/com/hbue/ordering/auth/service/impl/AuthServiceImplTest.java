@@ -5,6 +5,7 @@ import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
 import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
 import com.hbue.ordering.auth.service.JwtTokenService;
+import com.hbue.ordering.auth.service.LoginAttemptService;
 import com.hbue.ordering.auth.service.RefreshTokenLockService;
 import com.hbue.ordering.auth.service.RefreshTokenService;
 import com.hbue.ordering.auth.vo.LoginVO;
@@ -64,6 +65,125 @@ class AuthServiceImplTest {
                 CommonErrorCode.UNAUTHORIZED,
                 exception.getErrorCode()
         );
+    }
+
+    /**
+     * 验证同一账号连续达到失败阈值后，登录请求改为返回频率限制错误。
+     */
+    @Test
+    void shouldReturnTooManyRequestsAfterRepeatedLoginFailures() {
+        UserServiceClient userServiceClient = mock(UserServiceClient.class);
+        LoginAttemptService loginAttemptService =
+                mock(LoginAttemptService.class);
+        when(userServiceClient.authenticate(any())).thenReturn(
+                ApiResponse.failure(
+                        CommonErrorCode.UNAUTHORIZED,
+                        "用户名或密码错误"
+                )
+        );
+        when(loginAttemptService.isLocked("test-user"))
+                .thenReturn(false, false, false, false, false);
+        when(loginAttemptService.recordFailure("test-user"))
+                .thenReturn(false, false, false, false, true);
+
+        AuthServiceImpl authService = createAuthService(
+                userServiceClient,
+                loginAttemptService
+        );
+        LoginRequest request = new LoginRequest();
+        request.setUsername("test-user");
+        request.setPassword("wrong-password");
+
+        // 连续提交五次错误凭据，前四次仍按普通认证失败处理。
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> authService.login(request)
+            );
+
+            // 达到失败阈值后应改为频率限制错误，阻止继续尝试密码。
+            if (attempt == 5) {
+                assertEquals(
+                        CommonErrorCode.TOO_MANY_REQUESTS,
+                        exception.getErrorCode()
+                );
+            } else {
+                assertEquals(
+                        CommonErrorCode.UNAUTHORIZED,
+                        exception.getErrorCode()
+                );
+            }
+        }
+
+        // 第五次失败触发账号锁定后，不再向用户服务继续校验密码。
+        verify(userServiceClient, org.mockito.Mockito.times(5))
+                .authenticate(any());
+        verify(loginAttemptService, org.mockito.Mockito.times(5))
+                .recordFailure("test-user");
+    }
+
+    /**
+     * 验证账号已锁定时，登录请求会在调用用户服务前被拒绝。
+     */
+    @Test
+    void shouldRejectLoginBeforeUserServiceWhenAccountIsLocked() {
+        UserServiceClient userServiceClient = mock(UserServiceClient.class);
+        LoginAttemptService loginAttemptService =
+                mock(LoginAttemptService.class);
+        when(loginAttemptService.isLocked("test-user")).thenReturn(true);
+
+        AuthServiceImpl authService = createAuthService(
+                userServiceClient,
+                loginAttemptService
+        );
+        LoginRequest request = new LoginRequest();
+        request.setUsername("test-user");
+        request.setPassword("any-password");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> authService.login(request)
+        );
+
+        assertEquals(
+                CommonErrorCode.TOO_MANY_REQUESTS,
+                exception.getErrorCode()
+        );
+        verify(userServiceClient, never()).authenticate(any());
+        verify(loginAttemptService, never()).recordFailure("test-user");
+    }
+
+    /**
+     * 验证账号凭据校验成功后会清除历史失败计数和锁定状态。
+     */
+    @Test
+    void shouldClearLoginFailureStateAfterSuccessfulAuthentication() {
+        UserServiceClient userServiceClient = mock(UserServiceClient.class);
+        LoginAttemptService loginAttemptService =
+                mock(LoginAttemptService.class);
+        when(loginAttemptService.isLocked("test-user")).thenReturn(false);
+        when(userServiceClient.authenticate(any())).thenReturn(
+                ApiResponse.success(
+                        com.hbue.ordering.user.api.vo.UserBasicVO.builder()
+                                .userId(5L)
+                                .username("test-user")
+                                .roleCode("CUSTOMER")
+                                .build()
+                )
+        );
+
+        AuthServiceImpl authService = createAuthService(
+                userServiceClient,
+                loginAttemptService
+        );
+        LoginRequest request = new LoginRequest();
+        request.setUsername("test-user");
+        request.setPassword("correct-password");
+
+        authService.login(request);
+
+        // 登录成功后重置状态，确保后续的失败次数从零开始统计。
+        verify(loginAttemptService).recordSuccess("test-user");
     }
 
     /**
@@ -144,6 +264,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
+                mock(LoginAttemptService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -213,6 +334,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
+                mock(LoginAttemptService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -256,6 +378,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
+                mock(LoginAttemptService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -298,6 +421,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
+                mock(LoginAttemptService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -361,9 +485,28 @@ class AuthServiceImplTest {
     private AuthServiceImpl createAuthService(
             UserServiceClient userServiceClient
     ) {
+        // 其它测试不验证登录限流时，使用默认未锁定的 Mockito 测试替身。
+        return createAuthService(
+                userServiceClient,
+                mock(LoginAttemptService.class)
+        );
+    }
+
+    /**
+     * 创建可注入指定登录失败保护行为的认证服务测试对象。
+     *
+     * @param userServiceClient 用户服务远程调用客户端
+     * @param loginAttemptService 登录失败保护服务测试替身
+     * @return 认证业务服务
+     */
+    private AuthServiceImpl createAuthService(
+            UserServiceClient userServiceClient,
+            LoginAttemptService loginAttemptService
+    ) {
         // 登录失败测试不会执行 Token 服务，使用 Mockito 隔离外部依赖。
         return new AuthServiceImpl(
                 userServiceClient,
+                loginAttemptService,
                 mock(JwtTokenService.class),
                 mock(RefreshTokenService.class),
                 mock(AccessTokenBlacklistService.class),
