@@ -3,6 +3,9 @@ package com.hbue.ordering.product.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.redis.DistributedLockService;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
@@ -10,6 +13,7 @@ import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,9 +24,15 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +48,22 @@ class ProductMenuServiceImplTest {
 
     @Mock
     private ProductMapper productMapper;
+
+    @Mock
+    private ProductMenuCacheService menuCacheService;
+
+    @Mock
+    private ProductBloomFilterManager bloomFilterManager;
+
+    @Mock
+    private DistributedLockService distributedLockService;
+
+    @BeforeEach
+    void setUp() {
+        // 布隆过滤器默认放行，避免拦掉原有用例依赖的数据。
+        lenient().when(bloomFilterManager.mightContainWindow(anyLong()))
+                .thenReturn(true);
+    }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
@@ -104,11 +130,92 @@ class ProductMenuServiceImplTest {
         verify(diningWindowMapper, never()).selectById(any());
     }
 
+    @Test
+    void shouldReturnCachedMenuWithoutQueryingDatabase() {
+        WindowMenuVO cachedMenu = new WindowMenuVO(
+                3L,
+                "W-3",
+                "一楼窗口",
+                "一楼东侧",
+                List.of(),
+                List.of()
+        );
+        when(menuCacheService.findWindowMenu(3L)).thenReturn(cachedMenu);
+
+        WindowMenuVO menu = service().getWindowMenu(3L);
+
+        assertSame(cachedMenu, menu);
+        verify(diningWindowMapper, never()).selectById(any());
+    }
+
+    @Test
+    void shouldRejectWhenWindowMenuMarkedAbsent() {
+        when(menuCacheService.isWindowMenuMarkedAbsent(3L)).thenReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service().getWindowMenu(3L)
+        );
+
+        assertEquals(CommonErrorCode.NOT_FOUND.code(), exception.getErrorCode().code());
+        verify(diningWindowMapper, never()).selectById(any());
+        verify(menuCacheService, never()).findWindowMenu(anyLong());
+    }
+
+    @Test
+    void shouldRejectWhenBloomFilterJudgesWindowAbsent() {
+        when(bloomFilterManager.mightContainWindow(3L)).thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service().getWindowMenu(3L)
+        );
+
+        assertEquals(CommonErrorCode.NOT_FOUND.code(), exception.getErrorCode().code());
+        verify(menuCacheService, never()).findWindowMenu(anyLong());
+        verify(menuCacheService, never()).isWindowMenuMarkedAbsent(anyLong());
+        verify(diningWindowMapper, never()).selectById(any());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    void shouldFallbackToDatabaseWhenLockNotAcquired() {
+        DiningWindowDO window = window(3L, 1);
+        when(diningWindowMapper.selectById(3L)).thenReturn(window);
+        when(productCategoryMapper.selectList(any())).thenReturn(List.of());
+        when(productMapper.selectList(any())).thenReturn(List.of());
+
+        WindowMenuVO menu = service().getWindowMenu(3L);
+
+        assertNotNull(menu);
+        assertEquals(3L, menu.getWindowId());
+        verify(menuCacheService, never()).saveWindowMenu(anyLong(), any());
+    }
+
+    @Test
+    void shouldMarkAbsentWhenLockAcquiredAndWindowMissing() {
+        DistributedLockService.LockHandle lockHandle =
+                mock(DistributedLockService.LockHandle.class);
+        when(distributedLockService.tryAcquire(anyString())).thenReturn(lockHandle);
+        when(diningWindowMapper.selectById(3L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service().getWindowMenu(3L)
+        );
+
+        assertEquals(CommonErrorCode.NOT_FOUND.code(), exception.getErrorCode().code());
+        verify(menuCacheService).saveWindowMenuAbsent(3L);
+    }
+
     private ProductMenuServiceImpl service() {
         return new ProductMenuServiceImpl(
                 diningWindowMapper,
                 productCategoryMapper,
-                productMapper
+                productMapper,
+                menuCacheService,
+                bloomFilterManager,
+                distributedLockService
         );
     }
 

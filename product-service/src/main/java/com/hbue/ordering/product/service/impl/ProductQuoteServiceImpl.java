@@ -6,6 +6,7 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
@@ -49,25 +50,34 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
     /** 菜品数据 Mapper。 */
     private final ProductMapper productMapper;
 
+    /** 商品布隆过滤器管理器。 */
+    private final ProductBloomFilterManager bloomFilterManager;
+
     /**
      * 创建商品核价服务。
      *
      * @param diningWindowMapper 窗口数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper 菜品数据 Mapper
+     * @param bloomFilterManager 商品布隆过滤器管理器
      */
     public ProductQuoteServiceImpl(
             DiningWindowMapper diningWindowMapper,
             ProductCategoryMapper productCategoryMapper,
-            ProductMapper productMapper
+            ProductMapper productMapper,
+            ProductBloomFilterManager bloomFilterManager
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
+        this.bloomFilterManager = bloomFilterManager;
     }
 
     /**
      * 批量返回所选窗口内可下单菜品的当前价格。
+     *
+     * <p>核价结果不缓存：价格与售罄状态必须实时反映数据库。
+     * 查询前先用布隆过滤器拦掉一定不存在的菜品 ID，避免无效 ID 穿透数据库。</p>
      *
      * @param request 核价请求
      * @return 窗口状态和有效菜品核价结果
@@ -82,11 +92,23 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
             return new ProductQuoteResponse(false, List.of());
         }
 
+        // 用布隆过滤器过滤掉一定不存在的菜品 ID，保留可能存在的候选集合。
+        List<Long> candidateIds = new ArrayList<>();
+        for (Long productId : request.getProductIds()) {
+            if (bloomFilterManager.mightContainProduct(productId)) {
+                candidateIds.add(productId);
+            }
+        }
+        // 候选集合为空时直接返回，绝不能用空集合拼装 in 条件查库。
+        if (candidateIds.isEmpty()) {
+            return new ProductQuoteResponse(true, List.of());
+        }
+
         List<ProductDO> availableProducts = productMapper.selectList(
                 new QueryWrapper<ProductDO>()
                         .eq("window_id", request.getWindowId())
                         .eq("sale_status", ON_SALE_STATUS)
-                        .in("product_id", request.getProductIds())
+                        .in("product_id", candidateIds)
         );
 
         HashSet<Long> categoryIds = new HashSet<>();

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.dto.request.ProductCategorySaveRequest;
 import com.hbue.ordering.product.dto.request.ProductSaveRequest;
 import com.hbue.ordering.product.dto.request.WindowSaveRequest;
@@ -23,6 +25,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
@@ -30,7 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,6 +57,12 @@ class ProductAdministrationServiceImplTest {
 
     @Mock
     private DataScopeService dataScopeService;
+
+    @Mock
+    private ProductMenuCacheService menuCacheService;
+
+    @Mock
+    private ProductBloomFilterManager bloomFilterManager;
 
     @Test
     void shouldSoftDisableWindowInsteadOfDeletingIt() {
@@ -185,12 +197,37 @@ class ProductAdministrationServiceImplTest {
         assertTrue(captor.getValue().getParamNameValuePairs().containsValue(0));
     }
 
+    @Test
+    void shouldDeferCacheEvictionUntilTransactionCommit() {
+        when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service().disableWindow(OPERATOR_ID, 7L);
+
+            // 事务提交前不得删除缓存，否则并发读可能把旧值回写造成脏缓存。
+            verify(menuCacheService, never()).evictWindowMenu(anyLong());
+            verify(menuCacheService, never()).evictActiveWindows();
+
+            // 模拟事务提交，此时才应执行失效。
+            for (TransactionSynchronization synchronization
+                    : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+            verify(menuCacheService).evictWindowMenu(7L);
+            verify(menuCacheService).evictActiveWindows();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
     private ProductAdministrationService service() {
         return new ProductAdministrationServiceImpl(
                 diningWindowMapper,
                 productCategoryMapper,
                 productMapper,
-                dataScopeService
+                dataScopeService,
+                menuCacheService,
+                bloomFilterManager
         );
     }
 

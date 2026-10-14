@@ -3,6 +3,10 @@ package com.hbue.ordering.product.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.redis.DistributedLockService;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
+import com.hbue.ordering.product.cache.ProductCacheKeys;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
@@ -45,30 +49,56 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     /** 菜品数据 Mapper。 */
     private final ProductMapper productMapper;
 
+    /** 商品菜单缓存读写组件。 */
+    private final ProductMenuCacheService menuCacheService;
+
+    /** 商品布隆过滤器管理器。 */
+    private final ProductBloomFilterManager bloomFilterManager;
+
+    /** 分布式锁组件。 */
+    private final DistributedLockService distributedLockService;
+
     /**
      * 创建窗口菜单查询服务。
      *
      * @param diningWindowMapper 窗口数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper 菜品数据 Mapper
+     * @param menuCacheService 商品菜单缓存读写组件
+     * @param bloomFilterManager 商品布隆过滤器管理器
+     * @param distributedLockService 分布式锁组件
      */
     public ProductMenuServiceImpl(
             DiningWindowMapper diningWindowMapper,
             ProductCategoryMapper productCategoryMapper,
-            ProductMapper productMapper
+            ProductMapper productMapper,
+            ProductMenuCacheService menuCacheService,
+            ProductBloomFilterManager bloomFilterManager,
+            DistributedLockService distributedLockService
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
+        this.menuCacheService = menuCacheService;
+        this.bloomFilterManager = bloomFilterManager;
+        this.distributedLockService = distributedLockService;
     }
 
     /**
      * 查询所有启用窗口，并按 ID 稳定排序。
      *
+     * <p>优先读取缓存；未命中时回源数据库组装列表并写回缓存。
+     * 窗口列表重建代价低，此路径不加分布式锁。</p>
+     *
      * @return 启用窗口摘要列表
      */
     @Override
     public List<WindowSummaryVO> listActiveWindows() {
+        List<WindowSummaryVO> cached = menuCacheService.findActiveWindows();
+        if (cached != null) {
+            return cached;
+        }
+
         List<DiningWindowDO> windows = diningWindowMapper.selectList(
                 new QueryWrapper<DiningWindowDO>()
                         .eq("status", ACTIVE_STATUS)
@@ -84,11 +114,17 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getLocation()
             ));
         }
+        menuCacheService.saveActiveWindows(summaries);
         return summaries;
     }
 
     /**
      * 查询启用窗口下的启用分类和在售菜品。
+     *
+     * <p>查询顺序：校验窗口 ID、布隆过滤器拦截、空值标记拦截、读缓存、
+     * 抢互斥锁后双重检查缓存并回源数据库。布隆过滤器和空值标记用于
+     * 防止无效 ID 反复穿透，分布式锁用于避免热点窗口在缓存失效瞬间
+     * 被大量并发请求同时重建（缓存击穿）。</p>
      *
      * @param windowId 窗口 ID
      * @return 窗口菜单
@@ -97,13 +133,75 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     public WindowMenuVO getWindowMenu(Long windowId) {
         validateWindowId(windowId);
 
-        DiningWindowDO window = diningWindowMapper.selectById(windowId);
-        if (window == null
-                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+        // 布隆过滤器判定一定不存在时直接拒绝，不再查询缓存和数据库。
+        if (!bloomFilterManager.mightContainWindow(windowId)) {
             throw new BusinessException(
                     CommonErrorCode.NOT_FOUND,
                     "窗口不存在或已停用"
             );
+        }
+
+        // 命中空值标记说明此前已确认窗口无效，直接拒绝，不再查询数据库。
+        if (menuCacheService.isWindowMenuMarkedAbsent(windowId)) {
+            throw new BusinessException(
+                    CommonErrorCode.NOT_FOUND,
+                    "窗口不存在或已停用"
+            );
+        }
+
+        WindowMenuVO cached = menuCacheService.findWindowMenu(windowId);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 抢互斥锁，只让一个实例回源数据库重建缓存。
+        try (DistributedLockService.LockHandle lock =
+                     distributedLockService.tryAcquire(
+                             ProductCacheKeys.windowMenuLock(windowId)
+                     )) {
+            if (lock == null) {
+                // 未抢到锁时降级直接查库返回，不写缓存，避免与持锁方竞争写入。
+                WindowMenuVO menu = loadWindowMenu(windowId);
+                if (menu == null) {
+                    throw new BusinessException(
+                            CommonErrorCode.NOT_FOUND,
+                            "窗口不存在或已停用"
+                    );
+                }
+                return menu;
+            }
+
+            // 双重检查：持锁期间其他实例可能已把缓存填好。
+            WindowMenuVO lockedCached = menuCacheService.findWindowMenu(windowId);
+            if (lockedCached != null) {
+                return lockedCached;
+            }
+
+            WindowMenuVO menu = loadWindowMenu(windowId);
+            if (menu == null) {
+                // 记录空值标记，后续无效请求直接命中标记而不再查库。
+                menuCacheService.saveWindowMenuAbsent(windowId);
+                throw new BusinessException(
+                        CommonErrorCode.NOT_FOUND,
+                        "窗口不存在或已停用"
+                );
+            }
+            menuCacheService.saveWindowMenu(windowId, menu);
+            return menu;
+        }
+    }
+
+    /**
+     * 回源数据库组装窗口菜单。
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口菜单；窗口不存在或已停用时返回 null
+     */
+    private WindowMenuVO loadWindowMenu(Long windowId) {
+        DiningWindowDO window = diningWindowMapper.selectById(windowId);
+        if (window == null
+                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+            return null;
         }
 
         List<ProductCategoryDO> categories = productCategoryMapper.selectList(

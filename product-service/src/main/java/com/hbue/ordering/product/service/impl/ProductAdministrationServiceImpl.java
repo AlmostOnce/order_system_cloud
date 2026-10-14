@@ -6,6 +6,8 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.dto.request.ProductCategorySaveRequest;
 import com.hbue.ordering.product.dto.request.ProductSaveRequest;
 import com.hbue.ordering.product.dto.request.WindowSaveRequest;
@@ -22,6 +24,8 @@ import com.hbue.ordering.product.vo.WindowAdminVO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +61,12 @@ public class ProductAdministrationServiceImpl
     /** 数据范围判定服务。 */
     private final DataScopeService dataScopeService;
 
+    /** 商品菜单缓存读写组件。 */
+    private final ProductMenuCacheService menuCacheService;
+
+    /** 商品布隆过滤器管理器。 */
+    private final ProductBloomFilterManager bloomFilterManager;
+
     /**
      * 创建目录管理服务。
      *
@@ -64,17 +74,23 @@ public class ProductAdministrationServiceImpl
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper 菜品数据 Mapper
      * @param dataScopeService 数据范围判定服务
+     * @param menuCacheService 商品菜单缓存读写组件
+     * @param bloomFilterManager 商品布隆过滤器管理器
      */
     public ProductAdministrationServiceImpl(
             DiningWindowMapper diningWindowMapper,
             ProductCategoryMapper productCategoryMapper,
             ProductMapper productMapper,
-            DataScopeService dataScopeService
+            DataScopeService dataScopeService,
+            ProductMenuCacheService menuCacheService,
+            ProductBloomFilterManager bloomFilterManager
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
         this.dataScopeService = dataScopeService;
+        this.menuCacheService = menuCacheService;
+        this.bloomFilterManager = bloomFilterManager;
     }
 
     /** {@inheritDoc} */
@@ -123,6 +139,9 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("窗口编码已存在");
         }
+        // 新增窗口后补写布隆过滤器，并失效启用窗口列表缓存（均待事务提交后执行）。
+        addWindowToBloomFilterAfterCommit(window.getWindowId());
+        evictActiveWindowsAfterCommit();
         DiningWindowDO persistedWindow = diningWindowMapper.selectById(
                 window.getWindowId()
         );
@@ -162,6 +181,9 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("窗口编码已存在");
         }
+        // 窗口信息变更后失效启用窗口列表缓存与窗口菜单缓存（均待事务提交后执行）。
+        evictActiveWindowsAfterCommit();
+        evictWindowMenuAfterCommit(windowId);
         return toWindowVO(requireWindow(windowId));
     }
 
@@ -178,6 +200,9 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<DiningWindowDO> update = new UpdateWrapper<>();
         update.eq("window_id", windowId).set("status", 0);
         diningWindowMapper.update(null, update);
+        // 窗口停用后失效启用窗口列表缓存与窗口菜单缓存（均待事务提交后执行）。
+        evictActiveWindowsAfterCommit();
+        evictWindowMenuAfterCommit(windowId);
     }
 
     /** {@inheritDoc} */
@@ -224,6 +249,8 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在同名分类");
         }
+        // 新增分类后失效所属窗口的菜单缓存（待事务提交后执行）。
+        evictWindowMenuAfterCommit(windowId);
         ProductCategoryDO persistedCategory = productCategoryMapper.selectById(
                 category.getCategoryId()
         );
@@ -258,6 +285,8 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在同名分类");
         }
+        // 分类变更后失效所属窗口的菜单缓存（待事务提交后执行）。
+        evictWindowMenuAfterCommit(existingCategory.getWindowId());
         return toCategoryVO(requireCategory(categoryId));
     }
 
@@ -274,6 +303,8 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<ProductCategoryDO> update = new UpdateWrapper<>();
         update.eq("category_id", categoryId).set("status", 0);
         productCategoryMapper.update(null, update);
+        // 分类停用后失效所属窗口的菜单缓存（待事务提交后执行）。
+        evictWindowMenuAfterCommit(category.getWindowId());
     }
 
     /** {@inheritDoc} */
@@ -331,6 +362,9 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在相同菜品编码");
         }
+        // 新增菜品后补写布隆过滤器，并失效所属窗口的菜单缓存（均待事务提交后执行）。
+        addProductToBloomFilterAfterCommit(product.getProductId());
+        evictWindowMenuAfterCommit(windowId);
         ProductDO persistedProduct = productMapper.selectById(
                 product.getProductId()
         );
@@ -373,6 +407,8 @@ public class ProductAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在相同菜品编码");
         }
+        // 菜品变更后失效所属窗口的菜单缓存（待事务提交后执行）。
+        evictWindowMenuAfterCommit(existingProduct.getWindowId());
         return toProductVO(requireProduct(productId));
     }
 
@@ -389,6 +425,8 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<ProductDO> update = new UpdateWrapper<>();
         update.eq("product_id", productId).set("sale_status", 0);
         productMapper.update(null, update);
+        // 菜品下架后失效所属窗口的菜单缓存（待事务提交后执行）。
+        evictWindowMenuAfterCommit(product.getWindowId());
     }
 
     /**
@@ -527,6 +565,86 @@ public class ProductAdministrationServiceImpl
                     CommonErrorCode.BAD_REQUEST,
                     "请求参数不能为空"
             );
+        }
+    }
+
+    /**
+     * 在事务提交后失效启用窗口列表缓存。
+     */
+    private void evictActiveWindowsAfterCommit() {
+        afterCommit(new Runnable() {
+            @Override
+            public void run() {
+                menuCacheService.evictActiveWindows();
+            }
+        });
+    }
+
+    /**
+     * 在事务提交后失效窗口菜单缓存。
+     *
+     * @param windowId 窗口 ID
+     */
+    private void evictWindowMenuAfterCommit(Long windowId) {
+        afterCommit(new Runnable() {
+            @Override
+            public void run() {
+                menuCacheService.evictWindowMenu(windowId);
+            }
+        });
+    }
+
+    /**
+     * 在事务提交后把新建窗口补写进布隆过滤器。
+     *
+     * @param windowId 窗口 ID
+     */
+    private void addWindowToBloomFilterAfterCommit(Long windowId) {
+        afterCommit(new Runnable() {
+            @Override
+            public void run() {
+                bloomFilterManager.addWindow(windowId);
+            }
+        });
+    }
+
+    /**
+     * 在事务提交后把新建菜品补写进布隆过滤器。
+     *
+     * @param productId 菜品 ID
+     */
+    private void addProductToBloomFilterAfterCommit(Long productId) {
+        afterCommit(new Runnable() {
+            @Override
+            public void run() {
+                bloomFilterManager.addProduct(productId);
+            }
+        });
+    }
+
+    /**
+     * 把缓存失效动作推迟到事务提交后执行。
+     *
+     * <p>缓存旁路模式要求"先写库、后删缓存"。若在事务提交前删除缓存，
+     * 并发读线程可能在事务提交前读到旧值并回写缓存，导致旧值长期驻留
+     * （T1 更新库 → 删缓存 → T2 未命中读旧值 → 回写 → T1 提交）。
+     * 因此失效动作统一注册到 {@code afterCommit} 回调；不在事务中时立即执行，
+     * 事务回滚时因不触发 {@code afterCommit} 而自然跳过。</p>
+     *
+     * @param action 缓存失效动作
+     */
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            action.run();
+                        }
+                    }
+            );
+        } else {
+            action.run();
         }
     }
 

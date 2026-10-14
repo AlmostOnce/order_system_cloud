@@ -20,6 +20,32 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!--
+            Redisson 分布式锁与布隆过滤器客户端。
+            声明为 optional，避免传递给 Gateway 等不需要 Redisson 的服务
+            （Gateway 使用 Lettuce 响应式 Redis，Redisson 自动装配会与其冲突），
+            由真正需要 Redisson 的服务自行显式引入。
+            Spring Boot 3.5 需排除 redisson-spring-data-41 并固定 redisson-spring-data-35。
+        -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>${redisson.version}</version>
+            <optional>true</optional>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.redisson</groupId>
+                    <artifactId>redisson-spring-data-41</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-data-35</artifactId>
+            <version>${redisson.version}</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- 模块单元测试能力。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

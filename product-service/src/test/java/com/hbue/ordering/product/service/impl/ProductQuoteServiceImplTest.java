@@ -5,12 +5,14 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
+import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +44,16 @@ class ProductQuoteServiceImplTest {
 
     @Mock
     private ProductCategoryMapper productCategoryMapper;
+
+    @Mock
+    private ProductBloomFilterManager bloomFilterManager;
+
+    @BeforeEach
+    void setUp() {
+        // 布隆过滤器默认放行，避免拦掉原有用例依赖的菜品 ID。
+        lenient().when(bloomFilterManager.mightContainProduct(anyLong()))
+                .thenReturn(true);
+    }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
@@ -142,7 +156,8 @@ class ProductQuoteServiceImplTest {
         return new ProductQuoteServiceImpl(
                 diningWindowMapper,
                 productCategoryMapper,
-                productMapper
+                productMapper,
+                bloomFilterManager
         );
     }
 
