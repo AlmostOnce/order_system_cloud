@@ -63,4 +63,23 @@ security:
     issuer: ${JWT_ISSUER:http://localhost:9094}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
     blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+  pay-password:
+    # 支付密码校验失败计数与锁定：达到上限后锁定，锁定期内一律拒绝。
+    # 计数与锁定都在 Redis 带 TTL 的键中，属于临时状态，不入库。
+    max-failures: ${PAY_PASSWORD_MAX_FAILURES:5}
+    failure-ttl-seconds: ${PAY_PASSWORD_FAILURE_TTL_SECONDS:900}
+    lock-ttl-seconds: ${PAY_PASSWORD_LOCK_TTL_SECONDS:900}
+
+# 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 用户服务接口文档
+  service-description: 账号、角色权限、数据范围、余额与支付密码接口。
+  # 网关地址与路径前缀，用于修正经网关聚合后 "Try it out" 的目标地址。
+  # 网关路由 StripPrefix=1 只剥离 /api 一段，故前缀固定为 /api，与各服务自身路径拼接。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
 

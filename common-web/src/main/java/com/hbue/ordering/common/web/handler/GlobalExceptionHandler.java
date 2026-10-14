@@ -236,6 +236,11 @@ public class GlobalExceptionHandler {
             return HttpStatus.CONFLICT;
         }
 
+        // 请求过于频繁或凭据被锁定对应 HTTP 429。
+        if (CommonErrorCode.TOO_MANY_REQUESTS.code().equals(errorCode.code())) {
+            return HttpStatus.TOO_MANY_REQUESTS;
+        }
+
         // 服务暂不可用对应 HTTP 503。
         if (CommonErrorCode.SERVICE_UNAVAILABLE.code()
                 .equals(errorCode.code())) {

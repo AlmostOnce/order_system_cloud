@@ -60,6 +60,16 @@ public class UserDO {
     private String passwordHash;
 
     /**
+     * 支付密码哈希值。
+     *
+     * <p>与登录密码完全分离：账号被盗时，登录态被窃取不应直接导致余额被花掉，
+     * 余额支付需要第二道凭据。为 null 表示尚未设置支付密码，未设置前禁止使用余额。
+     * 该值不参与 JWT，只在余额相关接口的请求体里传入，用后即弃。</p>
+     */
+    @TableField("pay_password_hash")
+    private String payPasswordHash;
+
+    /**
      * 头像地址。
      */
     @TableField("avatar_url")

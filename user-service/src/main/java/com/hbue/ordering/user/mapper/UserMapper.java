@@ -5,6 +5,9 @@ import com.hbue.ordering.user.model.UserDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import java.math.BigDecimal;
 
 /**
  * 用户数据访问接口。
@@ -166,5 +169,93 @@ public interface UserMapper extends BaseMapper<UserDO> {
     """)
     UserDO selectByUsernameForLogin(
             @Param("username") String username
+    );
+
+    /**
+     * 按用户 ID 查询未删除账号的余额与支付密码。
+     *
+     * <p>余额属于敏感信息，查询接口与扣款接口都用它读取当前余额，
+     * 调用方必须自行校验账号状态。</p>
+     *
+     * @param userId 用户 ID
+     * @return 用户持久化对象，不存在或已删除时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            balance,
+            pay_password_hash,
+            status,
+            deleted_at
+        FROM users
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        """)
+    UserDO selectBalanceById(@Param("userId") Long userId);
+
+    /**
+     * 按用户 ID 查询未删除账号的登录密码与支付密码哈希。
+     *
+     * <p>仅供设置/修改支付密码时校验凭据使用，返回值绝不对外暴露。</p>
+     *
+     * @param userId 用户 ID
+     * @return 用户持久化对象，不存在或已删除时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            password_hash,
+            pay_password_hash,
+            status,
+            deleted_at
+        FROM users
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        """)
+    UserDO selectPasswordsById(@Param("userId") Long userId);
+
+    /**
+     * 条件扣减余额。
+     *
+     * <p>把"余额充足"写进 WHERE 条件并由数据库原子求值，防止并发下超扣；
+     * 返回 0 表示余额不足或账号不可用，调用方需回查区分。</p>
+     *
+     * @param userId 用户 ID
+     * @param amount 扣款金额，必须为正数
+     * @return 受影响行数，1 表示扣款成功
+     */
+    @Update("""
+        UPDATE users
+        SET balance = balance - #{amount},
+            version = version + 1,
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+          AND status = 1
+          AND deleted_at IS NULL
+          AND balance >= #{amount}
+        """)
+    int deductBalance(
+            @Param("userId") Long userId,
+            @Param("amount") BigDecimal amount
+    );
+
+    /**
+     * 设置或修改支付密码哈希。
+     *
+     * @param userId 用户 ID
+     * @param payPasswordHash 支付密码哈希
+     * @return 受影响行数，1 表示写入成功
+     */
+    @Update("""
+        UPDATE users
+        SET pay_password_hash = #{payPasswordHash},
+            version = version + 1,
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+        """)
+    int updatePayPassword(
+            @Param("userId") Long userId,
+            @Param("payPasswordHash") String payPasswordHash
     );
 }

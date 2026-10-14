@@ -102,6 +102,22 @@ public class RedisOperationsService {
     }
 
     /**
+     * 对 Key 保存的整数执行原子自增。
+     *
+     * <p>用于失败次数等计数场景；Key 不存在时按 0 起算。
+     * 本方法不设置过期时间，由调用方在返回值为 1（即首次计数）时
+     * 自行调用 {@link #expire(String, Duration)} 补设 TTL，
+     * 避免每加一次都重置过期时间导致计数永不到期。</p>
+     *
+     * @param key Redis Key
+     * @return 自增后的值
+     */
+    public Long increment(String key) {
+        // 返回 Redis 对整数自增操作的结果。
+        return stringRedisTemplate.opsForValue().increment(key);
+    }
+
+    /**
      * 设置 Redis Key 的过期时间。
      *
      * @param key Redis Key
