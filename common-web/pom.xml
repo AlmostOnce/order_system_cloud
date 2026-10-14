@@ -50,6 +50,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- 接口文档共享配置；仅编译期使用，不向下游模块传递。 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

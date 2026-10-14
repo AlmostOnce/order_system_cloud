@@ -80,6 +80,13 @@ public class SecurityConfig {
                         // 健康检查允许匿名访问。
                         .requestMatchers("/actuator/health").permitAll()
 
+                        // 接口文档路径允许匿名访问，便于本地联调查看。
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
                         // 其他接口暂时要求认证。
                         .anyRequest().authenticated()
                 )

@@ -117,6 +117,14 @@ public class OrderSecurityConfig {
                         .requestMatchers("/actuator/health")
                         .permitAll()
 
+                        // 接口文档路径允许匿名访问，便于本地联调查看。
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        )
+                        .permitAll()
+
                         // 支付服务内部接口无用户 JWT，安全由
                         // InternalTokenVerifier 的共享密钥校验保证。
                         .requestMatchers("/internal/orders/**")

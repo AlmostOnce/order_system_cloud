@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.service.ProductMenuService;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -22,6 +23,7 @@ import java.util.List;
  */
 @Validated
 @RestController
+@Tag(name = "商品菜单接口")
 @RequestMapping("/products/windows")
 @PreAuthorize("hasRole('CUSTOMER')")
 public class ProductMenuController {

@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.payment.dto.request.MockPayRequest;
 import com.hbue.ordering.payment.service.PaymentService;
 import com.hbue.ordering.payment.vo.CheckoutInfoVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ import java.util.Map;
  * @date 2026-10-12
  */
 @RestController
+@Tag(name = "模拟渠道（仅 dev）")
 @RequestMapping("/mock/channel")
 @Profile("dev")
 public class MockChannelController {

@@ -8,6 +8,7 @@ import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.RestaurantDO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-10-13
  */
 @RestController
+@Tag(name = "内部接口（服务间调用）")
 @RequestMapping("/internal")
 public class InternalCatalogController {
 

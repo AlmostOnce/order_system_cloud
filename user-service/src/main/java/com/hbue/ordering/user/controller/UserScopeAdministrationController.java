@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.dto.request.UserScopeSaveRequest;
 import com.hbue.ordering.user.service.UserScopeAdministrationService;
 import com.hbue.ordering.user.vo.UserScopeAdminVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +34,7 @@ import java.util.List;
  */
 @Validated
 @RestController
+@Tag(name = "数据范围管理")
 @RequestMapping("/users")
 @PreAuthorize("hasAnyRole('RESTAURANT_MANAGER','GENERAL_MANAGER')")
 public class UserScopeAdministrationController {

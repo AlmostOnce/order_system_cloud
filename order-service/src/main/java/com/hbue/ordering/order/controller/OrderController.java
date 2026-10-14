@@ -8,6 +8,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RestController
+@Tag(name = "订单接口")
 @RequestMapping("/orders")
 public class OrderController {
 

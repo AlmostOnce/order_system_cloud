@@ -3,6 +3,7 @@ package com.hbue.ordering.user.controller;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.dto.request.UserStatusUpdateRequest;
 import com.hbue.ordering.user.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Validated
 @RestController
+@Tag(name = "账号状态管理")
 @RequestMapping("/users")
 @PreAuthorize("hasRole('SYSTEM_ADMIN')")
 public class UserStatusAdministrationController {

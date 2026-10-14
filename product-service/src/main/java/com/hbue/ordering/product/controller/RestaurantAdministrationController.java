@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
 import com.hbue.ordering.product.service.RestaurantAdministrationService;
 import com.hbue.ordering.product.vo.RestaurantAdminVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +33,7 @@ import java.util.List;
  */
 @Validated
 @RestController
+@Tag(name = "餐厅管理接口")
 @RequestMapping("/products/admin/restaurants")
 @PreAuthorize("hasAnyRole('RESTAURANT_MANAGER','GENERAL_MANAGER')")
 public class RestaurantAdministrationController {

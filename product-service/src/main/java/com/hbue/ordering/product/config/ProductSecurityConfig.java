@@ -82,6 +82,12 @@ public class ProductSecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
+                        // 接口文档路径允许匿名访问，便于本地联调查看。
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         // 内部接口不在 Gateway 路由内，改由共享密钥在方法内校验。
                         .requestMatchers("/internal/**").permitAll()
                         .anyRequest().authenticated())

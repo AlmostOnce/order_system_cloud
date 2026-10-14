@@ -5,6 +5,7 @@ import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.service.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-09-20
  */
 @RestController
+@Tag(name = "用户接口")
 @RequestMapping("/users")
 public class UserController {
 

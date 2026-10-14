@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.service.ProductQuoteService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-09-28
  */
 @RestController
+@Tag(name = "内部接口（服务间调用）")
 @RequestMapping("/internal/products")
 public class ProductInternalController {
 

@@ -86,6 +86,12 @@ public class PaymentSecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
+                        // 接口文档路径允许匿名访问，便于本地联调查看。
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         // 渠道回调入口无用户 JWT，安全由 HMAC 验签保证。
                         .requestMatchers("/internal/payments/notify").permitAll()
                         // 模拟收银台仅 dev 环境启用且不经 Gateway 暴露。

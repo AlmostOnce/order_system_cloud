@@ -4,6 +4,44 @@ spring:
       server:
         webflux:
           routes:
+            # 接口文档专用路由：必须排在对应服务的 /api/xxx/** 路由之前，
+            # Spring Cloud Gateway 首个匹配生效。此处用 RewritePath 而非
+            # StripPrefix=1，否则会落到不存在的 /xxx/v3/api-docs 路径。
+            - id: auth-service-docs
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/auth/v3/api-docs
+              filters:
+                - RewritePath=/api/auth/v3/api-docs, /v3/api-docs
+
+            - id: user-service-docs
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users/v3/api-docs
+              filters:
+                - RewritePath=/api/users/v3/api-docs, /v3/api-docs
+
+            - id: order-service-docs
+              uri: lb://order-service
+              predicates:
+                - Path=/api/orders/v3/api-docs
+              filters:
+                - RewritePath=/api/orders/v3/api-docs, /v3/api-docs
+
+            - id: product-service-docs
+              uri: lb://product-service
+              predicates:
+                - Path=/api/products/v3/api-docs
+              filters:
+                - RewritePath=/api/products/v3/api-docs, /v3/api-docs
+
+            - id: payment-service-docs
+              uri: lb://payment-service
+              predicates:
+                - Path=/api/payments/v3/api-docs
+              filters:
+                - RewritePath=/api/payments/v3/api-docs, /v3/api-docs
+
             - id: order-service
               uri: lb://order-service
               predicates:

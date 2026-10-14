@@ -7,6 +7,7 @@ import com.hbue.ordering.auth.service.AuthService;
 import com.hbue.ordering.auth.vo.LoginVO;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-09-20
  */
 @RestController
+@Tag(name = "认证接口")
 @RequestMapping("/auth")
 public class AuthController {
 

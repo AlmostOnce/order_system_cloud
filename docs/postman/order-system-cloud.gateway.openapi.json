@@ -1,0 +1,3073 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "order-system-cloud 接口文档（经网关聚合）",
+    "description": "由 5 个业务服务的 springdoc 规范合并而成，统一经网关访问：baseUrl 已设为 http://localhost:9090/api，path 直接取自各服务自身路径。\n使用前提：启动 MySQL / Redis / Nacos 与各服务、网关后，先调用「认证服务 · 认证接口」的登录接口获取 Access Token，再在 Postman 集合的 Authorization（Bearer）中填入。\n本文件不含 /internal/** 与 /mock/**：这两类接口不经网关，请改用对应服务的单服务规范文件并直连其端口调试。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:9090",
+      "description": "网关（统一入口）"
+    }
+  ],
+  "tags": [
+    {
+      "name": "认证服务 · 认证接口"
+    },
+    {
+      "name": "用户服务 · 数据范围管理"
+    },
+    {
+      "name": "用户服务 · 角色权限管理"
+    },
+    {
+      "name": "用户服务 · 余额与支付密码"
+    },
+    {
+      "name": "用户服务 · 用户接口"
+    },
+    {
+      "name": "用户服务 · 账号状态管理"
+    },
+    {
+      "name": "订单服务 · 订单接口"
+    },
+    {
+      "name": "商品服务 · 商品管理接口"
+    },
+    {
+      "name": "商品服务 · 餐厅管理接口"
+    },
+    {
+      "name": "商品服务 · 商品菜单接口"
+    },
+    {
+      "name": "支付服务 · 支付接口"
+    }
+  ],
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "认证服务 · 认证接口"
+        ],
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth_RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/auth_ApiResponseUserBasicVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "认证服务 · 认证接口"
+        ],
+        "operationId": "refresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth_RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/auth_ApiResponseLoginVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "认证服务 · 认证接口"
+        ],
+        "operationId": "logout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth_RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/auth_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "认证服务 · 认证接口"
+        ],
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/auth_LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/auth_ApiResponseLoginVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/scopes": {
+      "get": {
+        "tags": [
+          "用户服务 · 数据范围管理"
+        ],
+        "operationId": "listScopes",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseListUserScopeAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "用户服务 · 数据范围管理"
+        ],
+        "operationId": "replaceScopes",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_UserScopeSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseListUserScopeAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/role": {
+      "put": {
+        "tags": [
+          "用户服务 · 角色权限管理"
+        ],
+        "operationId": "assignRole",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_UserRoleUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseUserBasicVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/pay-password": {
+      "put": {
+        "tags": [
+          "用户服务 · 余额与支付密码"
+        ],
+        "operationId": "setPayPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_PayPasswordSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "post": {
+        "tags": [
+          "用户服务 · 用户接口"
+        ],
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_UserRegisterCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseUserBasicVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/authenticate": {
+      "post": {
+        "tags": [
+          "用户服务 · 用户接口"
+        ],
+        "operationId": "authenticate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_UserPasswordVerifyCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseUserBasicVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/status": {
+      "patch": {
+        "tags": [
+          "用户服务 · 账号状态管理"
+        ],
+        "operationId": "updateUserStatus",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/user_UserStatusUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}": {
+      "get": {
+        "tags": [
+          "用户服务 · 用户接口"
+        ],
+        "operationId": "getUserById",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseUserBasicVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/ping": {
+      "get": {
+        "tags": [
+          "用户服务 · 用户接口"
+        ],
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseString"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/balance": {
+      "get": {
+        "tags": [
+          "用户服务 · 余额与支付密码"
+        ],
+        "operationId": "getMyBalance",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseUserBalanceVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/scopes/{scopeId}": {
+      "delete": {
+        "tags": [
+          "用户服务 · 数据范围管理"
+        ],
+        "operationId": "revokeScope",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "scopeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/user_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders": {
+      "post": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "createOrder",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/order_OrderCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseOrderDetailVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{orderId}/status": {
+      "patch": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "advanceOrderStatus",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/order_OrderStatusUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseOrderStatusVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{orderId}/cancel": {
+      "patch": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseOrderStatusVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/{orderId}": {
+      "get": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "getOrderById",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseOrderDetailVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/ping": {
+      "get": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseString"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orders/list": {
+      "get": {
+        "tags": [
+          "订单服务 · 订单接口"
+        ],
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/order_ApiResponseListOrderDetailVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/windows/{windowId}": {
+      "put": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "updateWindow",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_WindowSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseWindowAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "disableWindow",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/restaurants/{restaurantId}": {
+      "put": {
+        "tags": [
+          "商品服务 · 餐厅管理接口"
+        ],
+        "operationId": "updateRestaurant",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_RestaurantSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseRestaurantAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "商品服务 · 餐厅管理接口"
+        ],
+        "operationId": "disableRestaurant",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/products/{productId}": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseProductAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "updateProduct",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_ProductSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseProductAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "disableProduct",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/categories/{categoryId}": {
+      "put": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "updateCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_ProductCategorySaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseProductCategoryAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "disableCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseVoid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/windows": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "listWindows",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseListWindowAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "createWindow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_WindowSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseWindowAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/windows/{windowId}/products": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "listProducts",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseListProductAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "createProduct",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_ProductSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseProductAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/windows/{windowId}/categories": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "listCategories",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseListProductCategoryAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "商品服务 · 商品管理接口"
+        ],
+        "operationId": "createCategory",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_ProductCategorySaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseProductCategoryAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/admin/restaurants": {
+      "get": {
+        "tags": [
+          "商品服务 · 餐厅管理接口"
+        ],
+        "operationId": "listRestaurants",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseListRestaurantAdminVO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "商品服务 · 餐厅管理接口"
+        ],
+        "operationId": "createRestaurant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/product_RestaurantSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseRestaurantAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/windows": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品菜单接口"
+        ],
+        "operationId": "listActiveWindows",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseListWindowSummaryVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/products/windows/{windowId}/menu": {
+      "get": {
+        "tags": [
+          "商品服务 · 商品菜单接口"
+        ],
+        "operationId": "getWindowMenu",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/product_ApiResponseWindowMenuVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments": {
+      "post": {
+        "tags": [
+          "支付服务 · 支付接口"
+        ],
+        "operationId": "createPayment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/payment_PaymentCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/payment_ApiResponsePaymentCreateVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments/{paymentId}": {
+      "get": {
+        "tags": [
+          "支付服务 · 支付接口"
+        ],
+        "operationId": "getPaymentStatus",
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/payment_ApiResponsePaymentStatusVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments/order/{orderId}": {
+      "get": {
+        "tags": [
+          "支付服务 · 支付接口"
+        ],
+        "operationId": "getLatestByOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/payment_ApiResponsePaymentStatusVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "登录后获取的 Access Token"
+      }
+    },
+    "schemas": {
+      "auth_RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 2
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^1[3-9]\\d{9}$"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 6
+          }
+        },
+        "required": [
+          "password",
+          "phone",
+          "username"
+        ]
+      },
+      "auth_ApiResponseUserBasicVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/auth_UserBasicVO"
+          }
+        }
+      },
+      "auth_UserBasicVO": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "roleCode": {
+            "type": "string"
+          }
+        }
+      },
+      "auth_RefreshTokenRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "auth_ApiResponseLoginVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/auth_LoginVO"
+          }
+        }
+      },
+      "auth_LoginVO": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "refreshExpiresIn": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "auth_ApiResponseVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "auth_LoginRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "password",
+          "username"
+        ]
+      },
+      "user_ScopeItem": {
+        "type": "object",
+        "properties": {
+          "scopeType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "scopeRef": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "scopeType"
+        ]
+      },
+      "user_UserScopeSaveRequest": {
+        "type": "object",
+        "properties": {
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/user_ScopeItem"
+            }
+          }
+        }
+      },
+      "user_ApiResponseListUserScopeAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/user_UserScopeAdminVO"
+            }
+          }
+        }
+      },
+      "user_UserScopeAdminVO": {
+        "type": "object",
+        "properties": {
+          "scopeId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scopeType": {
+            "type": "string"
+          },
+          "scopeRef": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "user_UserRoleUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "roleCode": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "roleCode"
+        ]
+      },
+      "user_ApiResponseUserBasicVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/user_UserBasicVO"
+          }
+        }
+      },
+      "user_UserBasicVO": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "roleCode": {
+            "type": "string"
+          }
+        }
+      },
+      "user_PayPasswordSetRequest": {
+        "type": "object",
+        "properties": {
+          "loginPassword": {
+            "type": "string"
+          },
+          "oldPayPassword": {
+            "type": "string"
+          },
+          "newPayPassword": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 6
+          }
+        },
+        "required": [
+          "newPayPassword"
+        ]
+      },
+      "user_ApiResponseVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "user_UserRegisterCommand": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "user_UserPasswordVerifyCommand": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "user_UserBalanceDeductCommand": {
+        "type": "object",
+        "properties": {
+          "bizType": {
+            "type": "string"
+          },
+          "bizRef": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "payPassword": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          }
+        }
+      },
+      "user_ApiResponseUserBalanceDeductResultVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/user_UserBalanceDeductResultVO"
+          }
+        }
+      },
+      "user_UserBalanceDeductResultVO": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bizRef": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "balanceAfter": {
+            "type": "number"
+          },
+          "idempotent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "user_UserStatusUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "user_ApiResponseString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          }
+        }
+      },
+      "user_ApiResponseUserBalanceVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/user_UserBalanceVO"
+          }
+        }
+      },
+      "user_UserBalanceVO": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "number"
+          },
+          "payPasswordSet": {
+            "type": "boolean"
+          }
+        }
+      },
+      "user_ApiResponseUserScopeVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/user_UserScopeVO"
+          }
+        }
+      },
+      "user_UserScopeVO": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "platform": {
+            "type": "boolean"
+          },
+          "windowIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "restaurantIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "order_OrderCreateRequest": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/order_OrderItemCreateRequest"
+            },
+            "maxItems": 100,
+            "minItems": 0
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "items",
+          "windowId"
+        ]
+      },
+      "order_OrderItemCreateRequest": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "productId",
+          "quantity"
+        ]
+      },
+      "order_ApiResponseOrderDetailVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/order_OrderDetailVO"
+          }
+        }
+      },
+      "order_OrderDetailVO": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          },
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "pickupCode": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/order_OrderItemVO"
+            }
+          }
+        }
+      },
+      "order_OrderItemVO": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "unitPrice": {
+            "type": "number"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lineAmount": {
+            "type": "number"
+          }
+        }
+      },
+      "order_OrderStatusUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID",
+              "PREPARING",
+              "WAITING_FOR_PICKUP",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "order_ApiResponseOrderStatusVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/order_OrderStatusVO"
+          }
+        }
+      },
+      "order_OrderStatusVO": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "order_ApiResponseString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          }
+        }
+      },
+      "order_ApiResponseListOrderDetailVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/order_OrderDetailVO"
+            }
+          }
+        }
+      },
+      "order_ApiResponseOrderInternalVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/order_OrderInternalVO"
+          }
+        }
+      },
+      "order_OrderInternalVO": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "product_WindowSaveRequest": {
+        "type": "object",
+        "properties": {
+          "restaurantId": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "windowCode": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 0
+          },
+          "windowName": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "imageUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "isOpen": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "isOpen",
+          "restaurantId",
+          "status",
+          "windowCode",
+          "windowName"
+        ]
+      },
+      "product_ApiResponseWindowAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_WindowAdminVO"
+          }
+        }
+      },
+      "product_WindowAdminVO": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restaurantId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "windowCode": {
+            "type": "string"
+          },
+          "windowName": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isOpen": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "product_RestaurantSaveRequest": {
+        "type": "object",
+        "properties": {
+          "restaurantCode": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 0
+          },
+          "restaurantName": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 0
+          },
+          "imageUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "notice": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 9999,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "location",
+          "restaurantCode",
+          "restaurantName"
+        ]
+      },
+      "product_ApiResponseRestaurantAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_RestaurantAdminVO"
+          }
+        }
+      },
+      "product_RestaurantAdminVO": {
+        "type": "object",
+        "properties": {
+          "restaurantId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restaurantCode": {
+            "type": "string"
+          },
+          "restaurantName": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "notice": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "product_ProductSaveRequest": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "productCode": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "productName": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 0
+          },
+          "imageUrl": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 0
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0.0
+          },
+          "saleStatus": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "price",
+          "productCode",
+          "productName",
+          "saleStatus",
+          "sortOrder"
+        ]
+      },
+      "product_ApiResponseProductAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_ProductAdminVO"
+          }
+        }
+      },
+      "product_ProductAdminVO": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "saleStatus": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "product_ProductCategorySaveRequest": {
+        "type": "object",
+        "properties": {
+          "categoryName": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 0
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "categoryName",
+          "sortOrder",
+          "status"
+        ]
+      },
+      "product_ApiResponseProductCategoryAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_ProductCategoryAdminVO"
+          }
+        }
+      },
+      "product_ProductCategoryAdminVO": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoryName": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "product_ProductQuoteRequest": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "productIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "exclusiveMinimum": 0
+            },
+            "maxItems": 100,
+            "minItems": 0
+          }
+        },
+        "required": [
+          "productIds",
+          "windowId"
+        ]
+      },
+      "product_ApiResponseProductQuoteResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_ProductQuoteResponse"
+          }
+        }
+      },
+      "product_ProductQuoteResponse": {
+        "type": "object",
+        "properties": {
+          "windowActive": {
+            "type": "boolean"
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_ProductQuoteVO"
+            }
+          }
+        }
+      },
+      "product_ProductQuoteVO": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          }
+        }
+      },
+      "product_ApiResponseListWindowSummaryVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_WindowSummaryVO"
+            }
+          }
+        }
+      },
+      "product_WindowSummaryVO": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "windowCode": {
+            "type": "string"
+          },
+          "windowName": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          }
+        }
+      },
+      "product_ApiResponseWindowMenuVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_WindowMenuVO"
+          }
+        }
+      },
+      "product_MenuProductVO": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "product_ProductCategoryMenuVO": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoryName": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_MenuProductVO"
+            }
+          }
+        }
+      },
+      "product_WindowMenuVO": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "windowCode": {
+            "type": "string"
+          },
+          "windowName": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_ProductCategoryMenuVO"
+            }
+          },
+          "uncategorizedProducts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_MenuProductVO"
+            }
+          }
+        }
+      },
+      "product_ApiResponseListWindowAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_WindowAdminVO"
+            }
+          }
+        }
+      },
+      "product_ApiResponseListProductAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_ProductAdminVO"
+            }
+          }
+        }
+      },
+      "product_ApiResponseListProductCategoryAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_ProductCategoryAdminVO"
+            }
+          }
+        }
+      },
+      "product_ApiResponseListRestaurantAdminVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/product_RestaurantAdminVO"
+            }
+          }
+        }
+      },
+      "product_ApiResponseWindowInfoVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_WindowInfoVO"
+          }
+        }
+      },
+      "product_WindowInfoVO": {
+        "type": "object",
+        "properties": {
+          "windowId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restaurantId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "product_ApiResponseRestaurantInfoVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/product_RestaurantInfoVO"
+          }
+        }
+      },
+      "product_RestaurantInfoVO": {
+        "type": "object",
+        "properties": {
+          "restaurantId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restaurantCode": {
+            "type": "string"
+          },
+          "restaurantName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "product_ApiResponseVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "payment_PaymentCreateRequest": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "channelCode": {
+            "type": "string"
+          },
+          "payPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "orderId"
+        ]
+      },
+      "payment_ApiResponsePaymentCreateVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/payment_PaymentCreateVO"
+          }
+        }
+      },
+      "payment_PaymentCreateVO": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "paymentNo": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "channelCode": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "checkoutUrl": {
+            "type": "string"
+          },
+          "qrCodeContent": {
+            "type": "string"
+          }
+        }
+      },
+      "payment_MockPayRequest": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "pattern": "SUCCESS|FAILED"
+          },
+          "paidAmount": {
+            "type": "string",
+            "maxLength": 16,
+            "minLength": 0
+          }
+        }
+      },
+      "payment_ApiResponseMapStringString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "payment_ChannelNotifyRequest": {
+        "type": "object",
+        "properties": {
+          "paymentNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channelTradeNo": {
+            "type": "string"
+          },
+          "paidAmount": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "paidAmount",
+          "paymentNo",
+          "status"
+        ]
+      },
+      "payment_ApiResponseVoid": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "payment_ApiResponsePaymentStatusVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/payment_PaymentStatusVO"
+          }
+        }
+      },
+      "payment_PaymentStatusVO": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "paymentNo": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "paidAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "channelTradeNo": {
+            "type": "string"
+          },
+          "successTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "failReason": {
+            "type": "string"
+          }
+        }
+      },
+      "payment_ApiResponseCheckoutInfoVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/payment_CheckoutInfoVO"
+          }
+        }
+      },
+      "payment_CheckoutInfoVO": {
+        "type": "object",
+        "properties": {
+          "paymentNo": {
+            "type": "string"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
 import com.hbue.ordering.user.api.vo.UserScopeVO;
 import com.hbue.ordering.user.model.UserDataScopeDO;
 import com.hbue.ordering.user.service.UserDataScopeService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -26,6 +27,7 @@ import java.util.List;
  * @date 2026-10-13
  */
 @RestController
+@Tag(name = "内部接口（服务间调用）")
 @RequestMapping("/internal/users")
 public class UserScopeInternalController {
 

@@ -3,6 +3,7 @@ package com.hbue.ordering.payment.controller;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.payment.dto.request.ChannelNotifyRequest;
 import com.hbue.ordering.payment.service.PaymentService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-10-12
  */
 @RestController
+@Tag(name = "渠道回调（内部）")
 @RequestMapping("/internal/payments")
 public class PaymentNotifyController {
 

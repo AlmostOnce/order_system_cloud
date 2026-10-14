@@ -8,6 +8,7 @@ import com.hbue.ordering.order.security.InternalTokenVerifier;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @date 2026-10-12
  */
 @RestController
+@Tag(name = "内部接口（服务间调用）")
 @RequestMapping("/internal/orders")
 public class OrderInternalController {
 

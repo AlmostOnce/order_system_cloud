@@ -8,6 +8,7 @@ import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.vo.ProductAdminVO;
 import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +38,7 @@ import java.util.List;
  */
 @Validated
 @RestController
+@Tag(name = "商品管理接口")
 @RequestMapping("/products/admin")
 @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')")
 public class ProductAdministrationController {

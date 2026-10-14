@@ -96,3 +96,16 @@ internal:
   scope:
     # 数据范围相关内部接口的共享密钥，与 user-service / product-service 保持一致。
     token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+# 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 订单服务接口文档
+  service-description: 下单、订单查询与订单状态推进接口。
+  # 网关地址与路径前缀，用于修正经网关聚合后 "Try it out" 的目标地址。
+  # 网关路由 StripPrefix=1 只剥离 /api 一段，故前缀固定为 /api，与各服务自身路径拼接。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api

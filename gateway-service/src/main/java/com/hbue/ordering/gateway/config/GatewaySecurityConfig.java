@@ -123,6 +123,18 @@ public class GatewaySecurityConfig {
                         .pathMatchers("/actuator/health")
                         .permitAll()
 
+                        // 接口文档与聚合入口允许匿名访问，便于本地联调查看。
+                        .pathMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**"
+                        )
+                        .permitAll()
+
+                        // 各服务文档经网关聚合的访问路径。
+                        .pathMatchers("/api/*/v3/api-docs")
+                        .permitAll()
+
                         // 其他请求必须携带有效 JWT。
                         .anyExchange()
                         .authenticated()

@@ -49,3 +49,21 @@ security:
     issuer: http://localhost:9094
     public-key-location: file:/home/user/.config/order-system/keys/jwt-public.pem
     blacklist-key-prefix: "auth:access-token:blacklist:"
+
+# 接口文档聚合入口：网关 Swagger UI 下拉框列出各服务文档地址。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    urls:
+      - name: auth-service
+        url: /api/auth/v3/api-docs
+      - name: user-service
+        url: /api/users/v3/api-docs
+      - name: order-service
+        url: /api/orders/v3/api-docs
+      - name: product-service
+        url: /api/products/v3/api-docs
+      - name: payment-service
+        url: /api/payments/v3/api-docs

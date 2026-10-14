@@ -33,6 +33,8 @@
         <spring-cloud.version>2025.0.0</spring-cloud.version>
         <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
         <redisson.version>4.7.0</redisson.version>
+        <!-- 接口文档（OpenAPI / Swagger UI）版本，统一由 BOM 管理 -->
+        <springdoc.version>2.9.1</springdoc.version>
         <!-- 覆盖 Spring Boot 管理的 Lombok 版本，适配本机 JDK 25 编译环境 -->
         <lombok.version>1.18.48</lombok.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,6 +62,15 @@
                 <groupId>com.alibaba.cloud</groupId>
                 <artifactId>spring-cloud-alibaba-dependencies</artifactId>
                 <version>${spring-cloud-alibaba.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- 接口文档依赖版本统一由 springdoc BOM 管理 -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-bom</artifactId>
+                <version>${springdoc.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
