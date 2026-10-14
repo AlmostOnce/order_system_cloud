@@ -3,6 +3,10 @@ package com.hbue.ordering.order.enums;
 /**
  * 订单状态及其合法流转规则。
  *
+ * <p>该枚举统一定义订单生命周期允许的迁移；支付成功迁移由支付回调专用流程触发，
+ * 商家履约迁移通过 {@link #canBeAdvancedByManagerTo(OrderStatus)} 进一步收窄，
+ * 防止商家代替支付结果或顾客取消订单。</p>
+ *
  * @author order-system
  * @date 2026-09-28
  */

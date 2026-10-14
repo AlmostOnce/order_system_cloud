@@ -18,8 +18,9 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>统一封装启用窗口列表、窗口菜单和窗口菜单空值标记的读写与失效，
  * 缓存值以 JSON 字符串存储，复用现有 VO 完成序列化，不额外引入缓存专用 DTO。</p>
  *
- * <p>缓存是数据库之上的加速层而非数据来源：所有写操作都兜住
- * {@link RuntimeException} 并仅记录日志，缓存故障绝不能导致业务请求失败。</p>
+ * <p>缓存是数据库之上的加速层而非数据来源：反序列化失败按缓存未命中处理；
+ * 写入、删除和空值标记操作的运行时异常只记录日志。普通读取命令的 Redis 连接异常
+ * 沿当前调用链向上抛出，不在本类内伪装成缓存未命中。</p>
  *
  * <p>过期时间在基础 TTL 上叠加随机抖动，使同一批写入的 Key 不会同时失效，
  * 避免缓存集中过期引发雪崩。</p>
@@ -64,7 +65,7 @@ public class ProductMenuCacheService {
     }
 
     /**
-     * 查询启用窗口列表缓存。
+     * 查询启用窗口列表缓存，并把 JSON 解析为接口视图对象。
      *
      * @return 启用窗口列表；未命中或缓存异常时返回 null
      */
@@ -125,7 +126,7 @@ public class ProductMenuCacheService {
     }
 
     /**
-     * 查询窗口菜单缓存。
+     * 查询单个窗口菜单缓存，并把 JSON 解析为菜单视图对象。
      *
      * @param windowId 窗口 ID
      * @return 窗口菜单；未命中或缓存异常时返回 null

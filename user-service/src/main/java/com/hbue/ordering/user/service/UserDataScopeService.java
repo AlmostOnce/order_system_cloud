@@ -9,8 +9,9 @@ import java.util.List;
 /**
  * 用户数据范围业务服务。
  *
- * <p>数据范围由 restaurant / general manager 授予，是授权的唯一事实来源；
- * 角色分配不走本服务。</p>
+ * <p>数据范围由具备授权资格的业务角色授予，是数据范围事实的唯一来源；其他
+ * 服务应通过内部契约读取，不得自行推导。角色分配不走本服务。本接口继承
+ * MyBatis-Plus {@link IService}，同时提供范围快照、事务性替换及缓存失效操作。</p>
  *
  * @author order-system
  * @date 2026-10-13

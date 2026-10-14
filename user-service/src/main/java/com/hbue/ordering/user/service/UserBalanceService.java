@@ -21,6 +21,7 @@ public interface UserBalanceService {
      *
      * @param userId 当前登录用户 ID
      * @return 余额视图对象
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户未登录或账户不可用时抛出
      */
     UserBalanceVO getMyBalance(Long userId);
 
@@ -33,6 +34,7 @@ public interface UserBalanceService {
      * @param userId 用户 ID
      * @param command 余额扣款命令
      * @return 扣款结果
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 参数无效、支付密码错误、账户不可用或余额不足时抛出
      */
     UserBalanceDeductResultVO deduct(
             Long userId,

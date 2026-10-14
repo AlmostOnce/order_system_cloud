@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
  * 与网关访问前缀。</p>
  *
  * <p>未引入 springdoc 的模块（如 common-response）不会加载本配置；
- * 生产环境可通过 {@code SWAGGER_ENABLED=false} 关闭文档能力。</p>
+ * 可通过 {@code springdoc.api-docs.enabled=false} 关闭本配置及接口文档能力。</p>
  *
  * @author order-system
  * @date 2026-10-14

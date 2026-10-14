@@ -8,7 +8,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 新建或更新窗口分类的请求对象。
+ * 新建或更新窗口分类的接口请求 DTO。
+ *
+ * <p>字段格式由 Bean Validation 校验；窗口归属及操作者是否有权管理该窗口，
+ * 仍由 Service 层根据登录用户的数据范围校验。</p>
  *
  * @author order-system
  * @date 2026-09-28

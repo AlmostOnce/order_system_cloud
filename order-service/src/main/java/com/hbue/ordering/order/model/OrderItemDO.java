@@ -10,7 +10,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 订单菜品快照持久化对象。
+ * 订单菜品明细持久化对象，对应 {@code order_items} 表。
+ *
+ * <p>商品编码、名称和单价均保存下单时的快照，避免商品后续改名或调价影响历史订单；
+ * 该对象仅用于订单服务内部持久化，不直接作为对外接口响应。</p>
  *
  * @author order-system
  * @date 2026-09-28

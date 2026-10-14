@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 支付服务顾客接口。
  *
- * <p>顾客侧没有"标记支付成功"端点——订单支付状态只能由渠道回调事件驱动。</p>
+ * <p>本控制器只提供已认证顾客的支付单创建与查询入口，用户 ID 从已验证 JWT 的 subject 获取，
+ * 不接受客户端自行指定用户 ID。顾客侧没有"标记支付成功"端点——支付状态只能由渠道回调驱动。</p>
  *
  * @author order-system
  * @date 2026-10-12
@@ -48,6 +49,7 @@ public class PaymentController {
      * @param jwt 当前登录顾客 JWT
      * @param request 创建支付单请求
      * @return 支付单创建结果
+     * @throws NumberFormatException JWT subject 不是数值格式时抛出
      */
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -67,6 +69,7 @@ public class PaymentController {
      * @param jwt 当前登录顾客 JWT
      * @param paymentId 支付单 ID
      * @return 支付单状态
+     * @throws NumberFormatException JWT subject 不是数值格式时抛出
      */
     @GetMapping("/{paymentId}")
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -86,6 +89,7 @@ public class PaymentController {
      * @param jwt 当前登录顾客 JWT
      * @param orderId 订单 ID
      * @return 支付单状态
+     * @throws NumberFormatException JWT subject 不是数值格式时抛出
      */
     @GetMapping("/order/{orderId}")
     @PreAuthorize("hasRole('CUSTOMER')")

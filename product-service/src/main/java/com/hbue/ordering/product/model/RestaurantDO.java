@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
  * 餐厅持久化对象。
  *
  * <p>映射 product_db 中的 restaurants 表。餐厅是档口的上级层级：
- * 一个餐厅包含多个档口，餐厅经理按餐厅维度管辖。</p>
+ * 一个餐厅包含多个档口，餐厅经理按餐厅维度管辖。该类只映射数据库字段，
+ * 不负责数据范围判断或餐厅管理业务，也不直接作为接口响应对象。</p>
  *
  * @author order-system
  * @date 2026-10-13

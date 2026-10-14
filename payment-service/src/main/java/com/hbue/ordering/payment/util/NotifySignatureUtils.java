@@ -11,8 +11,9 @@ import java.util.HexFormat;
 /**
  * 渠道异步通知 HMAC-SHA256 签名工具。
  *
- * <p>模拟渠道的签名生成端（MockChannelNotifier）与支付服务的验签端
- * 共用本工具类，单测只需覆盖本类即可同时保证两端行为一致。</p>
+ * <p>模拟渠道的签名生成端（MockChannelNotifier）与支付服务的验签端共用本工具类，
+ * 以保证双方使用同一规范化字段顺序和 HMAC-SHA256 算法。本工具只负责签名计算与时间窗判断，
+ * 不负责支付单状态、金额与渠道交易号的业务校验。</p>
  *
  * <p>规范化串按固定字段顺序用换行符连接：
  * paymentNo \n channelTradeNo(可空则空串) \n paidAmount原串 \n status \n timestamp。
@@ -59,6 +60,7 @@ public final class NotifySignatureUtils {
      * @param secret 共享密钥
      * @param canonicalString 规范化串
      * @return 十六进制签名
+     * @throws IllegalStateException HMAC 算法或密钥初始化不可用时抛出
      */
     public static String sign(String secret, String canonicalString) {
         try {
@@ -91,7 +93,8 @@ public final class NotifySignatureUtils {
     }
 
     /**
-     * 验证渠道通知签名：先校验时间戳窗口，再用常量时间比较防时序攻击。
+     * 验证渠道通知签名：先拒绝空签名或超出时间窗的请求，再重建规范串计算签名，
+     * 最后使用常量时间比较降低时序侧信道风险。
      *
      * @param secret 共享密钥
      * @param request 渠道通知请求体

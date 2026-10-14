@@ -24,6 +24,7 @@ public class GatewayRateLimitConfig {
      * @param burstCapacity 令牌桶最大容量
      * @param requestedTokens 每个请求消耗的令牌数
      * @return Redis 令牌桶限流器
+     * @throws IllegalArgumentException 当参数小于 1，或单次消耗量超过桶容量时抛出
      */
     @Bean
     public RedisRateLimiter loginRedisRateLimiter(

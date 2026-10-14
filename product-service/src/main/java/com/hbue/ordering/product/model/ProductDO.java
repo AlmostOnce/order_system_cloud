@@ -12,7 +12,9 @@ import java.time.LocalDateTime;
 /**
  * 窗口菜品持久化对象。
  *
- * <p>映射 product_db 中的 products 表；每条菜品记录只属于一个窗口。</p>
+ * <p>映射 product_db 中的 {@code products} 表；每条菜品记录只属于一个窗口。
+ * 本类只表达持久化结构，不承载价格校验、售卖状态流转或跨服务业务规则，
+ * Controller 也不得直接将其作为返回对象。</p>
  *
  * @author order-system
  * @date 2026-09-28

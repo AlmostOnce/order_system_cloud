@@ -78,7 +78,7 @@ public class MockChannelNotifier {
     }
 
     /**
-     * 异步发送支付成功通知。
+     * 异步发送模拟支付结果通知。
      *
      * @param paymentNo 业务支付单号
      * @param channelTradeNo 渠道交易号
@@ -100,7 +100,7 @@ public class MockChannelNotifier {
     }
 
     /**
-     * 同步发送通知并在非成功响应时固定退避重试。
+     * 同步发送通知并在未收到业务成功确认时固定间隔重试。
      *
      * @param paymentNo 业务支付单号
      * @param channelTradeNo 渠道交易号
@@ -125,6 +125,7 @@ public class MockChannelNotifier {
                 NotifySignatureUtils.buildCanonicalString(request)
         );
 
+        // 每次重试复用同一份通知和签名，避免重试期间业务载荷变化；时间戳也保持一致。
         for (int attempt = 1; attempt <= MAX_RETRY_COUNT; attempt++) {
             NotifyHttpResponse response = postNotify(request, signature);
             if (response.isSuccess()) {
@@ -202,7 +203,7 @@ public class MockChannelNotifier {
     }
 
     /**
-     * 渠道侧 HTTP 响应摘要。
+     * 渠道侧 HTTP 响应摘要，用于判断回调是否已被支付服务业务受理。
      *
      * @param httpStatus HTTP 状态码；发送异常时为 -1
      * @param code 响应体中的业务状态码；无法解析时为 null
@@ -221,9 +222,11 @@ public class MockChannelNotifier {
     }
 
     /**
-     * 回调响应体的最小解析模型。
+     * 回调响应体的最小解析模型，仅提取业务状态码判断是否停止重试。
      *
      * @param code 业务状态码
+     * @author order-system
+     * @date 2026-10-12
      */
     private record NotificationResponse(String code) {
     }

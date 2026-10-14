@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 /**
- * 菜单中当前在售的菜品。
+ * 顾客菜单中单个当前在售菜品的展示视图。
+ *
+ * <p>由商品服务根据数据库状态组装，仅包含菜单所需字段；不包含 DO 的持久化行为，
+ * 也不承诺价格在后续下单时仍不变化，下单核价需调用内部商品契约。</p>
  *
  * @author order-system
  * @date 2026-09-28

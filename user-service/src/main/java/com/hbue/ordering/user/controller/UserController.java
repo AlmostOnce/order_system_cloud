@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 用户服务控制器。
  *
- * <p>负责处理用户查询和用户注册请求。</p>
+ * <p>负责提供用户基础信息查询、注册和供认证服务调用的账号密码校验入口。
+ * 控制器只完成 HTTP 参数接收与响应封装；密码比对、唯一性判断和安全字段过滤
+ * 由 UserService 处理。用户实体不直接暴露给调用方。</p>
  *
  * @author order-system
  * @date 2026-09-20
@@ -38,7 +40,7 @@ public class UserController {
     }
 
     /**
-     * 用户服务健康检查接口。
+     * 用户服务轻量连通性检查接口。
      *
      * @return 用户服务运行状态
      */
@@ -53,6 +55,7 @@ public class UserController {
      *
      * @param userId 用户 ID
      * @return 用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户不存在、停用或已删除时由统一异常处理转换为响应
      */
     @GetMapping("/{userId}")
     public ApiResponse<UserBasicVO> getUserById(
@@ -70,6 +73,7 @@ public class UserController {
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号已被使用时由统一异常处理转换为响应
      */
     @PostMapping
     public ApiResponse<UserBasicVO> register(
@@ -88,6 +92,7 @@ public class UserController {
      *
      * @param command 用户密码校验命令
      * @return 校验成功的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户不存在、不可用或密码错误时统一返回认证失败
      */
     @PostMapping("/authenticate")
     public ApiResponse<UserBasicVO> authenticate(

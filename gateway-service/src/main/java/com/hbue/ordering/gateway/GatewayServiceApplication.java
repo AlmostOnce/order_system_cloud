@@ -7,7 +7,14 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.context.annotation.Import;
 
 /**
- * Gateway 服务启动类。
+ * Spring Cloud Gateway 服务启动入口。
+ *
+ * <p>负责启动响应式网关应用并启用服务发现；同时显式装配 Gateway 所需的
+ * Reactive Redis 基础操作组件。路由、安全链和过滤器由各自配置类维护，
+ * 本类不承载业务逻辑。</p>
+ *
+ * @author order-system
+ * @date 2026-10-14
  */
 @SpringBootApplication
 @EnableDiscoveryClient

@@ -53,6 +53,7 @@ public class UserRoleAdministrationController {
      * @param userId 目标用户 ID
      * @param request 目标角色编码
      * @return 变更后的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 目标角色或用户无效、或操作者试图修改自身角色时由统一异常处理转换为响应
      */
     @PutMapping("/{userId}/role")
     public ApiResponse<UserBasicVO> assignRole(
@@ -60,6 +61,7 @@ public class UserRoleAdministrationController {
             @PathVariable("userId") @Positive Long userId,
             @Valid @RequestBody UserRoleUpdateRequest request
     ) {
+        // 操作者 ID 取自已验签 JWT；目标角色是否允许及是否属于本人由 Service 再次校验。
         return ApiResponse.success(
                 userService.assignRole(
                         operatorId(jwt),
@@ -70,7 +72,7 @@ public class UserRoleAdministrationController {
     }
 
     /**
-     * 从 JWT 中取出当前操作者 ID。
+     * 从已通过资源服务器校验的 JWT 中取出当前操作者 ID。
      *
      * @param jwt 当前登录操作者 JWT
      * @return 操作者用户 ID

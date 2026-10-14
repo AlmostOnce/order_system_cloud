@@ -1,10 +1,11 @@
 package com.hbue.ordering.auth.model;
 
 /**
- * Refresh Token 对应的用户信息。
+ * Refresh Token 在认证服务内部关联的用户身份快照。
  *
- * <p>该对象只在认证服务内部使用，
- * 不作为接口响应对象直接返回给客户端。</p>
+ * <p>这些字段从 Redis 中读取，用于刷新时重新签发访问令牌以及注销时核对
+ * Refresh Token 所属用户。该对象只在认证服务内部使用，不作为接口响应对象
+ * 直接返回给客户端，也不包含用户密码等凭据。</p>
  *
  * @author order-system
  * @date 2026-09-22

@@ -13,7 +13,10 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * 新建或更新窗口菜品的请求对象。
+ * 新建或更新窗口菜品的接口请求 DTO。
+ *
+ * <p>该对象仅承载调用方可修改的商品字段，不包含窗口 ID、商品 ID、数据库时间等
+ * 服务端控制字段；格式校验由 Bean Validation 完成，分类归属和售卖业务规则由 Service 校验。</p>
  *
  * @author order-system
  * @date 2026-09-28

@@ -8,8 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 用户安全配置。
  *
- * <p>当前只提供 BCrypt 密码加密器，
- * 不负责登录认证和接口权限控制。</p>
+ * <p>当前只提供 BCrypt {@link PasswordEncoder}，供用户登录密码、引导账号密码
+ * 和支付密码哈希使用；不负责校验登录请求、签发 JWT、资源服务器验签或接口权限控制。</p>
  *
  * @author order-system
  * @date 2026-09-20

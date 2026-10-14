@@ -15,7 +15,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 订单详情视图对象。
+ * 面向顾客及商家接口的订单详情视图对象。
+ *
+ * <p>由订单 DO、可选的用户基础信息和订单明细快照组装，不暴露 MyBatis 持久化类型；
+ * 列表摘要可以不加载 {@code items}，详情响应才包含下单时保存的商品快照。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -67,6 +70,7 @@ public class OrderDetailVO {
      *
      * @param orderDO 订单持久化对象
      * @return 订单摘要视图
+     * @throws NullPointerException {@code orderDO} 为 null 时抛出
      */
     public static OrderDetailVO from(OrderDO orderDO) {
         return from(orderDO, null, null);
@@ -78,6 +82,7 @@ public class OrderDetailVO {
      * @param orderDO 订单持久化对象
      * @param orderItems 订单明细快照
      * @return 订单详情视图
+     * @throws NullPointerException {@code orderDO} 为 null 时抛出
      */
     public static OrderDetailVO from(
             OrderDO orderDO,
@@ -92,6 +97,7 @@ public class OrderDetailVO {
      * @param orderDO 订单持久化对象
      * @param userBasicVO 用户基础信息
      * @return 订单视图
+     * @throws NullPointerException {@code orderDO} 为 null 时抛出
      */
     public static OrderDetailVO from(
             OrderDO orderDO,
@@ -107,6 +113,7 @@ public class OrderDetailVO {
      * @param userBasicVO 用户基础信息
      * @param orderItems 订单明细快照
      * @return 订单详情视图
+     * @throws NullPointerException {@code orderDO} 为 null 时抛出
      */
     public static OrderDetailVO from(
             OrderDO orderDO,

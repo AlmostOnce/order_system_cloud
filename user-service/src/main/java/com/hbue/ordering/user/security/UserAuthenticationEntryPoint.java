@@ -16,6 +16,9 @@ import java.nio.charset.StandardCharsets;
 /**
  * 用户服务未认证请求统一返回 401 响应。
  *
+ * <p>用于处理缺少、无效或已注销 JWT 的请求，将认证失败映射为项目统一 JSON
+ * 响应；不回显 Token 内容或底层解析异常。</p>
+ *
  * @author order-system
  * @date 2026-10-13
  */

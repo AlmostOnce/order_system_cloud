@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 支付渠道异步通知入口。
  *
- * <p>该入口没有用户 JWT，安全由 HMAC-SHA256 签名校验保证；
+ * <p>该入口没有用户 JWT，安全由 PaymentService 按支付单渠道执行的 HMAC 签名与时间窗校验保证；
  * 不在 Gateway 路由白名单内，仅限服务内网访问。
- * 真实渠道（如支付宝）此处返回 "success" 文本，
+ * 真实渠道（如支付宝）通常要求此处返回约定的纯文本确认，
  * 模拟为保持项目统一响应格式而返回 ApiResponse。</p>
  *
  * @author order-system

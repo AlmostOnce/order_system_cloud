@@ -23,7 +23,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 基于商品数据库提供当前窗口可售菜品和价格。
+ * 基于商品数据库提供当前窗口可售菜品和价格的内部核价实现。
+ *
+ * <p>本服务是订单服务创建订单前的商品事实来源，不信任调用方提交的价格；
+ * 对窗口启用状态、菜品所属窗口、售卖状态和分类启用状态进行数据库核验。
+ * 核价结果不使用菜单缓存，布隆过滤器只排除确定不存在的菜品 ID，不能替代数据库校验。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -89,6 +93,7 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
         DiningWindowDO window = diningWindowMapper.selectById(request.getWindowId());
         if (window == null
                 || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+            // 用窗口状态标记拒绝本次核价，调用方据此中止订单创建。
             return new ProductQuoteResponse(false, List.of());
         }
 
@@ -101,6 +106,7 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
         }
         // 候选集合为空时直接返回，绝不能用空集合拼装 in 条件查库。
         if (candidateIds.isEmpty()) {
+            // 空集合不应进入 IN 查询，避免 ORM 对空条件的处理产生非预期 SQL。
             return new ProductQuoteResponse(true, List.of());
         }
 

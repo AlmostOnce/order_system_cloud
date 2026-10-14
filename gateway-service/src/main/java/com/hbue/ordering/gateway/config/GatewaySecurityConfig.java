@@ -37,6 +37,9 @@ import reactor.core.publisher.Mono;
  * <p>Gateway 只使用 RSA 公钥校验 JWT，
  * 不读取也不保存 JWT 私钥。</p>
  *
+ * <p>本配置负责网关层的身份认证、公共路径放行和统一 401/403 处理；
+ * 除 JWT 中已有的认证信息外，不判定订单、档口等业务数据范围，细粒度授权由业务服务完成。</p>
+ *
  * @author order-system
  * @date 2026-09-22
  */
@@ -154,11 +157,14 @@ public class GatewaySecurityConfig {
     /**
      * 创建 JWT 解码器。
      *
+     * <p>公钥内容格式错误时，密钥转换器产生的运行时异常不会被本方法吞掉。</p>
+     *
      * @param publicKeyResource RSA 公钥资源
      * @param issuer JWT 签发方
      * @param redisOperationsService Redis 响应式基础操作组件
      * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
      * @return JWT 解码器
+     * @throws IllegalStateException 当 RSA 公钥资源无法读取时抛出，阻止网关以不安全状态启动
      */
     @Bean
     public ReactiveJwtDecoder jwtDecoder(

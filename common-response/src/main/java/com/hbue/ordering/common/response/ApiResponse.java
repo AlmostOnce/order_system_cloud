@@ -10,8 +10,9 @@ import java.util.Objects;
 /**
  * HTTP 接口统一返回对象。
  *
- * <p>该模块只提供统一响应对象，
- * 不依赖 Servlet Web，Gateway 和业务服务都可以使用。</p>
+ * <p>该模块只定义业务响应体中的 {@code code}、{@code message} 和 {@code data}，
+ * 不依赖 Servlet Web，也不负责决定 HTTP 状态码；Gateway 和业务服务可共用此契约，
+ * HTTP 状态由各自的 Web 或安全处理边界确定。</p>
  *
  * @param <T> 返回数据类型
  * @author order-system
@@ -74,6 +75,7 @@ public final class ApiResponse<T> {
      * @param errorCode 错误码
      * @param <T> 数据类型
      * @return 失败响应
+     * @throws NullPointerException 当错误码为 null 时抛出
      */
     public static <T> ApiResponse<T> failure(ErrorCode errorCode) {
         // 错误码不能为空。
@@ -97,6 +99,7 @@ public final class ApiResponse<T> {
      * @param message 自定义错误信息
      * @param <T> 数据类型
      * @return 失败响应
+     * @throws NullPointerException 当错误码为 null 时抛出
      */
     public static <T> ApiResponse<T> failure(
             ErrorCode errorCode,

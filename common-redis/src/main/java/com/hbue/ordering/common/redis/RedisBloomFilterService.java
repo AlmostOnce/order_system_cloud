@@ -19,6 +19,9 @@ import org.slf4j.LoggerFactory;
  * <p>布隆过滤器不支持删除元素，已写入的 ID 会一直参与判定，
  * 因此删除数据后仍需依赖空值缓存兜底。</p>
  *
+ * <p>本组件调用 Redisson 同步 API，适用于同步业务服务；不要在 WebFlux
+ * 事件循环线程中直接调用，以免 Redis I/O 阻塞请求处理线程。</p>
+ *
  * @author order-system
  * @date 2026-10-14
  */
@@ -54,6 +57,7 @@ public class RedisBloomFilterService {
      * @param expectedInsertions 预期元素数量
      * @param falseProbability 预期误判率
      * @return 可用的布隆过滤器
+     * @throws IllegalArgumentException 当过滤器名称为空或仅包含空白时抛出
      */
     public RBloomFilter<Long> getOrInitFilter(
             String filterName,

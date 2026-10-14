@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 窗口菜单及窗口基本信息。
+ * 顾客可见的窗口菜单响应视图。
+ *
+ * <p>包含窗口展示信息、启用分类及无分类的在售菜品；只表示查询时刻的菜单快照，
+ * 不承担下单时的价格或可售状态校验。</p>
  *
  * @author order-system
  * @date 2026-09-28

@@ -10,8 +10,9 @@ import java.math.BigDecimal;
 /**
  * 支付渠道策略接口。
  *
- * <p>未来接入支付宝/微信等真实渠道时新增实现类，
- * 业务层只依赖本接口与渠道标识路由，不感知渠道差异。</p>
+ * <p>未来接入支付宝/微信等真实渠道时新增实现类，业务层只依赖本接口与渠道标识路由，
+ * 不感知各渠道的下单凭证、查询响应和回调报文差异。渠道类只做协议适配；支付单状态机、
+ * 幂等更新以及订单服务推进仍由支付 Service 负责。</p>
  *
  * @author order-system
  * @date 2026-10-12
@@ -65,7 +66,12 @@ public interface PaymentChannel {
     ChannelNotifyMessage parseNotify(ChannelNotifyRequest request);
 
     /**
-     * 渠道下单结果。
+     * 渠道下单适配结果。
+     *
+     * <p>封装渠道交易号和可能存在的收银台凭证；同步结算渠道可以没有页面地址与二维码。</p>
+     *
+     * @author order-system
+     * @date 2026-10-12
      */
     @Data
     @AllArgsConstructor
@@ -82,7 +88,12 @@ public interface PaymentChannel {
     }
 
     /**
-     * 渠道侧支付状态查询结果。
+     * 渠道侧主动查询得到的支付状态摘要。
+     *
+     * <p>用于对账或通知丢失后的补偿查询，不等同于本地支付单状态；具体映射由 Service 决定。</p>
+     *
+     * @author order-system
+     * @date 2026-10-12
      */
     @Data
     @AllArgsConstructor
@@ -93,7 +104,13 @@ public interface PaymentChannel {
     }
 
     /**
-     * 标准化回调消息。
+     * 由渠道适配器解析出的标准化回调业务消息。
+     *
+     * <p>统一支付单号、渠道交易号、金额和成败结果，供 Service 层执行金额核验与状态流转；
+     * 该消息本身不代表验签已通过。</p>
+     *
+     * @author order-system
+     * @date 2026-10-12
      */
     @Data
     @AllArgsConstructor

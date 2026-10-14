@@ -14,7 +14,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 支付服务未认证请求统一返回 401 响应。
+ * 支付服务未认证请求的统一 401 响应边界。
+ *
+ * <p>将资源服务器认证失败转换为项目统一 JSON 响应，不返回令牌解析细节或堆栈信息；
+ * 仅处理身份未认证场景，已认证但无权限的请求由 {@link PaymentAccessDeniedHandler} 处理。</p>
  *
  * @author order-system
  * @date 2026-10-12

@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 餐厅管理接口返回对象。
+ * 餐厅管理接口返回的视图对象。
+ *
+ * <p>包含餐厅管理端展示字段及持久化审计时间；不作为写请求或数据库映射对象，
+ * 餐厅经理可见范围仍由 Service 层基于用户数据范围控制。</p>
  *
  * @author order-system
  * @date 2026-10-13

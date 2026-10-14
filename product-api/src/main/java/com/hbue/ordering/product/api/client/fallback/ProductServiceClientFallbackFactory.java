@@ -11,7 +11,10 @@ import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 商品服务不可用时返回统一的降级结果。
+ * 商品核价远程调用失败时创建统一降级客户端。
+ *
+ * <p>该工厂保留原始失败原因供日志排查，并向调用方返回服务不可用响应；
+ * 降级结果不伪造价格或可售状态，调用方必须停止依赖该次核价继续创建订单。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -26,10 +29,10 @@ public class ProductServiceClientFallbackFactory
     );
 
     /**
-     * 创建商品服务降级客户端。
+     * 根据本次远程调用的失败原因创建降级客户端。
      *
      * @param cause 远程调用失败原因
-     * @return 返回服务不可用响应的客户端
+     * @return 调用核价方法时始终返回服务不可用响应的客户端
      */
     @Override
     public ProductServiceClient create(Throwable cause) {

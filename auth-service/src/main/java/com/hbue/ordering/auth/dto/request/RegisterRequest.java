@@ -9,7 +9,8 @@ import lombok.Data;
  * 用户注册请求对象。
  *
  * <p>该对象只负责接收注册参数，
- * 不直接使用用户数据库实体。</p>
+ * 不直接使用用户数据库实体。字段格式通过 Jakarta Validation 约束；密码
+ * 只用于注册命令传递，后续由 user-service 加密保存，认证服务不持久化密码。</p>
  *
  * @author order-system
  * @date 2026-09-20

@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 /**
- * 商品服务返回的订单价格快照来源。
+ * 商品服务核价结果中的单个可售商品视图。
+ *
+ * <p>此类型用于服务间传递商品服务读取到的当前商品标识、名称和单价，
+ * 供订单服务在创建订单时形成价格快照；它不是商品表实体，也不代表后续价格。</p>
  *
  * @author order-system
  * @date 2026-09-28

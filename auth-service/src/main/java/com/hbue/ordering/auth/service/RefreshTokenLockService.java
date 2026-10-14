@@ -17,8 +17,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Refresh Token 轮换分布式锁服务。
  *
- * <p>同一枚 Refresh Token 使用相同的摘要锁 Key，
- * 不同 Token 使用不同锁，避免重复轮换同时允许不同用户并行刷新。</p>
+ * <p>同一枚 Refresh Token 使用相同的 SHA-256 摘要锁 Key，不同 Token 使用不同锁，
+ * 避免同一凭据被并发轮换，同时允许不同用户并行刷新。锁只协调刷新临界区；
+ * Redis 原子消费旧 Token 仍是防止重复签发的最终判定，不能仅依赖锁保证幂等。</p>
  *
  * @author order-system
  * @date 2026-09-25
@@ -67,6 +68,7 @@ public class RefreshTokenLockService {
      *
      * @param refreshToken 原始 Refresh Token
      * @return 用于在 try-with-resources 中释放锁的句柄
+     * @throws BusinessException Token 为空、等待超时、线程中断或 Redis/Redisson 不可用时抛出
      */
     public LockHandle acquire(String refreshToken) {
         // 空 Token 无法生成有效锁 Key，按无效凭据处理。
@@ -145,7 +147,10 @@ public class RefreshTokenLockService {
     }
 
     /**
-     * 已获取分布式锁的释放句柄。
+     * 已获取分布式锁的资源句柄。
+     *
+     * <p>调用方应使用 try-with-resources 确保刷新流程结束后关闭句柄；关闭时
+     * 仅当前线程仍持有锁才执行解锁，固定租约用于兜底回收异常遗留的锁。</p>
      */
     public static class LockHandle implements AutoCloseable {
 
@@ -165,6 +170,9 @@ public class RefreshTokenLockService {
 
         /**
          * 在当前线程仍持有锁时释放分布式锁。
+         *
+         * <p>解锁异常只记录日志，不覆盖已经得到的刷新业务结果；若未能释放，
+         * 锁的固定租约会限制其最长存活时间。</p>
          */
         @Override
         public void close() {

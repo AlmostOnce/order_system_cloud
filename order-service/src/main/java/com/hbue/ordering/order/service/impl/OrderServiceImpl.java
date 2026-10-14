@@ -122,7 +122,9 @@ public class OrderServiceImpl
      */
     @Override
     public UserBasicVO getUserBasic(Long userId) {
+        // 用户信息属于 user-service 的数据边界，订单服务通过 Feign 获取，不直接读取用户库。
         ApiResponse<UserBasicVO> response = userServiceClient.getUserById(userId);
+        // 远程调用无响应或返回失败时，不把不完整数据继续用于订单业务。
         if (response == null
                 || !CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
             throw new BusinessException(
@@ -142,6 +144,7 @@ public class OrderServiceImpl
      */
     @Override
     public OrderDetailVO getOrderDetailById(Long userId, Long orderId) {
+        // 将订单不存在和不属于当前用户统一按 404 返回，避免泄露订单是否存在。
         OrderDO orderDO = getById(orderId);
         if (orderDO == null || !userId.equals(orderDO.getUserId())) {
             throw new BusinessException(
@@ -150,6 +153,7 @@ public class OrderServiceImpl
             );
         }
 
+        // 用户展示信息通过用户服务查询；菜品名称和价格来自下单时保存的明细快照。
         UserBasicVO userBasicVO = getUserBasic(orderDO.getUserId());
         return OrderDetailVO.from(
                 orderDO,
@@ -172,10 +176,13 @@ public class OrderServiceImpl
             String idempotencyKey,
             OrderCreateRequest request
     ) {
+        // 在访问数据库和远程服务前校验幂等键及业务字段，尽早拒绝无效请求。
         validateIdempotencyKey(idempotencyKey);
         validateCreateRequest(request);
 
+        // 请求摘要用于区分同一幂等键下的安全重试与内容不同的新请求。
         String requestHash = calculateRequestHash(request);
+        // 先查已有记录以快速处理普通重试；并发首次请求仍由数据库唯一约束兜底。
         OrderDO existingOrder = baseMapper.selectByUserIdAndIdempotencyKey(
                 userId,
                 idempotencyKey
@@ -184,8 +191,11 @@ public class OrderServiceImpl
             return replayOrder(existingOrder, requestHash);
         }
 
+        // 商品价格和可售状态以商品服务的核价结果为准，不信任客户端提交的价格。
         List<ProductQuoteVO> productQuotes = queryProductQuotes(request);
+        // 将核价结果固化为订单明细快照，避免商品后续改价影响已创建订单。
         List<OrderItemDO> orderItems = buildOrderItems(request, productQuotes);
+        // 总金额从服务端计算的行金额累加，并在写库前检查数据库 DECIMAL 字段上限。
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (OrderItemDO orderItem : orderItems) {
             totalAmount = totalAmount.add(orderItem.getLineAmount());
@@ -197,6 +207,7 @@ public class OrderServiceImpl
             );
         }
 
+        // 下单前确认用户服务仍能确认该用户存在；报价成功不代表用户资料读取一定成功。
         UserBasicVO userBasicVO = getUserBasic(userId);
         if (userBasicVO == null) {
             throw new BusinessException(
@@ -205,6 +216,7 @@ public class OrderServiceImpl
             );
         }
 
+        // 订单号、初始状态、版本号和请求摘要由服务端生成，客户端不能指定持久化字段。
         OrderDO orderDO = buildOrder(
                 userId,
                 idempotencyKey,
@@ -214,6 +226,7 @@ public class OrderServiceImpl
         );
 
         try {
+            // 订单头和明细必须在同一事务保存，避免出现缺少明细的半成品订单。
             orderPersistenceService.saveOrderWithItems(orderDO, orderItems);
         } catch (DuplicateKeyException exception) {
             // 原子写入事务已回滚；使用新的一致性读取取得并发请求的赢家订单。
@@ -239,6 +252,7 @@ public class OrderServiceImpl
      */
     @Override
     public OrderStatusVO cancelOrder(Long userId, Long orderId) {
+        // 先确认订单归属；随后状态机校验确保已支付或履约中的订单不能由顾客取消。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         if (userId == null || !userId.equals(orderDO.getUserId())) {
             // 对其他用户的订单按不存在处理，避免泄露订单信息。
@@ -248,6 +262,7 @@ public class OrderServiceImpl
             );
         }
 
+        // 仅允许待支付订单取消，实际更新仍由状态与版本号条件保护并发写入。
         OrderStatus currentStatus = getCurrentStatus(orderDO);
         if (currentStatus != OrderStatus.PENDING_PAYMENT
                 || !currentStatus.canTransitionTo(OrderStatus.CANCELLED)) {
@@ -296,6 +311,7 @@ public class OrderServiceImpl
 
         OrderStatus currentStatus = getCurrentStatus(orderDO);
         if (!currentStatus.canBeAdvancedByManagerTo(targetStatus)) {
+            // 非法状态推进也写审计记录，便于追踪管理端的拒绝操作。
             auditLogger.record(
                     operatorId,
                     ORDER_STATUS_ADVANCE,
@@ -308,6 +324,7 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
+        // 先确认数据库状态迁移成功，再记录成功审计，避免审计日志领先于真实状态。
         OrderStatusVO statusVO = persistStatusTransition(
                 orderDO,
                 targetStatus
@@ -335,6 +352,7 @@ public class OrderServiceImpl
      */
     @Override
     public OrderStatusVO markOrderPaid(Long orderId) {
+        // 支付通知可能重放或并发到达，先读取状态并按状态机判定是否允许推进。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         OrderStatus currentStatus = getCurrentStatus(orderDO);
 
@@ -351,6 +369,7 @@ public class OrderServiceImpl
         }
 
         try {
+            // 状态与版本号条件更新用于竞争唯一写入权，防止重复通知重复推进订单。
             return persistStatusTransition(orderDO, OrderStatus.PAID);
         } catch (BusinessException conflictException) {
             // 并发回调竞争失败时回读订单：已被推进为已支付则幂等成功。
@@ -373,6 +392,7 @@ public class OrderServiceImpl
      * @return 订单持久化对象
      */
     private OrderDO getOrderForStatusChange(Long orderId) {
+        // 各状态变更入口复用此查询，统一处理订单缺失和对应 404 错误码。
         OrderDO orderDO = getById(orderId);
         if (orderDO == null) {
             throw new BusinessException(
@@ -390,6 +410,7 @@ public class OrderServiceImpl
      * @return 当前订单状态
      */
     private OrderStatus getCurrentStatus(OrderDO orderDO) {
+        // 将数据库展示值映射回领域枚举，业务迁移规则集中由 OrderStatus 管理。
         OrderStatus currentStatus = OrderStatus.findByLabel(
                 orderDO.getStatus()
         );
@@ -414,6 +435,7 @@ public class OrderServiceImpl
             OrderDO orderDO,
             OrderStatus targetStatus
     ) {
+        // 把读取到的旧状态和版本号一并交给持久化层，避免并发请求覆盖彼此的状态变更。
         boolean updated = orderPersistenceService.updateStatusIfUnchanged(
                 orderDO.getOrderId(),
                 orderDO.getStatus(),
@@ -425,6 +447,7 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
+        // 只有数据库确认受影响行数为 1 才返回变更成功。
         return OrderStatusVO.builder()
                 .orderId(orderDO.getOrderId())
                 .status(targetStatus.getLabel())
@@ -449,6 +472,7 @@ public class OrderServiceImpl
      * @param idempotencyKey 客户端幂等键
      */
     private void validateIdempotencyKey(String idempotencyKey) {
+        // 输入约束与数据库幂等键列保持一致，避免空键或过长键进入持久化流程。
         if (idempotencyKey == null
                 || idempotencyKey.isBlank()
                 || idempotencyKey.length() > 128) {
@@ -465,6 +489,7 @@ public class OrderServiceImpl
      * @param request 创建订单请求
      */
     private void validateCreateRequest(OrderCreateRequest request) {
+        // 校验窗口、明细集合及单次明细数量，防止空订单和超量请求进入核价链路。
         if (request == null
                 || request.getWindowId() == null
                 || request.getWindowId() <= 0
@@ -477,6 +502,7 @@ public class OrderServiceImpl
             );
         }
 
+        // 同一订单内每种商品只允许一行；购买多个同类商品应通过 quantity 表达。
         Set<Long> productIds = new HashSet<>();
         for (OrderItemCreateRequest item : request.getItems()) {
             if (item == null
@@ -502,6 +528,7 @@ public class OrderServiceImpl
     private List<ProductQuoteVO> queryProductQuotes(
             OrderCreateRequest request
     ) {
+        // 仅把窗口和商品 ID 清单交给商品服务，由商品服务判定归属、可售状态和实际价格。
         ProductQuoteRequest quoteRequest = new ProductQuoteRequest();
         quoteRequest.setWindowId(request.getWindowId());
         List<Long> productIds = new ArrayList<>();
@@ -512,6 +539,7 @@ public class OrderServiceImpl
 
         ApiResponse<ProductQuoteResponse> response =
                 productServiceClient.quote(quoteRequest);
+        // 校验远程服务的统一响应结构，防止失败响应或空数据被继续当作有效报价使用。
         if (response == null
                 || !CommonErrorCode.SUCCESS.code().equals(response.getCode())
                 || response.getData() == null) {
@@ -525,6 +553,7 @@ public class OrderServiceImpl
         }
 
         ProductQuoteResponse quoteResponse = response.getData();
+        // 窗口停用属于明确业务拒绝；缺少商品列表则说明核价结果不完整。
         if (!quoteResponse.isWindowActive()) {
             throw new BusinessException(
                     CommonErrorCode.BAD_REQUEST,
@@ -551,6 +580,7 @@ public class OrderServiceImpl
             OrderCreateRequest request,
             List<ProductQuoteVO> productQuotes
     ) {
+        // 按商品 ID 建立报价索引，之后按客户端请求顺序组装订单行。
         Map<Long, ProductQuoteVO> quoteByProductId = new HashMap<>();
         for (ProductQuoteVO quote : productQuotes) {
             if (quote == null
@@ -568,6 +598,7 @@ public class OrderServiceImpl
 
         List<OrderItemDO> items = new ArrayList<>();
         for (OrderItemCreateRequest requestedItem : request.getItems()) {
+            // 任一请求商品缺少报价都整体拒绝，不静默跳过菜品以免总金额与顾客意图不符。
             ProductQuoteVO quote = quoteByProductId.get(
                     requestedItem.getProductId()
             );
@@ -587,6 +618,7 @@ public class OrderServiceImpl
                 );
             }
 
+            // 保存商品编码、名称、单价和行金额快照，使历史订单不受菜单变更影响。
             BigDecimal lineAmount = quote.getPrice()
                     .multiply(BigDecimal.valueOf(requestedItem.getQuantity()));
             OrderItemDO item = new OrderItemDO();
@@ -619,6 +651,7 @@ public class OrderServiceImpl
             String requestHash,
             BigDecimal totalAmount
     ) {
+        // 订单号包含时间和随机后缀；并发幂等仍依赖用户 ID 与幂等键的数据库唯一约束。
         LocalDateTime now = LocalDateTime.now();
         String time = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         String random = UUID.randomUUID()
@@ -653,6 +686,7 @@ public class OrderServiceImpl
             OrderDO existingOrder,
             String requestHash
     ) {
+        // 同一个幂等键只能重放相同请求；若请求摘要不同，返回冲突而不是复用旧订单。
         if (!requestHash.equals(existingOrder.getRequestHash())) {
             throw new BusinessException(
                     CommonErrorCode.CONFLICT,
@@ -673,9 +707,11 @@ public class OrderServiceImpl
      */
     private String calculateRequestHash(OrderCreateRequest request) {
         try {
+            // 采用 SHA-256 对参与订单语义的字段生成摘要，不将幂等键本身纳入摘要内容。
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             updateDigest(digest, request.getWindowId().toString());
 
+            // 先按商品 ID 排序，使商品行排列顺序不同但内容相同的请求得到相同摘要。
             List<OrderItemCreateRequest> sortedItems = new ArrayList<>(
                     request.getItems()
             );
@@ -688,6 +724,7 @@ public class OrderServiceImpl
                 updateDigest(digest, item.getQuantity().toString());
             }
 
+            // 显式写入备注存在标记，区分 null 与空字符串这两种不同输入。
             String remark = request.getRemark();
             if (remark == null) {
                 digest.update((byte) 0);
@@ -697,6 +734,7 @@ public class OrderServiceImpl
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException exception) {
+            // SHA-256 是 Java 标准算法；若运行环境缺失，不降级为弱摘要，直接报告环境错误。
             throw new IllegalStateException(
                     "当前 Java 环境不支持 SHA-256",
                     exception
@@ -711,6 +749,7 @@ public class OrderServiceImpl
      * @param value 请求字段
      */
     private void updateDigest(MessageDigest digest, String value) {
+        // 每个字段前写入 UTF-8 字节长度，避免直接拼接导致字段边界不明确。
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         digest.update(ByteBuffer.allocate(Integer.BYTES)
                 .putInt(bytes.length)
@@ -726,6 +765,7 @@ public class OrderServiceImpl
      */
     @Override
     public List<OrderDO> listByUserId(Long userId) {
+        // 查询条件限定为当前用户 ID，避免列表接口跨用户暴露订单。
         return baseMapper.selectByUserId(userId);
     }
 }

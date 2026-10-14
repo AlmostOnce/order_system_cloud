@@ -42,6 +42,7 @@ public class InternalScopeTokenVerifier {
      * 校验内部调用凭据，失败时抛出 401。
      *
      * @param token 请求头中携带的共享密钥
+     * @throws BusinessException 当服务端密钥未配置或请求凭据不匹配时抛出
      */
     public void verify(String token) {
         // 未配置共享密钥时拒绝全部内部调用，避免漏配导致内部接口暴露。

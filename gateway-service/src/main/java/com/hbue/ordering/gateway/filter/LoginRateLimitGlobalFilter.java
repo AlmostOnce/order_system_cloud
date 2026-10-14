@@ -28,7 +28,7 @@ import java.util.Map;
 /**
  * 登录接口 IP 限流全局过滤器。
  *
- * <p>只限制客户端的 {@code POST /api/auth/login} 请求，
+ * <p>只限制客户端的精确路径 {@code POST /api/auth/login} 请求，
  * 使用 TCP 连接的远端地址作为 Redis 限流 Key，
  * 不信任客户端自行传入的 X-Forwarded-For 请求头。</p>
  *
@@ -87,7 +87,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      *
      * @param exchange 当前请求和响应交换对象
      * @param chain Gateway 过滤器链
-     * @return 当前请求的响应式处理结果
+     * @return 当前请求的响应式处理结果；限流通过后继续过滤器链，拒绝或依赖不可用时写入错误响应
      */
     @Override
     public Mono<Void> filter(
@@ -112,6 +112,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
         }
 
         // Redis 中的令牌桶状态由所有 Gateway 实例共享。
+        // 延迟到响应式链订阅时执行检查；materialize 将异常转成信号，统一进入 fail-closed 分支。
         return Mono.defer(() -> redisRateLimiter.isAllowed(
                         LOGIN_RATE_LIMIT_ID,
                         clientIp
@@ -287,7 +288,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      * @param status HTTP 状态码
      * @param errorCode 项目错误码
      * @param message 面向调用方的提示信息
-     * @return 响应写入完成信号
+     * @return 响应写入完成信号；JSON 序列化失败时返回错误信号
      */
     private Mono<Void> writeFailure(
             ServerWebExchange exchange,

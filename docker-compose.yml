@@ -78,7 +78,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "9090:8080"
+      - "9090:9090"
 
 volumes:
   order-system-cloud-mysql-data:

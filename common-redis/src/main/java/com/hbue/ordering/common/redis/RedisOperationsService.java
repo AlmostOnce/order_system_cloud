@@ -12,6 +12,10 @@ import java.util.Map;
  * <p>统一封装字符串、Hash、过期时间、Key 判断和删除操作，
  * 供各业务模块按需注入使用。</p>
  *
+ * <p>本组件基于同步 {@link StringRedisTemplate}，方法调用会等待 Redis 操作结果，
+ * 应在同步业务线程中使用；不要在 Gateway/WebFlux 事件循环中调用。
+ * Redis 访问异常按 Spring Data Redis 的异常语义向调用方传播。</p>
+ *
  * @author order-system
  * @date 2026-09-25
  */

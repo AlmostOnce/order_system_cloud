@@ -67,7 +67,7 @@ public class MockPaymentChannel implements PaymentChannel {
     }
 
     /**
-     * 模拟渠道无渠道侧状态机，恒返回 UNKNOWN。
+     * 模拟渠道不提供主动查询，恒返回 UNKNOWN；最终支付结果通过签名异步通知传回。
      *
      * @param paymentNo 业务支付单号
      * @param channelTradeNo 渠道交易号
@@ -78,6 +78,7 @@ public class MockPaymentChannel implements PaymentChannel {
             String paymentNo,
             String channelTradeNo
     ) {
+        // 模拟渠道不维护可供主动查询的独立状态，不能用 UNKNOWN 推断支付成功或失败。
         return new ChannelQueryResult("UNKNOWN");
     }
 
@@ -115,6 +116,7 @@ public class MockPaymentChannel implements PaymentChannel {
             // 金额格式非法时交给上层按金额校验失败处理。
             paidAmount = null;
         }
+        // 只有通知状态为 SUCCESS 时标记支付成功，其余状态均作为非成功结果交由支付流程处理。
         return new ChannelNotifyMessage(
                 request.getPaymentNo(),
                 request.getChannelTradeNo(),

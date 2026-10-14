@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 /**
  * 余额扣款结果视图。
  *
- * <p>返回扣款业务单据、金额、扣款后余额以及本次是否为幂等重放，
- * 供 payment-service 判断是否继续推进支付单与订单状态。</p>
+ * <p>这是 user-service 返回给 payment-service 的账务结果契约，包含扣款业务引用、金额、扣款后余额以及幂等重放标记。
+ * 只有收到明确的成功响应后，payment-service 才能继续推进支付单和订单状态；该对象不是余额流水持久化实体。</p>
  *
  * @author order-system
  * @date 2026-10-14

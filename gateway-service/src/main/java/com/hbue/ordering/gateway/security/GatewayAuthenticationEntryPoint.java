@@ -52,7 +52,7 @@ public class GatewayAuthenticationEntryPoint
      *
      * @param exchange WebFlux 请求交换对象
      * @param exception 认证异常
-     * @return 响应完成信号
+     * @return 响应写入完成信号；JSON 序列化失败时返回错误信号
      */
     @Override
     public Mono<Void> commence(

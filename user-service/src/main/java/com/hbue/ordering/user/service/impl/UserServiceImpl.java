@@ -25,6 +25,11 @@ import java.time.LocalDateTime;
 /**
  * 用户业务服务实现。
  *
+ * <p>负责 user-service 内部的用户账户读写、密码校验、角色及账号状态维护和
+ * 初始管理账号引导。登录密码使用 BCrypt 哈希保存；角色权限只描述可执行的
+ * 操作类别，具体数据范围由 {@link UserDataScopeService} 单独维护。管理变更
+ * 通过审计记录器留痕，且不跨服务直接访问其他服务的数据库。</p>
+ *
  * @author order-system
  * @date 2026-09-20
  */
@@ -112,6 +117,7 @@ public class UserServiceImpl
      *
      * @param userId 用户 ID
      * @return 用户基础信息
+     * @throws BusinessException 用户不存在、已停用或已删除时抛出
      */
     @Override
     public UserBasicVO getUserById(Long userId) {
@@ -138,6 +144,7 @@ public class UserServiceImpl
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
+     * @throws BusinessException 用户名或手机号重复时抛出；并发重复由数据库唯一约束兜底
      */
     @Override
     public UserBasicVO register(UserRegisterCommand command) {
@@ -197,6 +204,7 @@ public class UserServiceImpl
      *
      * @param command 用户密码校验命令
      * @return 校验成功的用户基础信息
+     * @throws BusinessException 用户不存在、不可用或密码不匹配时统一抛出认证失败
      */
     @Override
     public UserBasicVO authenticate(
@@ -243,6 +251,7 @@ public class UserServiceImpl
      * @param phone 管理员手机号
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
+     * @throws BusinessException 检查到用户名或手机号被其他账号占用时抛出
      */
     @Override
     public boolean bootstrapSystemAdmin(
@@ -268,6 +277,7 @@ public class UserServiceImpl
      * @param phone 总经理手机号
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
+     * @throws BusinessException 账号冲突或创建全平台范围失败时抛出，事务会回滚账号创建
      */
     @Override
     @Transactional
@@ -298,6 +308,7 @@ public class UserServiceImpl
      * @param targetUserId 目标用户 ID
      * @param roleCode 目标角色编码
      * @return 变更后的用户基础信息
+     * @throws BusinessException 操作者无效、目标用户不存在、角色非法或试图修改本人角色时抛出
      */
     @Override
     public UserBasicVO assignRole(
@@ -377,6 +388,7 @@ public class UserServiceImpl
      * @param operatorId 操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @param status 目标状态：1 启用，0 禁用
+     * @throws BusinessException 状态值非法、用户不存在或禁用最后一个启用的系统管理员时抛出
      */
     @Override
     public void updateUserStatus(
@@ -436,6 +448,7 @@ public class UserServiceImpl
             }
         }
 
+        // 只有通过最后一个管理员保护后才更新状态，并记录操作者及变更前后值。
         UpdateWrapper<UserDO> update = new UpdateWrapper<>();
         update.eq("user_id", targetUserId)
                 .set("status", status)

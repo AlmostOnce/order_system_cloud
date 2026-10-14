@@ -9,6 +9,15 @@ import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
 
+/**
+ * 支付单专用数据访问接口。
+ *
+ * <p>继承 MyBatis-Plus 基础 CRUD，并补充支付单号查询、活动支付单查询和带状态条件的原子更新。
+ * 条件更新是支付回调幂等控制的一部分；本 Mapper 不负责渠道验签、金额业务校验或订单服务调用。</p>
+ *
+ * @author order-system
+ * @date 2026-10-12
+ */
 @Mapper
 public interface PaymentMapper extends BaseMapper<PaymentDO> {
 

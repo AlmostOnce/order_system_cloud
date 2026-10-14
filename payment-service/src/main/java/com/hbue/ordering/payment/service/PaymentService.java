@@ -11,7 +11,10 @@ import com.hbue.ordering.payment.vo.PaymentStatusVO;
 import com.hbue.ordering.common.response.ApiResponse;
 
 /**
- * 支付业务服务。
+ * 支付业务服务契约。
+ *
+ * <p>对 Controller 暴露支付单创建、归属校验后的状态查询及渠道回调处理能力；
+ * 具体状态机、渠道路由、幂等控制和跨服务订单推进由实现类编排，Controller 不直接访问 Mapper。</p>
  *
  * @author order-system
  * @date 2026-10-12
@@ -29,6 +32,8 @@ public interface PaymentService extends IService<PaymentDO> {
      * @param userId 当前登录顾客 ID
      * @param request 创建支付单请求（含渠道标识与余额渠道的支付密码）
      * @return 支付单创建结果
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 订单不存在、非本人订单、
+     *         状态冲突或依赖服务不可用时抛出
      */
     PaymentCreateVO createPayment(Long userId, PaymentCreateRequest request);
 
@@ -38,6 +43,7 @@ public interface PaymentService extends IService<PaymentDO> {
      * @param userId 当前登录顾客 ID
      * @param paymentId 支付单 ID
      * @return 支付单状态视图
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 支付单不存在或不属于当前用户时按 404 处理
      */
     PaymentStatusVO getPaymentStatus(Long userId, Long paymentId);
 
@@ -47,6 +53,7 @@ public interface PaymentService extends IService<PaymentDO> {
      * @param userId 当前登录顾客 ID
      * @param orderId 订单 ID
      * @return 支付单状态视图
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 订单无支付单或支付单不属于当前用户时按 404 处理
      */
     PaymentStatusVO getLatestByOrder(Long userId, Long orderId);
 
@@ -56,6 +63,8 @@ public interface PaymentService extends IService<PaymentDO> {
      * @param request 渠道通知请求体
      * @param signature 渠道侧签名
      * @return 统一响应；COMMON_000 表示已受理（渠道可停止重试）
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 处理流程需要以异常中止时抛出；
+     *         验签、金额等拒绝通过统一响应返回
      */
     ApiResponse<Void> handleNotify(
             ChannelNotifyRequest request,
@@ -67,6 +76,7 @@ public interface PaymentService extends IService<PaymentDO> {
      *
      * @param paymentNo 业务支付单号
      * @return 收银台信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 支付单不存在时抛出
      */
     CheckoutInfoVO getCheckoutInfo(String paymentNo);
 
@@ -76,6 +86,7 @@ public interface PaymentService extends IService<PaymentDO> {
      * @param paymentNo 业务支付单号
      * @param request 确认支付请求（缺省按成功全额处理）
      * @return 渠道交易号
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 支付单不存在或已处理时抛出
      */
     String confirmMockPayment(String paymentNo, MockPayRequest request);
 }

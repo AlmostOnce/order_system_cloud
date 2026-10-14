@@ -5,7 +5,10 @@ import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
 /**
- * 创建订单时提交的菜品 ID 和数量。
+ * 创建订单时提交的一行商品 ID 和购买数量。
+ *
+ * <p>该请求不包含商品名称或价格，这些数据由订单服务通过商品服务核价取得，
+ * 并以快照形式写入订单明细。</p>
  *
  * @author order-system
  * @date 2026-09-28

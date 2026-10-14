@@ -23,6 +23,10 @@ import java.util.Set;
 /**
  * 用户数据范围业务实现。
  *
+ * <p>负责读写 user-service 自有的 {@code user_data_scopes}，将持久化记录转换为
+ * 权限判断所需的范围快照，并在范围发生替换、撤销或引导授予后尝试删除 Redis
+ * 缓存。缓存失效失败仅记录日志，后续由缓存 TTL 兜底；数据库写入仍以本地事务为准。</p>
+ *
  * @author order-system
  * @date 2026-10-13
  */
@@ -74,6 +78,7 @@ public class UserDataScopeServiceImpl
      *
      * @param userId 用户 ID
      * @return 范围快照
+     * @implNote 范围集合去重并保留读取顺序；未知范围类型不加入快照
      */
     @Override
     public UserScopeSnapshot loadSnapshot(Long userId) {
@@ -108,6 +113,7 @@ public class UserDataScopeServiceImpl
      *
      * @param userId 用户 ID
      * @param scopes 新的范围列表
+     * @implNote 该操作在一个本地事务中先删除旧记录再写入新记录，随后失效范围缓存
      */
     @Override
     @Transactional
@@ -131,6 +137,7 @@ public class UserDataScopeServiceImpl
      *
      * @param userId 用户 ID
      * @param scopeId 范围记录 ID
+     * @implNote 删除条件同时包含用户 ID 和范围记录 ID，避免跨用户撤销
      */
     @Override
     @Transactional
@@ -152,6 +159,7 @@ public class UserDataScopeServiceImpl
      * 授予全平台范围，重复授予时保持幂等。
      *
      * @param userId 用户 ID
+     * @implNote 重复授予由预查询和数据库唯一键共同兜底，并发重复插入按已存在处理
      */
     @Override
     public void grantPlatformScope(Long userId) {

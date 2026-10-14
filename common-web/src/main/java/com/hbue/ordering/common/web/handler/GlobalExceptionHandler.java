@@ -23,6 +23,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *
  * <p>业务代码中只需要抛出 BusinessException，
  * 不需要在每个 Controller 中重复拼装错误响应。</p>
+ *
+ * <p>该处理器面向 Spring MVC/Servlet 服务；Gateway 使用 WebFlux，
+ * 其认证与授权失败由 Gateway 自己的响应式安全处理器处理，不经过本类。</p>
+ *
+ * @author order-system
+ * @date 2026-10-14
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

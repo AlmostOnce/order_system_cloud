@@ -11,7 +11,10 @@ import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 档口与餐厅内部查询的降级工厂。
+ * 档口与餐厅内部查询失败时创建统一降级客户端。
+ *
+ * <p>数据范围校验依赖这些查询确认档口归属和餐厅存在性，因此远程失败时
+ * 不能伪造资源信息或放行操作；本工厂返回服务不可用结果，让调用方按失败关闭处理。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -26,10 +29,10 @@ public class WindowInternalClientFallbackFactory
     );
 
     /**
-     * 创建降级客户端。
+     * 根据本次远程调用的失败原因创建降级客户端。
      *
      * @param cause 远程调用失败原因
-     * @return 返回服务不可用响应的客户端
+     * @return 两个查询方法均返回服务不可用响应的客户端
      */
     @Override
     public WindowInternalClient create(Throwable cause) {

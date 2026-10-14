@@ -77,6 +77,7 @@ public class UserBalanceServiceImpl implements UserBalanceService {
      *
      * @param userId 当前登录用户 ID
      * @return 余额视图对象
+     * @throws BusinessException 用户未登录、停用、删除或不存在时抛出
      */
     @Override
     public UserBalanceVO getMyBalance(Long userId) {
@@ -97,6 +98,7 @@ public class UserBalanceServiceImpl implements UserBalanceService {
      * @param userId 用户 ID
      * @param command 余额扣款命令
      * @return 扣款结果
+     * @throws BusinessException 参数无效、密码校验失败、余额不足或账户不可用时抛出
      */
     @Override
     @Transactional(noRollbackFor = DuplicateKeyException.class)

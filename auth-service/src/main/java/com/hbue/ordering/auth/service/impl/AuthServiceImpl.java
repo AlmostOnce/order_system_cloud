@@ -25,7 +25,9 @@ import org.springframework.stereotype.Service;
 /**
  * 认证业务服务实现。
  *
- * <p>负责处理用户注册、用户登录以及 JWT 签发。</p>
+ * <p>负责认证流程编排：账号资料与密码校验委托给 user-service，访问令牌由
+ * RSA 私钥签发，Refresh Token 与 Access Token 黑名单由 Redis 服务维护。本类
+ * 不持有用户表数据，也不把密码或完整令牌写入日志。</p>
  *
  * @author order-system
  * @date 2026-09-21
@@ -92,6 +94,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param request 登录请求
      * @return 登录 Token
+     * @throws BusinessException 用户服务不可用、账号密码无效或 Token 存储失败时抛出
      */
     @Override
     public LoginVO login(LoginRequest request) {
@@ -166,6 +169,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param request Refresh Token 刷新请求
      * @return 新的登录 Token
+     * @throws BusinessException Refresh Token 无效、已被并发消费或锁/存储服务不可用时抛出
      */
     @Override
     public LoginVO refreshAccessToken(RefreshTokenRequest request) {
@@ -187,6 +191,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param oldRefreshToken 原 Refresh Token
      * @return 新的登录 Token
+     * @throws BusinessException Refresh Token 无效、并发消费失败或依赖服务不可用时抛出
      */
     private LoginVO refreshAccessTokenWithLock(
             String oldRefreshToken
@@ -273,6 +278,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param request 注销请求，包含需要撤销的 Refresh Token
      * @param accessToken 当前已通过认证的 Access Token
+     * @throws BusinessException Access Token 不完整、Refresh Token 属于其他用户或 Redis 撤销失败时抛出
      */
     @Override
     public void logout(
@@ -321,6 +327,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param request 注册请求
      * @return 注册成功的用户基础信息
+     * @throws BusinessException 注册信息冲突或用户服务不可用时抛出
      */
     @Override
     public UserBasicVO register(RegisterRequest request) {

@@ -58,7 +58,7 @@ public class BalancePaymentChannel implements PaymentChannel {
     }
 
     /**
-     * 余额渠道无渠道侧状态机，恒返回 UNKNOWN。
+     * 余额渠道不支持主动查询，恒返回 UNKNOWN；该结果表示渠道状态未知，不代表支付失败。
      *
      * @param paymentNo 业务支付单号
      * @param channelTradeNo 渠道交易号
@@ -69,6 +69,7 @@ public class BalancePaymentChannel implements PaymentChannel {
             String paymentNo,
             String channelTradeNo
     ) {
+        // 余额扣款结果由支付服务的同步扣款流程确定，渠道本身没有可查询的独立状态。
         return new ChannelQueryResult("UNKNOWN");
     }
 

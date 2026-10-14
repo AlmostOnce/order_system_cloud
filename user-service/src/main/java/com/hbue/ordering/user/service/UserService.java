@@ -7,7 +7,11 @@ import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.model.UserDO;
 
 /**
- * 用户业务服务。
+ * 用户业务服务契约。
+ *
+ * <p>负责维护 user-service 所属的用户账户数据，包括注册、账号认证、角色和
+ * 账号状态管理及启动期引导。密码哈希只在本服务持久化；跨服务调用通过 API
+ * 契约传输必要的用户信息，不允许其他服务直接访问 users 表。</p>
  *
  * @author order-system
  * @date 2026-09-20
@@ -19,6 +23,7 @@ public interface UserService extends IService<UserDO> {
      *
      * @param userId 用户 ID
      * @return 用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户不存在、已停用或已删除时抛出
      */
     UserBasicVO getUserById(Long userId);
 
@@ -27,6 +32,7 @@ public interface UserService extends IService<UserDO> {
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号冲突时抛出
      */
     UserBasicVO register(UserRegisterCommand command);
 
@@ -35,6 +41,7 @@ public interface UserService extends IService<UserDO> {
      *
      * @param command 用户密码校验命令
      * @return 校验成功的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户不存在、状态不可用或密码不匹配时统一抛出认证失败
      */
     UserBasicVO authenticate(UserPasswordVerifyCommand command);
 
@@ -48,6 +55,7 @@ public interface UserService extends IService<UserDO> {
      * @param phone 管理员手机号
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号被其他账号占用时抛出
      */
     boolean bootstrapSystemAdmin(
             String username,
@@ -66,6 +74,7 @@ public interface UserService extends IService<UserDO> {
      * @param phone 总经理手机号
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 账号冲突或全平台范围写入失败时抛出，事务内账号创建随之回滚
      */
     boolean bootstrapGeneralManager(
             String username,
@@ -85,6 +94,7 @@ public interface UserService extends IService<UserDO> {
      * @param targetUserId 目标用户 ID
      * @param roleCode 目标角色编码
      * @return 变更后的用户基础信息
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效、修改本人角色、目标用户不存在或角色编码无效时抛出
      */
     UserBasicVO assignRole(
             Long operatorId,
@@ -104,6 +114,7 @@ public interface UserService extends IService<UserDO> {
      * @param operatorId 操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @param status 目标状态：1 启用，0 禁用
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 目标状态无效、目标用户不存在或禁用最后一个启用的系统管理员时抛出
      */
     void updateUserStatus(
             Long operatorId,

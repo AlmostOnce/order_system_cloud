@@ -14,7 +14,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 用户服务无权请求统一返回 403 响应。
+ * 用户服务已认证但权限不足时统一写入 403 响应。
+ *
+ * <p>该处理器将 Spring Security 的授权拒绝转换为项目统一 JSON 响应，避免
+ * 不同安全链路返回不同格式；不向客户端暴露异常堆栈或内部授权细节。</p>
  *
  * @author order-system
  * @date 2026-10-13

@@ -11,8 +11,9 @@ import java.time.LocalDateTime;
 /**
  * 支付单持久化对象，与 payments 表一一对应。
  *
- * <p>active_flag 为数据库虚拟生成列，不参与业务读写，
- * 因此不出现在该对象中。</p>
+ * <p>该类型只负责支付服务本地 {@code payments} 表的字段映射，不包含状态迁移或渠道处理逻辑；
+ * {@code active_flag} 为数据库虚拟生成列，不参与业务读写，因此不出现在该对象中。
+ * 订单、用户仅以 ID/快照字段关联，不建立跨服务数据库外键。</p>
  *
  * @author order-system
  * @date 2026-10-12

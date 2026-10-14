@@ -22,6 +22,7 @@ public interface PayPasswordService {
      *
      * @param userId 用户 ID
      * @param request 支付密码设置请求
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 登录身份确认失败、原密码错误或新旧密码不符合约束时抛出
      */
     void setPayPassword(Long userId, PayPasswordSetRequest request);
 
@@ -30,6 +31,7 @@ public interface PayPasswordService {
      *
      * @param userId 用户 ID
      * @param payPassword 支付密码明文
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 密码错误、账户锁定、未设置支付密码或 Redis 校验依赖不可用时抛出
      */
     void verifyPayPassword(Long userId, String payPassword);
 

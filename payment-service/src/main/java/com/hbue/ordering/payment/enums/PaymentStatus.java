@@ -11,16 +11,16 @@ package com.hbue.ordering.payment.enums;
  */
 public enum PaymentStatus {
 
-    /** 已创建，等待渠道回调。 */
+    /** 支付单已创建，尚未确认渠道结果，允许继续流转到成功或失败。 */
     CREATED("CREATED"),
 
-    /** 渠道通知支付成功。 */
+    /** 渠道确认支付成功；该支付单进入终态，不再流转。 */
     SUCCESS("SUCCESS"),
 
-    /** 渠道通知支付失败，用户可重新发起支付。 */
+    /** 渠道确认支付失败；该支付单进入终态，不再流转。 */
     FAILED("FAILED"),
 
-    /** 已关闭（预留给超时关单场景，当前版本不产生）。 */
+    /** 支付单已关闭的终态，预留给超时关单场景，当前版本不会产生。 */
     CLOSED("CLOSED");
 
     /** 数据库存储的状态码。 */
@@ -48,13 +48,14 @@ public enum PaymentStatus {
      * 判断当前支付单状态能否流转到目标状态。
      *
      * @param targetStatus 目标状态
-     * @return 状态迁移合法时返回 true
+     * @return 仅 CREATED 流转到 SUCCESS 或 FAILED 时返回 true；空目标或终态迁移返回 false
      */
     public boolean canTransitionTo(PaymentStatus targetStatus) {
         if (targetStatus == null) {
             return false;
         }
 
+        // 只允许尚未确认结果的支付单接收一次成功或失败结果，防止终态被重复改写。
         return switch (this) {
             case CREATED -> targetStatus == SUCCESS || targetStatus == FAILED;
             case SUCCESS, FAILED, CLOSED -> false;

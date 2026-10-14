@@ -13,7 +13,8 @@ import java.math.BigDecimal;
  * <p>{@code bizType} 与 {@code bizRef} 指向业务单据，与 {@code change_type}
  * 一起构成 {@code balance_records} 的幂等唯一键，重复提交不会重复扣款。</p>
  *
- * <p>支付密码只在本次请求的内存中短暂传递，禁止写入日志。</p>
+ * <p>支付密码只在本次请求的内存中短暂传递，禁止写入日志或持久化；user-service 必须校验密码、正数金额和业务引用，
+ * 并在同一事务内完成余额修改与流水记录。该命令是跨服务契约，不应被当作账务实体直接保存。</p>
  *
  * @author order-system
  * @date 2026-10-14

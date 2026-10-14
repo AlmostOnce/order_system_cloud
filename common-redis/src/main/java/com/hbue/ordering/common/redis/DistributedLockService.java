@@ -16,6 +16,11 @@ import java.util.concurrent.TimeUnit;
  * <p>获取锁失败不抛出异常，由调用方决定降级策略：
  * 缓存重建场景通常降级为直接查询数据库，优先保证业务可用。</p>
  *
+ * <p>该组件通过同步 Redisson API 获取锁，等待过程会占用当前线程，
+ * 应由 Servlet/业务工作线程调用，不要放到 WebFlux 事件循环线程中。
+ * 固定租约到期后锁可能自动释放，调用方应确保租约覆盖临界区耗时，
+ * 并使用返回句柄在临界区结束后主动释放。</p>
+ *
  * @author order-system
  * @date 2026-10-14
  */
@@ -56,6 +61,7 @@ public class DistributedLockService {
      *
      * @param lockKey 锁 Key
      * @return 锁句柄；未获取到锁时返回 null
+     * @throws IllegalArgumentException 当锁 Key 为空或仅包含空白时抛出
      */
     public LockHandle tryAcquire(String lockKey) {
         return tryAcquire(
@@ -75,6 +81,7 @@ public class DistributedLockService {
      * @param waitSeconds 等待锁的最长时间，单位为秒
      * @param leaseSeconds 持有锁的最长时间，单位为秒
      * @return 锁句柄；未获取到锁时返回 null
+     * @throws IllegalArgumentException 当锁 Key 为空或仅包含空白时抛出
      */
     public LockHandle tryAcquire(
             String lockKey,
@@ -117,6 +124,12 @@ public class DistributedLockService {
 
     /**
      * 已获取分布式锁的释放句柄。
+     *
+     * <p>句柄应在获取锁的线程中关闭，通常配合 try-with-resources 使用；
+     * 若当前线程不再持锁，关闭操作不会调用 Redisson 的解锁方法。</p>
+     *
+     * @author order-system
+     * @date 2026-10-14
      */
     public static class LockHandle implements AutoCloseable {
 
@@ -142,6 +155,8 @@ public class DistributedLockService {
 
         /**
          * 在当前线程仍持有锁时释放分布式锁。
+         *
+         * <p>释放异常会记录日志并由固定租约兜底，不会继续向业务调用方抛出。</p>
          */
         @Override
         public void close() {

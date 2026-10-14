@@ -10,7 +10,9 @@ import java.time.Instant;
 /**
  * Access Token 黑名单服务。
  *
- * <p>只保存已注销令牌的唯一 ID，并让黑名单 Key 与 JWT 同时过期。</p>
+ * <p>只保存已注销 Access Token 的唯一 ID（jti），并让黑名单 Key 在该 JWT
+ * 原定过期时一并过期，避免长期保留无用记录。该服务不存储完整 JWT，也不管理
+ * Refresh Token；Redis 写入失败会向调用方传播，不能在黑名单未写入时宣称注销成功。</p>
  *
  * @author order-system
  * @date 2026-09-25
@@ -48,6 +50,8 @@ public class AccessTokenBlacklistService {
      *
      * @param tokenId JWT 的 jti 声明
      * @param expiresAt Access Token 的过期时间
+     * @throws IllegalArgumentException jti 或过期时间缺失时抛出
+     * @throws RuntimeException Redis 写入失败时传播给调用方
      */
     public void blacklist(String tokenId, Instant expiresAt) {
         // 无法确定令牌身份或过期时间时拒绝写入。

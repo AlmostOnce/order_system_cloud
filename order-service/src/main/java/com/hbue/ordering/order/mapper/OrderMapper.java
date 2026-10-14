@@ -10,6 +10,15 @@ import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
+/**
+ * 订单主表数据访问接口。
+ *
+ * <p>负责按用户、幂等键读取订单，以及执行带原状态和版本号条件的原子状态更新；
+ * 该接口只处理数据库访问，不承担订单权限判断或状态迁移规则。</p>
+ *
+ * @author order-system
+ * @date 2026-10-14
+ */
 @Mapper
 public interface OrderMapper extends BaseMapper<OrderDO> {
 

@@ -9,7 +9,11 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 批量查询窗口内可下单菜品及当前价格的请求。
+ * 批量查询指定窗口内可下单菜品及当前价格的服务间请求 DTO。
+ *
+ * <p>该对象属于商品服务核价接口契约，不是前端订单创建对象；
+ * 调用方提供窗口和最多 100 个正整数菜品 ID，商品服务仍会自行核对
+ * 窗口、菜品、分类和售卖状态，不能把请求中的 ID 当作可信价格或状态依据。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -25,7 +29,7 @@ public class ProductQuoteRequest {
     @Positive
     private Long windowId;
 
-    /** 需要核价的菜品 ID，最多 100 个且不能重复。 */
+    /** 需要核价的菜品 ID，最多 100 个；元素不能为空且必须为正整数，重复项由服务层拒绝。 */
     @NotEmpty
     @Size(max = MAX_PRODUCT_IDS)
     private List<@NotNull @Positive Long> productIds;

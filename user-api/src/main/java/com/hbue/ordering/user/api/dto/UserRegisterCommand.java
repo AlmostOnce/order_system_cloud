@@ -5,7 +5,8 @@ import lombok.Data;
 /**
  * 用户注册命令。
  *
- * <p>用于认证服务向用户服务传递注册信息。</p>
+ * <p>用于认证服务向 user-service 传递新用户注册资料，是服务间传输对象而非数据库对象。
+ * {@code password} 是短暂传输的原始凭据，用户服务负责加密后保存；调用方不得记录该字段。</p>
  *
  * @author order-system
  * @date 2026-09-20

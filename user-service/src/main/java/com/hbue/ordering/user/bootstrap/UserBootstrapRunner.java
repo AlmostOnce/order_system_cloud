@@ -124,7 +124,8 @@ public class UserBootstrapRunner implements ApplicationRunner {
             return;
         }
 
-        // 配置缺失或格式不合法时启动失败，且日志不包含任何凭据。
+        // 先校验两组引导配置，再开始写库，避免第二组配置错误时只创建出半套账号。
+        // 配置错误只报告变量名和格式要求，不把密码等凭据写入日志。
         validateConfig(ADMIN_PREFIX, adminUsername, adminPhone, adminPassword);
         validateConfig(MANAGER_PREFIX, managerUsername, managerPhone, managerPassword);
 
@@ -134,6 +135,9 @@ public class UserBootstrapRunner implements ApplicationRunner {
 
     /**
      * 引导系统管理员账号。
+     *
+     * <p>账号是否已存在及角色是否匹配由 UserService 判定；本方法只记录创建或
+     * 跳过结果，不输出密码等凭据。</p>
      */
     private void bootstrapSystemAdmin() {
         boolean created = userService.bootstrapSystemAdmin(
@@ -150,6 +154,9 @@ public class UserBootstrapRunner implements ApplicationRunner {
 
     /**
      * 引导初始总经理账号及其全平台数据范围。
+     *
+     * <p>全平台数据范围由 UserService 与账号创建放在同一事务内写入；本方法
+     * 只负责记录业务结果。</p>
      */
     private void bootstrapGeneralManager() {
         boolean created = userService.bootstrapGeneralManager(
@@ -171,6 +178,7 @@ public class UserBootstrapRunner implements ApplicationRunner {
      * @param username 引导用户名
      * @param phone 引导手机号
      * @param password 引导明文密码
+     * @throws IllegalStateException 配置缺失或长度、手机号格式不符合要求时抛出
      */
     private void validateConfig(
             String prefix,
@@ -215,6 +223,7 @@ public class UserBootstrapRunner implements ApplicationRunner {
      * @param prefix 变量前缀
      * @param name 变量名称（不含前缀）
      * @param value 变量值
+     * @throws IllegalStateException 引导开关已开启但必填值缺失时抛出
      */
     private void requirePresent(String prefix, String name, String value) {
         if (value == null || value.isBlank()) {

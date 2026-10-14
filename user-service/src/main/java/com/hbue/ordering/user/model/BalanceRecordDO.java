@@ -44,7 +44,7 @@ public class BalanceRecordDO {
     private String changeType;
 
     /**
-     * 变动金额，正数表示入账方向，负数表示扣减方向由 change_type 决定。
+     * 本次业务变动金额；入账或扣款方向由 {@code change_type} 标识，扣款流程以正数记录扣款额。
      */
     @TableField("amount")
     private BigDecimal amount;

@@ -34,10 +34,14 @@ import java.util.Objects;
 /**
  * 用户服务资源服务器配置。
  *
- * <p>用户服务此前只提供登录注册等公开接口，引入本配置后：
- * 公开接口（注册、登录校验、按 ID 查询用户基础信息）继续匿名可访问；
- * 角色分配与数据范围授予等管理接口必须携带 JWT 并通过方法级角色门禁；
- * 内部接口不再走 JWT，改为共享密钥在方法内校验。</p>
+ * <p>注册、登录校验、健康检查、接口文档和按 ID 查询基础信息继续匿名可访问；
+ * 其他外部接口要求 JWT。JWT 使用 RSA 公钥、issuer 和标准时间声明校验，并在
+ * Redis 中检查 jti 黑名单；Redis 不可用时拒绝请求。roles 声明映射为
+ * {@code ROLE_*}，供方法级 {@code @PreAuthorize} 检查。</p>
+ *
+ * <p>{@code /internal/**} 仅在 Spring Security 的 URL 层放行，内部 Controller
+ * 仍须校验共享密钥；此路径不应通过 Gateway 暴露给外部客户端。配置只定义
+ * user-service 的资源服务器边界，不负责签发 Token。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -68,7 +72,7 @@ public class UserResourceServerConfig {
     }
 
     /**
-     * 配置用户服务的无状态 JWT 安全过滤链。
+     * 配置用户服务的无状态 JWT 安全过滤链和 URL 级访问规则。
      *
      * @param http Spring Security HTTP 配置
      * @return 安全过滤链
@@ -110,7 +114,10 @@ public class UserResourceServerConfig {
     }
 
     /**
-     * 将 JWT roles 声明映射为 Spring Security 角色。
+     * 将 JWT 的 roles 声明中的角色编码映射为 Spring Security 的角色权限。
+     *
+     * <p>例如 {@code CUSTOMER} 会转换为 {@code ROLE_CUSTOMER}，与
+     * {@code hasRole('CUSTOMER')} 的默认前缀规则保持一致。</p>
      *
      * @return JWT 认证转换器
      */
@@ -129,12 +136,16 @@ public class UserResourceServerConfig {
     /**
      * 创建校验签名、签发方、有效期和 Redis 黑名单的 JWT 解码器。
      *
+     * <p>解码器只持有公钥，不具备签发能力。Redis 不能明确确认 jti 未被注销时，
+     * 本次解码失败并由资源服务器返回未认证响应。</p>
+     *
      * @param resourceLoader Spring 资源加载器
      * @param publicKeyLocation RSA 公钥资源位置
      * @param issuer JWT 签发方
      * @param redisOperationsService Redis 基础操作服务
      * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
      * @return JWT 解码器
+     * @throws IllegalStateException 公钥文件读取失败时抛出
      */
     @Bean
     public JwtDecoder jwtDecoder(
@@ -174,6 +185,7 @@ public class UserResourceServerConfig {
      * @param redisOperationsService Redis 基础操作服务
      * @param blacklistKeyPrefix 黑名单 Key 前缀
      * @return 已通过校验的 JWT
+     * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */
     private Jwt decodeAndCheckBlacklist(
             JwtDecoder decoder,

@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 /**
  * JWT Token 服务。
  *
- * <p>负责使用 RSA 私钥签发访问令牌。</p>
+ * <p>负责使用 RSA 私钥签发无状态 Access Token，并写入用户 ID、用户名、角色、
+ * 签发方、签发时间、过期时间和唯一 jti。此服务不创建 Refresh Token，也不
+ * 保存会话状态；Refresh Token 由 {@link RefreshTokenService} 管理。</p>
  *
  * @author order-system
  * @date 2026-09-21
@@ -68,6 +70,7 @@ public class JwtTokenService {
      * @param username 用户名
      * @param roleCode 角色编码
      * @return JWT 访问 Token
+     * @throws org.springframework.security.oauth2.jwt.JwtEncodingException JWT 编码或签名失败时抛出
      */
     public String createAccessToken(
             Long userId,
@@ -104,7 +107,7 @@ public class JwtTokenService {
     }
 
     /**
-     * 获取访问 Token 有效期。
+     * 获取当前配置在代码常量中的访问 Token 有效期。
      *
      * @return Token 有效期，单位为秒
      */

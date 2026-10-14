@@ -15,6 +15,10 @@ import org.springframework.stereotype.Component;
 /**
  * 用户服务远程调用降级工厂。
  *
+ * <p>该工厂保留 Feign 失败原因，并区分预期的账号认证拒绝与基础设施故障：
+ * authenticate 收到 HTTP 401 时返回统一未授权响应；其他调用失败或其他方法降级时，
+ * 返回服务不可用。降级响应不会伪造用户信息，日志也不记录密码或完整请求体。</p>
+ *
  * @author order-system
  * @date 2026-09-20
  */
@@ -35,6 +39,9 @@ public class UserServiceClientFallbackFactory
 
     /**
      * 创建用户服务降级客户端。
+     *
+     * <p>本次创建的匿名实现捕获认证拒绝标记，供密码校验接口保持 401 语义；
+     * 其余接口统一返回服务不可用，避免调用方误把降级当成成功数据。</p>
      *
      * @param cause 远程调用失败原因
      * @return 用户服务降级客户端
@@ -108,7 +115,7 @@ public class UserServiceClientFallbackFactory
      * 判断 Feign 异常链路中是否包含 HTTP 401 响应。
      *
      * @param cause Feign 降级原因
-     * @return 存在 HTTP 401 响应时返回 true
+     * @return 异常原因链中存在 HTTP 401 时返回 true；空原因链或其他状态返回 false
      */
     private boolean isUnauthorized(Throwable cause) {
         // 遍历异常原因链，兼容 Feign 异常被上层包装的情况。

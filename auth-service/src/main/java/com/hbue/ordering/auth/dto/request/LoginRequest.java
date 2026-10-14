@@ -5,7 +5,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 用户登录请求对象。
+ * 用户登录请求 DTO。
+ *
+ * <p>只承载客户端提交的用户名和登录密码；字段格式由 Jakarta Validation
+ * 校验，DTO 不负责查询用户、比对密码或签发 Token。密码不得写入日志。</p>
  *
  * @author order-system
  * @date 2026-09-20

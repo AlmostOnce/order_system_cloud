@@ -8,7 +8,11 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 商品服务的批量核价结果。
+ * 商品服务返回的批量核价响应 DTO。
+ *
+ * <p>{@code windowActive} 表示请求窗口当前是否启用；{@code products} 仅包含
+ * 属于该窗口且当前允许下单的商品。请求 ID 未出现在结果中时，调用方不得
+ * 使用客户端提交的名称或价格替代商品服务数据。</p>
  *
  * @author order-system
  * @date 2026-09-28

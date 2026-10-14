@@ -93,8 +93,12 @@ public class PayPasswordServiceImpl implements PayPasswordService {
     /**
      * 首次设置或修改支付密码。
      *
+     * <p>首次设置用登录密码确认身份；修改时通过统一的支付密码校验路径验证
+     * 原密码，因此修改操作同样受 Redis 失败计数和锁定策略保护。</p>
+     *
      * @param userId 用户 ID
      * @param request 支付密码设置请求
+     * @throws BusinessException 身份凭据错误、账户不可用或密码不满足业务约束时抛出
      */
     @Override
     public void setPayPassword(Long userId, PayPasswordSetRequest request) {
@@ -170,6 +174,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      *
      * @param userId 用户 ID
      * @param payPassword 支付密码明文
+     * @throws BusinessException 密码为空、账户不可用、支付密码未设置、校验失败达到限制或 Redis 不可用时抛出
      */
     @Override
     public void verifyPayPassword(Long userId, String payPassword) {
@@ -229,6 +234,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      *
      * @param userId 用户 ID
      * @return 已设置时返回 true
+     * @throws RuntimeException 用户表查询失败时传播数据库异常
      */
     @Override
     public boolean isPayPasswordSet(Long userId) {

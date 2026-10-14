@@ -8,6 +8,9 @@ import java.util.List;
 /**
  * 订单及其明细的原子持久化服务接口。
  *
+ * <p>封装需要明确事务边界的订单写操作，避免业务编排分别写订单头和明细造成部分提交；
+ * 本接口只保证订单服务本地数据库写入原子性，不负责商品核价、用户授权或跨服务事务。</p>
+ *
  * @author order-system
  * @date 2026-09-28
  */
@@ -19,6 +22,7 @@ public interface OrderPersistenceService {
      * @param order 订单数据
      * @param items 订单菜品快照
      * @return 写入主键后的订单对象
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 任一订单或明细插入失败时抛出并回滚事务
      */
     OrderDO saveOrderWithItems(
             OrderDO order,

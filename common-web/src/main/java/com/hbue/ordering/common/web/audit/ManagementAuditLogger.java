@@ -64,7 +64,9 @@ public class ManagementAuditLogger {
     }
 
     /**
-     * 从当前认证信息中取出角色编码。
+     * 从当前认证信息的权限集合中取出首个带 {@code ROLE_} 前缀的角色编码。
+     *
+     * <p>不根据请求参数推断操作者角色；当前认证上下文缺失或没有角色权限时返回 unknown。</p>
      *
      * @return 角色编码；无法确定时返回 unknown
      */

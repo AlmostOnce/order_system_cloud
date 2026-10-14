@@ -8,7 +8,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 菜品管理接口返回对象。
+ * 菜品管理接口返回的视图对象。
+ *
+ * <p>由管理 Service 将菜品 DO 映射为接口数据，允许管理端查看下架商品及审计时间；
+ * 该类型不用于接收写请求，也不向调用方暴露数据库实体本身。</p>
  *
  * @author order-system
  * @date 2026-09-28

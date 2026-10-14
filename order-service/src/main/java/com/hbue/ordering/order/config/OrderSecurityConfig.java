@@ -32,11 +32,11 @@ import java.util.Objects;
 /**
  * 订单服务安全配置。
  *
- * <p>订单服务作为 JWT 资源服务，
- * 负责校验 Gateway 转发过来的访问令牌。</p>
+ * <p>订单服务作为 JWT 资源服务，负责独立校验访问令牌签名、签发方和有效期，
+ * 并通过 Redis 黑名单阻止已注销令牌继续访问；它不信任 Gateway 仅凭转发就完成认证。</p>
  *
- * <p>同时统一处理未认证和无权限请求，
- * 保证返回项目统一响应格式。</p>
+ * <p>同时统一处理未认证和无权限请求，保证分别返回 401 与 403 的项目统一响应格式。
+ * 内部订单回调路径不要求用户 JWT，但仍由控制器的共享密钥校验；黑名单状态无法确认时拒绝请求。</p>
  *
  * @author order-system
  * @date 2026-09-22
@@ -92,10 +92,8 @@ public class OrderSecurityConfig {
                         )
                 )
 
-                // 关闭默认表单登录。
                 .formLogin(formLogin -> formLogin.disable())
 
-                // 关闭默认 HTTP Basic 认证。
                 .httpBasic(httpBasic -> httpBasic.disable())
 
                 // 配置统一的认证异常和权限异常处理器。
@@ -111,7 +109,6 @@ public class OrderSecurityConfig {
                         )
                 )
 
-                // 配置接口访问权限。
                 .authorizeHttpRequests(authorize -> authorize
                         // 健康检查允许匿名访问。
                         .requestMatchers("/actuator/health")
@@ -144,7 +141,6 @@ public class OrderSecurityConfig {
                         )
                 );
 
-        // 返回安全过滤链。
         return http.build();
     }
 
@@ -155,26 +151,21 @@ public class OrderSecurityConfig {
      */
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        // 创建 JWT 权限转换器。
+        // 将 JWT 中的 roles 声明映射为 Spring Security 识别的 ROLE_* 权限。
         JwtGrantedAuthoritiesConverter authoritiesConverter =
                 new JwtGrantedAuthoritiesConverter();
 
-        // 从 JWT 的 roles 声明中读取角色。
         authoritiesConverter.setAuthoritiesClaimName("roles");
 
-        // 将 CUSTOMER 转换为 ROLE_CUSTOMER。
         authoritiesConverter.setAuthorityPrefix("ROLE_");
 
-        // 创建 JWT 认证转换器。
         JwtAuthenticationConverter authenticationConverter =
                 new JwtAuthenticationConverter();
 
-        // 设置角色转换规则。
         authenticationConverter.setJwtGrantedAuthoritiesConverter(
                 authoritiesConverter
         );
 
-        // 返回 JWT 认证转换器。
         return authenticationConverter;
     }
 
@@ -186,6 +177,7 @@ public class OrderSecurityConfig {
      * @param redisOperationsService Redis 基础操作组件
      * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
      * @return JWT 解码器
+     * @throws IllegalStateException 读取 RSA 公钥资源发生 I/O 错误时抛出，避免服务以无验证状态启动
      */
     @Bean
     public JwtDecoder jwtDecoder(
@@ -244,6 +236,7 @@ public class OrderSecurityConfig {
      * @param redisOperationsService Redis 基础操作组件
      * @param blacklistKeyPrefix 黑名单 Key 前缀
      * @return 已通过校验的 JWT
+     * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */
     private Jwt decodeAndCheckBlacklist(
             JwtDecoder decoder,

@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 窗口管理接口返回对象。
+ * 档口管理接口返回的视图对象。
+ *
+ * <p>包含管理端需要查看的启停和营业状态；操作者可见范围由 Service 层按餐厅/档口
+ * 数据范围过滤，本类不承载持久化或授权逻辑。</p>
  *
  * @author order-system
  * @date 2026-09-28

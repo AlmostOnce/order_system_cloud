@@ -13,8 +13,8 @@ import java.security.MessageDigest;
  * 该调用没有用户身份，因此不适用用户 JWT，而是使用服务间共享密钥
  * （X-Internal-Token 请求头）表达"哪个系统能做什么"。</p>
  *
- * <p>使用常量时间比较防止时序攻击；该内部接口不在 Gateway 路由白名单内，
- * 外部无法直接访问。</p>
+ * <p>使用常量时间比较降低时序攻击风险。该内部路径不配置为 Gateway 对外路由，
+ * 但网关隔离不代替服务端身份校验；订单服务仍必须验证请求中的共享密钥。</p>
  *
  * @author order-system
  * @date 2026-10-12
@@ -44,6 +44,7 @@ public class InternalTokenVerifier {
      * @return 令牌有效时返回 true
      */
     public boolean verify(String token) {
+        // 未提供令牌或仅包含空白字符时直接拒绝，不进入密钥比较。
         if (token == null || token.isBlank()) {
             return false;
         }

@@ -26,9 +26,10 @@ import java.util.Set;
 /**
  * 商品服务数据范围判定实现。
  *
- * <p>范围事实来自 user-service 的内部查询接口，查询结果缓存在 Redis
- * （键 {@code authz:user-scope:{userId}}，TTL 300 秒），
- * 撤销范围时由 user-service 主动删除缓存键，使越权窗口压缩到一次缓存删除。</p>
+ * <p>范围事实以 user-service 的内部查询结果为准，Redis 中的用户范围快照仅作短期缓存
+ *（键 {@code authz:user-scope:{userId}}，TTL 300 秒）。缓存读取失败会回源查询，
+ * 写入缓存失败不影响本次判权；user-service 查询失败时按服务不可用拒绝继续操作，
+ * 不会因范围信息缺失而放行。撤销范围时由 user-service 主动删除对应缓存键。</p>
  *
  * <p>档口属于公开资源，越权统一返回 403，与订单等私有数据的 404 语义区分。</p>
  *
@@ -146,8 +147,8 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 判断用户是否有权操作指定档口。
      *
-     * <p>主管档口、全平台范围直接命中；否则把档口换算为所属餐厅，
-     * 再判断是否被餐厅范围覆盖。</p>
+     * <p>全平台或直接授权档口范围命中时无需再查档口归属；否则只有用户具备餐厅范围
+     * 才继续读取档口所属餐厅并判断覆盖关系。档口不存在时返回无权，避免以缺失归属放行。</p>
      *
      * @param userId 当前登录用户 ID
      * @param windowId 目标档口 ID
@@ -166,6 +167,7 @@ public class DefaultDataScopeService implements DataScopeService {
             return false;
         }
 
+        // 只有需要用餐厅范围覆盖档口时才查询档口归属，避免对直接授权范围重复访问数据库。
         DiningWindowDO window = diningWindowMapper.selectById(windowId);
         return window != null
                 && scopes.coversRestaurant(window.getRestaurantId());

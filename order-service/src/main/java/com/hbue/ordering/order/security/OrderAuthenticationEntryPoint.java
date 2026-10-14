@@ -16,9 +16,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * 订单服务未认证处理器。
  *
- * <p>当客户端没有携带 Token，
- * 或者 Token 无效、过期时，
- * 统一返回项目定义的 401 响应。</p>
+ * <p>当客户端未携带 Token，或 Token 无效、过期、已注销时，统一返回项目定义的 401 响应；
+ * 已认证但角色不足的请求由 {@link OrderAccessDeniedHandler} 负责返回 403。</p>
  *
  * @author order-system
  * @date 2026-09-22
@@ -57,27 +56,23 @@ public class OrderAuthenticationEntryPoint
             HttpServletResponse response,
             AuthenticationException exception
     ) throws IOException {
-        // 设置 HTTP 状态码。
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-        // 设置 JSON 响应类型。
         response.setContentType(
                 MediaType.APPLICATION_JSON_VALUE
         );
 
-        // 设置 UTF-8 编码。
         response.setCharacterEncoding(
                 StandardCharsets.UTF_8.name()
         );
 
-        // 构造统一未认证响应。
+        // 不将底层 Token 校验细节返回给调用方，避免泄露认证实现信息。
         ApiResponse<Void> apiResponse =
                 ApiResponse.failure(
                         CommonErrorCode.UNAUTHORIZED,
                         "未登录或登录已过期"
                 );
 
-        // 写出 JSON 响应。
         objectMapper.writeValue(
                 response.getWriter(),
                 apiResponse

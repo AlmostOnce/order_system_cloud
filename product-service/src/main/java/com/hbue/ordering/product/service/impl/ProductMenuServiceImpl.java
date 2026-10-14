@@ -26,7 +26,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 从商品目录组装顾客可见的窗口菜单。
+ * 从商品目录组装顾客可见的窗口菜单，并协调缓存、布隆过滤器与回源查询。
+ *
+ * <p>本类只读取商品目录并构造展示视图，不负责管理端写操作。窗口菜单查询先用布隆过滤器
+ * 和空值缓存挡住无效 ID，再使用 Redis 缓存；缓存击穿时用按窗口区分的分布式锁合并重建，
+ * 最终菜单内容仍以商品数据库中的启停、分类和售卖状态为准。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -161,6 +165,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                      )) {
             if (lock == null) {
                 // 未抢到锁时降级直接查库返回，不写缓存，避免与持锁方竞争写入。
+                // 此分支由当前请求直接回源但不写缓存，避免未持锁线程与锁内重建并发写入。
                 WindowMenuVO menu = loadWindowMenu(windowId);
                 if (menu == null) {
                     throw new BusinessException(

@@ -48,6 +48,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             OrderDO order,
             List<OrderItemDO> items
     ) {
+        // 先插入订单主记录以取得数据库生成的主键；事务保证后续失败时主记录也回滚。
         if (orderMapper.insert(order) != 1) {
             throw new BusinessException(
                     CommonErrorCode.INTERNAL_ERROR,
@@ -55,6 +56,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             );
         }
 
+        // 明细统一关联新生成的订单 ID；任何一行保存失败都会抛异常并回滚整个订单事务。
         for (OrderItemDO item : items) {
             item.setOrderId(order.getOrderId());
             if (orderItemMapper.insert(item) != 1) {
@@ -76,7 +78,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             Integer expectedVersion,
             String targetStatus
     ) {
-        // 状态和版本号同时匹配，才允许数据库执行状态迁移。
+        // 仅当旧状态与版本号同时匹配才执行迁移；受影响行数为 0 表示状态已被其他请求改变。
         return orderMapper.updateStatusIfVersionMatches(
                 orderId,
                 expectedStatus,

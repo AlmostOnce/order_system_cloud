@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 菜单分类及其在售菜品。
+ * 顾客菜单中的一个启用分类及其在售菜品列表。
+ *
+ * <p>由商品服务菜单查询组装；即使分类下暂时没有在售菜品，也会保留该分类，
+ * 以维持目录结构的展示语义。</p>
  *
  * @author order-system
  * @date 2026-09-28

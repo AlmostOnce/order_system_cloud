@@ -59,11 +59,13 @@ public class UserBalanceController {
      *
      * @param jwt 当前登录用户 JWT
      * @return 余额视图对象
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 当前账户不可用时由统一异常处理转换为响应
      */
     @GetMapping("/me/balance")
     public ApiResponse<UserBalanceVO> getMyBalance(
             @AuthenticationPrincipal Jwt jwt
     ) {
+        // 用户 ID 从已经验签的 JWT subject 获取，不接受客户端指定其他用户 ID。
         return ApiResponse.success(
                 userBalanceService.getMyBalance(currentUserId(jwt))
         );
@@ -75,18 +77,20 @@ public class UserBalanceController {
      * @param jwt 当前登录用户 JWT
      * @param request 支付密码设置请求
      * @return 无数据的成功响应
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 凭据校验失败、账户不可用或防爆破依赖不可用时由统一异常处理转换为响应
      */
     @PutMapping("/pay-password")
     public ApiResponse<Void> setPayPassword(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody PayPasswordSetRequest request
     ) {
+        // 绑定当前令牌主体，避免请求体或 URL 将支付密码写入到其他用户账户。
         payPasswordService.setPayPassword(currentUserId(jwt), request);
         return ApiResponse.success(null);
     }
 
     /**
-     * 从 JWT 中取出当前用户 ID。
+     * 从已通过资源服务器校验的 JWT 中取出当前用户 ID。
      *
      * @param jwt 当前登录用户 JWT
      * @return 当前用户 ID

@@ -33,6 +33,7 @@ public class PaymentChannelRegistry {
     public PaymentChannelRegistry(List<PaymentChannel> channelList) {
         Map<String, PaymentChannel> registered = new LinkedHashMap<>();
         for (PaymentChannel channel : channelList) {
+            // 按渠道标识登记策略实现，后续由请求中的渠道码选择对应渠道。
             registered.put(channel.channelCode(), channel);
         }
         this.channels = Collections.unmodifiableMap(registered);
@@ -48,6 +49,7 @@ public class PaymentChannelRegistry {
         if (channelCode == null || channelCode.isBlank()) {
             return null;
         }
+        // 去除首尾空格并统一大小写，确保请求值与注册表中的渠道码匹配。
         return channels.get(channelCode.trim().toUpperCase());
     }
 
@@ -60,6 +62,7 @@ public class PaymentChannelRegistry {
     public PaymentChannel require(String channelCode) {
         PaymentChannel channel = find(channelCode);
         if (channel == null) {
+            // 将未知渠道统一转换为业务参数错误，避免调用方继续使用空渠道实现。
             throw new BusinessException(
                     CommonErrorCode.BAD_REQUEST,
                     "不支持的支付渠道：" + channelCode

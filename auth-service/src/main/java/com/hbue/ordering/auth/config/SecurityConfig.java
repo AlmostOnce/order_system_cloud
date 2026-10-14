@@ -26,7 +26,13 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 认证服务安全配置。
+ * 认证服务 HTTP 安全边界配置。
+ *
+ * <p>登录、注册和刷新接口允许匿名访问；注销接口以及未单独放行的请求必须
+ * 携带有效访问令牌。访问令牌由 RSA 公钥验签，并在标准声明校验后检查 Redis
+ * 黑名单；黑名单状态无法确认时按拒绝访问处理。</p>
+ *
+ * <p>该配置只保护认证服务自身的 HTTP 请求，不负责 Gateway 的路由授权。</p>
  *
  * @author order-system
  * @date 2026-09-20
@@ -103,6 +109,9 @@ public class SecurityConfig {
     /**
      * 创建校验签名、签发方和 Redis 黑名单的 JWT 解码器。
      *
+     * <p>Redis 黑名单检查在标准 JWT 校验之后执行。Redis 状态不可用或无法明确
+     * 确认令牌未被注销时，解码会失败，不会降级为放行。</p>
+     *
      * @param publicKeyResource RSA 公钥资源
      * @param issuer JWT 签发方
      * @param redisOperationsService Redis 基础操作组件
@@ -160,6 +169,7 @@ public class SecurityConfig {
      * @param redisOperationsService Redis 基础操作组件
      * @param blacklistKeyPrefix 黑名单 Key 前缀
      * @return 已校验的 JWT
+     * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */
     private Jwt decodeAndCheckBlacklist(
             JwtDecoder decoder,

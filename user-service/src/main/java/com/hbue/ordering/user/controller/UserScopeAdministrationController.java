@@ -26,8 +26,8 @@ import java.util.List;
  *
  * <p>数据范围的授予权归业务角色：{@code RESTAURANT_MANAGER}（限本餐厅）与
  * {@code GENERAL_MANAGER}（全平台）。技术角色 {@code SYSTEM_ADMIN} 不具备该能力。
- * 每个接口会把当前操作者传给 Service，由 Service 完成"授予者不得越出自身范围"
- * 与"不得操作本人"两项校验（越权统一返回 403）。</p>
+ * 查询接口校验操作者身份和目标用户存在；覆盖、撤销操作还会由 Service 校验
+ * "授予者不得越出自身范围"与"不得对本人授予或撤销"（越权统一返回 403）。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -59,12 +59,14 @@ public class UserScopeAdministrationController {
      * @param jwt 当前登录操作者 JWT
      * @param userId 目标用户 ID
      * @return 目标用户的数据范围列表
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效或目标用户不存在时由统一异常处理转换为响应
      */
     @GetMapping("/{userId}/scopes")
     public ApiResponse<List<UserScopeAdminVO>> listScopes(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable("userId") @Positive Long userId
     ) {
+        // 当前操作者身份来自验签后的 JWT，不能由调用方参数替换。
         return ApiResponse.success(
                 userScopeAdministrationService.listScopes(
                         operatorId(jwt),
@@ -80,6 +82,7 @@ public class UserScopeAdministrationController {
      * @param userId 目标用户 ID
      * @param request 新的范围列表
      * @return 写入后的数据范围列表
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 范围超出操作者授权边界或引用对象不存在时由统一异常处理转换为响应
      */
     @PutMapping("/{userId}/scopes")
     public ApiResponse<List<UserScopeAdminVO>> replaceScopes(
@@ -87,6 +90,7 @@ public class UserScopeAdministrationController {
             @PathVariable("userId") @Positive Long userId,
             @Valid @RequestBody UserScopeSaveRequest request
     ) {
+        // Service 按操作者的数据范围验证每一项后才执行覆盖写入。
         return ApiResponse.success(
                 userScopeAdministrationService.replaceScopes(
                         operatorId(jwt),
@@ -103,6 +107,7 @@ public class UserScopeAdministrationController {
      * @param userId 目标用户 ID
      * @param scopeId 范围记录 ID
      * @return 空成功响应
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 范围不属于目标用户或超出操作者权限时由统一异常处理转换为响应
      */
     @DeleteMapping("/{userId}/scopes/{scopeId}")
     public ApiResponse<Void> revokeScope(
@@ -110,6 +115,7 @@ public class UserScopeAdministrationController {
             @PathVariable("userId") @Positive Long userId,
             @PathVariable("scopeId") @Positive Long scopeId
     ) {
+        // Service 会确认范围记录归属、操作者范围及禁止自我操作约束。
         userScopeAdministrationService.revokeScope(
                 operatorId(jwt),
                 userId,
@@ -119,7 +125,7 @@ public class UserScopeAdministrationController {
     }
 
     /**
-     * 从 JWT 中取出当前操作者 ID。
+     * 从已通过资源服务器校验的 JWT 中取出当前操作者 ID。
      *
      * @param jwt 当前登录操作者 JWT
      * @return 操作者用户 ID

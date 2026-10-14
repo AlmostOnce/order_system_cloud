@@ -5,7 +5,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * 模拟支付渠道配置属性。
+ * 模拟支付渠道的外部化配置映射。
+ *
+ * <p>从 {@code payment.channel} 配置前缀读取回调密钥、回调地址和模拟行为参数；
+ * 密钥应由环境配置提供而不是写入源码。该类仅承载配置，不负责签名或支付状态处理。</p>
  *
  * @author order-system
  * @date 2026-10-12

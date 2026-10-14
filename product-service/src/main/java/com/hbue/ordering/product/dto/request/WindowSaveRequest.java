@@ -9,7 +9,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 新建或更新窗口的请求对象。
+ * 新建或更新档口的接口请求 DTO。
+ *
+ * <p>该对象承载可编辑字段，不接受窗口主键或数据库审计时间；除格式校验外，
+ * Service 还会验证操作者同时有权管理目标档口及请求中的所属餐厅。</p>
  *
  * @author order-system
  * @date 2026-09-28

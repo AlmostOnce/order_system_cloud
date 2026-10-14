@@ -18,8 +18,9 @@ import java.util.UUID;
 /**
  * Refresh Token Redis 服务实现。
  *
- * <p>Refresh Token 本身不携带用户信息，
- * 用户信息保存在 Redis Hash 中，Token 只作为 Redis Key 的一部分。</p>
+ * <p>Refresh Token 本身不携带用户信息，用户 ID、用户名和角色编码保存在 Redis
+ * Hash 中，Token 只作为随机凭据及 Redis Key 的一部分。每个 Key 都设置 TTL；
+ * 刷新流程通过删除旧 Key 原子竞争消费权，避免旧 Token 被重复使用。</p>
  *
  * @author order-system
  * @date 2026-09-22
@@ -85,6 +86,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
      * @param username 用户名
      * @param roleCode 角色编码
      * @return Refresh Token
+     * @throws IllegalStateException Redis Key 的过期时间无法设置时抛出，并清理刚写入的数据
      */
     @Override
     public String createRefreshToken(
@@ -131,6 +133,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
      *
      * @param refreshToken Refresh Token
      * @return 用户信息；Token 不存在或已过期时返回 null
+     * @throws RuntimeException Redis 查询失败或存储的用户 ID 格式错误时抛出
      */
     @Override
     public RefreshTokenInfo getRefreshTokenInfo(String refreshToken) {
@@ -183,6 +186,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
      *
      * @param refreshToken Refresh Token
      * @return Redis 确认删除令牌时返回 true；令牌已被消费时返回 false
+     * @throws BusinessException Redis 无法明确确认删除结果时抛出，避免继续签发 Token
      */
     @Override
     public boolean consumeRefreshToken(String refreshToken) {

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 订单服务数据范围判定实现。
+ * 订单服务数据范围查询与判定实现。
  *
  * <p>范围事实来自 user-service 的内部查询接口，结果缓存在 Redis
  * （键 {@code authz:user-scope:{userId}}，TTL 300 秒），
@@ -34,7 +34,9 @@ import java.util.Set;
  * 判定结果（{@link #canAccessWindow(Long, Long)}），由 Service 决定返回 404；
  * {@link #checkWindowAccess(Long, Long)} 仅用于公开资源场景。</p>
  *
- * <p>餐厅范围需要把档口换算为所属餐厅，档口归属数据由 product-service 提供。</p>
+ * <p>餐厅范围需要把档口换算为所属餐厅，档口归属数据由 product-service 提供。
+ * Redis 仅作为短期加速层，缓存缺失或读取失败时回源 user-service；范围事实无法确认时抛出服务不可用，
+ * 不默认放行任何商家数据操作。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -89,6 +91,7 @@ public class DefaultDataScopeService implements DataScopeService {
      *
      * @param userId 用户 ID
      * @return 范围快照
+     * @throws BusinessException user-service 调用失败或返回无效结果时抛出，调用方应拒绝受保护操作
      */
     @Override
     public UserScopeSnapshot loadScopes(Long userId) {
@@ -96,12 +99,14 @@ public class DefaultDataScopeService implements DataScopeService {
             return UserScopeSnapshot.empty(null);
         }
 
+        // 缓存只保存 user-service 返回的授权事实，不在订单服务内自行推导用户角色范围。
         String cacheKey = AuthzCacheKeys.userScope(userId);
         UserScopeVO cachedScope = readCache(cacheKey);
         if (cachedScope != null) {
             return toSnapshot(cachedScope, userId);
         }
 
+        // 缓存未命中或不可读时回源权威用户服务；回源失败不能退化为无范围或全范围。
         ApiResponse<UserScopeVO> response =
                 userScopeInternalClient.getScopes(userId, internalScopeToken);
         if (response == null
@@ -130,6 +135,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * @param userId 当前登录用户 ID
      * @param windowId 目标档口 ID
      * @return 有权时返回 true
+     * @throws BusinessException 范围事实或档口归属依赖不可用时抛出，避免依赖故障导致错误授权
      */
     @Override
     public boolean canAccessWindow(Long userId, Long windowId) {
@@ -137,6 +143,7 @@ public class DefaultDataScopeService implements DataScopeService {
             return false;
         }
         UserScopeSnapshot scopes = loadScopes(userId);
+        // 档口直接授权优先命中；餐厅授权必须先取得档口所属餐厅再判定。
         if (scopes.coversWindow(windowId)) {
             return true;
         }
@@ -155,6 +162,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * @param userId 当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      * @return 有权时返回 true
+     * @throws BusinessException user-service 范围查询失败时抛出
      */
     @Override
     public boolean canAccessRestaurant(Long userId, Long restaurantId) {
@@ -169,6 +177,7 @@ public class DefaultDataScopeService implements DataScopeService {
      *
      * @param userId 当前登录用户 ID
      * @param windowId 目标档口 ID
+     * @throws BusinessException 无权访问时抛出 403 业务异常
      */
     @Override
     public void checkWindowAccess(Long userId, Long windowId) {
@@ -185,6 +194,7 @@ public class DefaultDataScopeService implements DataScopeService {
      *
      * @param userId 当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
+     * @throws BusinessException 无权访问时抛出 403 业务异常
      */
     @Override
     public void checkRestaurantAccess(Long userId, Long restaurantId) {

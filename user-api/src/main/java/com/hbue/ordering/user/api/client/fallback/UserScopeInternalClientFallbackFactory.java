@@ -12,8 +12,8 @@ import org.springframework.stereotype.Component;
 /**
  * 用户数据范围内部调用降级工厂。
  *
- * <p>范围查询失败时返回服务不可用，交由调用方按下拒绝处理，绝不返回空范围
- * 之外的放行语义。</p>
+ * <p>范围查询失败时返回服务不可用，交由调用方拒绝本次受保护的数据操作；
+ * 降级实现不伪造空范围或平台级范围，也不将依赖故障转换为放行。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -30,6 +30,9 @@ public class UserScopeInternalClientFallbackFactory
 
     /**
      * 创建用户数据范围降级客户端。
+     *
+     * <p>工厂保留原始失败原因供日志排查，返回失败响应要求调用方 fail closed；
+     * 调用方不能因响应缺少范围数据就继续执行业务。</p>
      *
      * @param cause 远程调用失败原因
      * @return 用户数据范围降级客户端

@@ -43,6 +43,7 @@ public final class UserScopeSnapshot {
     ) {
         this.userId = userId;
         this.platformScope = platformScope;
+        // 复制传入集合并包装为只读集合，避免调用方在构造后改变授权快照内容。
         this.windowIds = windowIds == null
                 ? Collections.emptySet()
                 : Collections.unmodifiableSet(new LinkedHashSet<>(windowIds));

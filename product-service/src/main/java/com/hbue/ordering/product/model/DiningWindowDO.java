@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 /**
  * 窗口持久化对象。
  *
- * <p>映射 product_db 中的 dining_windows 表。</p>
+ * <p>映射 product_db 中的 {@code dining_windows} 表，只承载表字段与 ORM 映射；
+ * 窗口启停、营业状态和归属权限由 Service 层处理，DO 不作为接口响应类型。</p>
  *
  * @author order-system
  * @date 2026-09-28

@@ -14,7 +14,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 支付服务无权请求统一返回 403 响应。
+ * 支付服务已认证但无权访问时的统一 403 响应边界。
+ *
+ * <p>将 Spring Security 权限拒绝转换为项目统一 JSON 响应，不暴露安全过滤器内部细节；
+ * 未认证请求仍由 {@link PaymentAuthenticationEntryPoint} 返回 401。</p>
  *
  * @author order-system
  * @date 2026-10-12

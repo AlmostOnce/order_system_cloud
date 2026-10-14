@@ -40,6 +40,10 @@ import java.util.UUID;
 /**
  * 支付业务服务实现。
  *
+ * <p>职责边界：本类负责支付业务编排，不跨服务直接访问用户库或订单库；用户余额扣款
+ * 通过 user-service 内部契约完成，订单推进通过 order-service 内部契约完成。
+ * 跨服务调用不参与本地数据库事务，因此远程失败必须显式记录，不能伪装成分布式原子提交。</p>
+ *
  * <p>幂等与一致性设计（双重防护）：
  * 第一重为支付单"仅 CREATED 可标记结果"的条件更新，并发回调只产生一个赢家；
  * 第二重为订单服务侧的乐观锁状态推进，即便第一重失效也只允许一次生效。
@@ -134,7 +138,10 @@ public class PaymentServiceImpl
     }
 
     /**
-     * 为待支付订单创建支付单并按渠道编排后续动作。
+     * 为当前用户的待支付订单创建或复用支付单，并按所选渠道编排结算。
+     *
+     * <p>订单归属、状态和金额以订单服务返回的数据为准；同一订单的活动支付单由查询和唯一索引
+     * 双重保护。余额渠道执行内部扣款，其它渠道返回收银台凭证等待验签回调。</p>
      *
      * @param userId 当前登录顾客 ID
      * @param request 创建支付单请求（含渠道标识与余额渠道的支付密码）
@@ -149,6 +156,7 @@ public class PaymentServiceImpl
                 resolveChannelCode(request)
         );
         Long orderId = request.getOrderId();
+        // 订单服务是订单归属、订单状态和应付金额的唯一事实来源，不能采用客户端传入金额。
         OrderInternalDTO order = queryOrderInternal(orderId, userId);
 
         // 已有进行中支付单时幂等返回，避免重复创建。
@@ -169,6 +177,7 @@ public class PaymentServiceImpl
             save(paymentDO);
         } catch (DuplicateKeyException exception) {
             // 唯一索引 uk_payments_order_active 兜底并发创建；回查并发赢家。
+            // 只有确认已有活动支付单后才按幂等成功处理，否则保留数据库异常以便排查。
             PaymentDO concurrentPayment =
                     baseMapper.selectActiveByOrderId(orderId);
             if (concurrentPayment == null) {
@@ -222,9 +231,11 @@ public class PaymentServiceImpl
     }
 
     /**
-     * 余额渠道结算：扣款成功后标记支付单成功并推进订单。
+     * 余额渠道结算：先由用户服务按支付单号幂等扣款，再条件更新本地支付单并推进订单。
      *
-     * <p>扣款失败直接抛出业务异常，支付单保持 CREATED 供重试；
+     * <p>用户服务的扣款账务事务归用户服务所有，本地事务不能覆盖该远程副作用。
+     * 若远程扣款成功而本地更新未完成，重试仍使用相同支付单号作为扣款业务引用，
+     * 依赖用户服务的幂等约束避免再次扣款。扣款失败直接抛出业务异常，支付单保持 CREATED 供重试；
      * 扣款成功但条件更新未命中（并发已有赢家或已终态）时不再推进订单，
      * 仅回读支付单渲染结果。</p>
      *
@@ -240,6 +251,7 @@ public class PaymentServiceImpl
     ) {
         PaymentChannel.ChannelPaymentCreation creation =
                 channel.createPayment(paymentDO);
+        // 先扣款后置成功：扣款接口以 paymentNo 作为幂等业务引用，跨服务间不存在本地原子事务。
         deductBalance(paymentDO, payPassword);
 
         int updated = baseMapper.markSuccessIfCreated(
@@ -248,6 +260,7 @@ public class PaymentServiceImpl
                 creation.getChannelTradeNo()
         );
         if (updated == 1) {
+            // 仅条件更新的唯一赢家推进订单，避免并发重试重复触发跨服务状态变更。
             advanceOrderPaid(paymentDO);
             log.info("余额支付成功，paymentNo={}，orderId={}，金额={}",
                     paymentDO.getPaymentNo(),
@@ -381,8 +394,8 @@ public class PaymentServiceImpl
     }
 
     /**
-     * 处理渠道异步通知：定位支付单、按成交渠道验签、金额校验、
-     * 幂等状态机、订单推进。
+     * 处理渠道异步通知：按支付单记录选择渠道验签，随后核验金额并执行条件状态更新，
+     * 只有成功更新支付单的请求才推进订单状态。
      *
      * @param request 渠道通知请求体
      * @param signature 渠道侧签名
@@ -420,12 +433,14 @@ public class PaymentServiceImpl
             );
         }
 
+        // 只有验签通过的回调才计入有效通知次数，避免伪造请求污染回调重试统计。
         // 无条件累计回调次数，重放行为可在支付单上直接观察。
         baseMapper.touchNotify(paymentDO.getPaymentNo());
 
         boolean success = NOTIFY_STATUS_SUCCESS.equalsIgnoreCase(
                 request.getStatus()
         );
+        // 状态字段已包含在签名串中；除 SUCCESS 外的已验签结果按失败通知处理。
         if (!success) {
             return handleFailedNotify(paymentDO, request);
         }
@@ -463,6 +478,7 @@ public class PaymentServiceImpl
                 request.getChannelTradeNo()
         );
         if (updated == 0) {
+            // 条件更新未命中意味着支付单已被并发回调或其它流程推进到终态，回读后判定幂等结果。
             return handleDuplicatedNotify(paymentDO);
         }
 
@@ -533,7 +549,7 @@ public class PaymentServiceImpl
      *
      * <p>订单已被取消（CONFLICT）或订单服务不可用时，支付事实保持 SUCCESS
      * 不回滚——支付事实必须如实记录；学习项目不做自动退款与跨服务事务补偿，
-     * 记录 ERROR 日志人工处置。</p>
+     * 记录 ERROR 日志人工处置。该方法吞掉已捕获的 Feign 失败，避免把已成功收款误报为支付失败。</p>
      *
      * @param paymentDO 支付单
      */
@@ -543,6 +559,7 @@ public class PaymentServiceImpl
                     orderInternalClient.markPaid(paymentDO.getOrderId());
             if (response == null
                     || !SUCCESS_CODE.equals(response.getCode())) {
+                // 不回滚已记录的支付成功事实；将无法推进的订单留给告警和人工核查。
                 String message = response == null ? null : response.getMessage();
                 log.error("订单服务拒绝推进订单状态，paymentNo={}，orderId={}，原因={}",
                         paymentDO.getPaymentNo(),
@@ -550,6 +567,7 @@ public class PaymentServiceImpl
                         message);
             }
         } catch (FeignException exception) {
+            // 网络错误无法证明订单端是否处理成功，不能在这里重复扣款或回滚支付状态。
             log.error("订单服务推进调用失败，paymentNo={}，orderId={}，状态={}",
                     paymentDO.getPaymentNo(),
                     paymentDO.getOrderId(),
@@ -578,6 +596,7 @@ public class PaymentServiceImpl
         if (response == null
                 || !SUCCESS_CODE.equals(response.getCode())
                 || response.getData() == null) {
+            // 查单不可用或未找到时停止创建支付单，避免基于不完整订单事实收费。
             throw new BusinessException(
                     CommonErrorCode.NOT_FOUND,
                     "订单不存在"

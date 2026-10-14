@@ -57,6 +57,7 @@ public class UserScopeInternalController {
      * @param userId 用户 ID
      * @param internalToken 服务间共享密钥
      * @return 用户数据范围
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 共享密钥无效时拒绝内部查询
      */
     @GetMapping("/{userId}/scopes")
     public ApiResponse<UserScopeVO> getScopes(
@@ -74,6 +75,7 @@ public class UserScopeInternalController {
         for (UserDataScopeDO scope : userDataScopeService.listByUserId(userId)) {
             DataScopeType scopeType = DataScopeType.findByCode(scope.getScopeType());
             if (scopeType == null) {
+                // 不将数据库中无法识别的范围编码解释成任何授权能力。
                 continue;
             }
             switch (scopeType) {
@@ -83,6 +85,7 @@ public class UserScopeInternalController {
             }
         }
 
+        // 对外只返回已识别的范围类型，平台范围以独立标志表示。
         UserScopeVO userScopeVO = UserScopeVO.builder()
                 .userId(userId)
                 .platform(platform)

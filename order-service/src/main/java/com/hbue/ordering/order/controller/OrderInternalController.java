@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>鉴权说明：与代表用户的 /internal/products/quote（透传用户 JWT）不同，
  * 支付回调驱动的订单推进没有用户上下文，属于"系统事件"调用，
- * 因此使用共享密钥（X-Internal-Token）认证。两种模式并存是刻意设计。</p>
+ * 因此使用共享密钥（X-Internal-Token）认证。两种模式并存是刻意设计。
+ * 内部接口不依赖用户角色或用户 JWT，但每个请求仍须通过本控制器的共享密钥校验；
+ * Gateway 不暴露该路径，服务发现地址也不应被视为认证措施。</p>
  *
  * @author order-system
  * @date 2026-10-12

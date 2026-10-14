@@ -18,6 +18,16 @@ import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 顾客和商家使用的订单 HTTP 接口。
+ *
+ * <p>本控制器负责接收请求、从已验证的 JWT 提取操作者身份并调用订单服务，
+ * 不接受客户端自行指定的用户归属作为授权依据。角色权限由方法级安全注解限制，
+ * 订单所有权、商家数据范围和状态迁移规则由 Service 再次校验。</p>
+ *
+ * @author order-system
+ * @date 2026-10-14
+ */
 @RestController
 @Tag(name = "订单接口")
 @RequestMapping("/orders")
@@ -25,10 +35,20 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    /**
+     * 创建订单 HTTP 接口控制器。
+     *
+     * @param orderService 订单业务服务
+     */
     public OrderController(OrderService orderService) {
         this.orderService = orderService;
     }
 
+    /**
+     * 返回订单服务存活探测信息。
+     *
+     * @return 订单服务运行状态文本
+     */
     @GetMapping("/ping")
     public ApiResponse<String> ping () {
         return ApiResponse.success("order service is running!");

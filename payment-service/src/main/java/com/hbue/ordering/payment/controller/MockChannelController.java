@@ -77,6 +77,7 @@ public class MockChannelController {
     ) {
         String channelTradeNo =
                 paymentService.confirmMockPayment(paymentNo, request);
+        // 此入口只返回模拟渠道交易号；支付结果由支付服务后续发起的签名异步回调确认。
         return ApiResponse.success(
                 Map.of(
                         "paymentNo", paymentNo,

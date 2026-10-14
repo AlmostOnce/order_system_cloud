@@ -21,8 +21,11 @@ import java.util.Objects;
 /**
  * JWT 密钥配置。
  *
- * <p>认证服务使用 RSA 私钥签发 JWT，
- * Gateway 和业务服务使用 RSA 公钥校验 JWT。</p>
+ * <p>认证服务使用 RSA 私钥签发 JWT；私钥只由本服务读取，Gateway 和业务服务
+ * 只配置对应的 RSA 公钥进行验签，不应复制或依赖认证服务的私钥。</p>
+ *
+ * <p>本配置只负责加载密钥并创建签发端的 {@link JwtEncoder}，不负责解析
+ * 客户端请求中的 Token，也不负责黑名单校验。</p>
  *
  * <p>私钥通过外部文件注入，禁止写入代码和 Git 仓库。</p>
  *
@@ -57,9 +60,10 @@ public class JwtKeyConfig {
     }
 
     /**
-     * 加载 RSA 密钥。
+     * 加载与配置的密钥编号关联的 RSA 公私钥对。
      *
      * @return RSA 密钥
+     * @throws IllegalStateException 私钥或公钥文件无法读取、格式不正确时抛出
      */
     @Bean
     public RSAKey jwtRsaKey() {
@@ -100,7 +104,7 @@ public class JwtKeyConfig {
     }
 
     /**
-     * 创建 JWT 编码器。
+     * 基于已加载的 RSA 密钥创建 JWT 编码器，供认证业务签发访问令牌。
      *
      * @param rsaKey RSA 密钥
      * @return JWT 编码器

@@ -34,7 +34,7 @@ import java.util.Objects;
  * 支付服务资源服务器配置，沿用订单服务和商品服务的签名与注销令牌校验规则。
  *
  * <p>与顾客接口不同，渠道回调和模拟收银台入口没有用户 JWT，
- * 其安全由 HMAC 签名校验保证，因此放行认证后交给验签逻辑处理；
+ * 因而只允许其通过 Spring Security 的身份门槛，渠道回调仍须在业务层完成 HMAC 签名校验；
  * 两类入口均不在 Gateway 路由白名单内，外部无法直接访问。</p>
  *
  * @author order-system
@@ -121,6 +121,8 @@ public class PaymentSecurityConfig {
 
     /**
      * 创建校验签名、签发方、有效期和 Redis 黑名单的 JWT 解码器。
+     *
+     * <p>黑名单状态无法从 Redis 确认时按无效令牌处理，避免 Redis 故障期间继续接受已注销令牌。</p>
      *
      * @param resourceLoader Spring 资源加载器
      * @param publicKeyLocation RSA 公钥资源位置

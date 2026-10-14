@@ -16,9 +16,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * 订单服务无权限处理器。
  *
- * <p>当用户已经完成登录，
- * 但是当前角色没有访问目标接口的权限时，
- * 统一返回项目定义的 403 响应。</p>
+ * <p>当用户已经通过认证但缺少接口所需角色或权限时，统一返回项目定义的 403 响应；
+ * 它不处理未登录或无效 Token，这类情况由 {@link OrderAuthenticationEntryPoint} 返回 401。</p>
  *
  * @author order-system
  * @date 2026-09-22
@@ -57,27 +56,23 @@ public class OrderAccessDeniedHandler
             HttpServletResponse response,
             AccessDeniedException accessDeniedException
     ) throws IOException {
-        // 设置 HTTP 状态码。
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
-        // 设置 JSON 响应类型。
         response.setContentType(
                 MediaType.APPLICATION_JSON_VALUE
         );
 
-        // 设置 UTF-8 编码。
         response.setCharacterEncoding(
                 StandardCharsets.UTF_8.name()
         );
 
-        // 构造统一无权限响应。
+        // 保持安全过滤器产生的权限拒绝与业务接口使用相同响应结构。
         ApiResponse<Void> apiResponse =
                 ApiResponse.failure(
                         CommonErrorCode.FORBIDDEN,
                         "没有访问权限"
                 );
 
-        // 写出 JSON 响应。
         objectMapper.writeValue(
                 response.getWriter(),
                 apiResponse

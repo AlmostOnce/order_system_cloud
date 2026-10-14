@@ -54,6 +54,7 @@ public class UserBalanceInternalController {
      * @param internalToken 服务间共享密钥
      * @param command 余额扣款命令
      * @return 扣款结果
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 内部共享密钥无效或扣款业务校验失败时由统一异常处理转换为响应
      */
     @PostMapping("/{userId}/balance/deduct")
     public ApiResponse<UserBalanceDeductResultVO> deduct(
@@ -64,6 +65,7 @@ public class UserBalanceInternalController {
     ) {
         // 内部调用必须携带正确的共享密钥，失败时统一返回 401。
         internalScopeTokenVerifier.verify(internalToken);
+        // 只有共享密钥校验通过后才进入余额扣款业务。
         return ApiResponse.success(
                 userBalanceService.deduct(userId, command)
         );

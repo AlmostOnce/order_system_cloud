@@ -53,6 +53,7 @@ public class UserStatusAdministrationController {
      * @param userId 目标用户 ID
      * @param request 目标状态：1 启用，0 禁用
      * @return 无数据的成功响应
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 状态不合法、目标用户不存在或禁用最后一个启用的系统管理员时由统一异常处理转换为响应
      */
     @PatchMapping("/{userId}/status")
     public ApiResponse<Void> updateUserStatus(
@@ -60,6 +61,7 @@ public class UserStatusAdministrationController {
             @PathVariable("userId") @Positive Long userId,
             @Valid @RequestBody UserStatusUpdateRequest request
     ) {
+        // 操作者身份来自已验签 JWT，Service 负责最后一个系统管理员保护和审计。
         userService.updateUserStatus(
                 operatorId(jwt),
                 userId,
@@ -69,7 +71,7 @@ public class UserStatusAdministrationController {
     }
 
     /**
-     * 从 JWT 中取出当前操作者 ID。
+     * 从已通过资源服务器校验的 JWT 中取出当前操作者 ID。
      *
      * @param jwt 当前登录操作者 JWT
      * @return 操作者用户 ID

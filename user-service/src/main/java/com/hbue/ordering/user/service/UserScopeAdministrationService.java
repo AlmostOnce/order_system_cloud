@@ -26,6 +26,7 @@ public interface UserScopeAdministrationService {
      * @param operatorId 操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @return 目标用户的数据范围列表
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效或目标用户不存在时抛出
      */
     List<UserScopeAdminVO> listScopes(Long operatorId, Long targetUserId);
 
@@ -39,6 +40,7 @@ public interface UserScopeAdministrationService {
      * @param targetUserId 目标用户 ID
      * @param request 新的范围列表
      * @return 写入后的数据范围列表
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 越权、自我操作、引用对象不存在或商品服务不可用时抛出
      */
     List<UserScopeAdminVO> replaceScopes(
             Long operatorId,
@@ -52,6 +54,7 @@ public interface UserScopeAdministrationService {
      * @param operatorId 操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @param scopeId 范围记录 ID
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 越权、自我操作或范围记录不存在时抛出
      */
     void revokeScope(Long operatorId, Long targetUserId, Long scopeId);
 }

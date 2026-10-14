@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 /**
  * 窗口菜品分类持久化对象。
  *
- * <p>映射 product_db 中的 product_categories 表。</p>
+ * <p>映射 product_db 中的 {@code product_categories} 表，只承载持久化字段；
+ * 分类归属和启停规则由 Service 层校验，DO 不直接暴露给接口调用方。</p>
  *
  * @author order-system
  * @date 2026-09-28

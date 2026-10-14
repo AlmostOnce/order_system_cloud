@@ -4,10 +4,10 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * 登录响应对象。
+ * 登录及刷新接口的响应 VO。
  *
- * <p>只返回访问 Token 和 Token 有效期，
- * 不返回用户密码等敏感信息。</p>
+ * <p>返回访问 Token、Refresh Token、Bearer 类型及各自有效期。客户端应将
+ * Token 作为凭据妥善保管；响应不包含密码、密码哈希或数据库实体。</p>
  *
  * @author order-system
  * @date 2026-09-20

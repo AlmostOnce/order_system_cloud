@@ -30,7 +30,8 @@ import java.util.Set;
  * <p>授予者的可授范围完全由其在 user-service 的范围快照决定，实现
  * "只能授予自己已具备的范围"：全平台范围可授予任意范围，餐厅范围可授予
  * 本餐厅及其下属档口。越界、对本人操作返回 403；引用对象不存在返回 400；
- * 目标用户不存在返回 404；product-service 不可用返回 503。</p>
+ * 目标用户不存在返回 404；product-service 不可用返回 503。范围写入后记录变更前后
+ * 快照用于审计；本服务不改变目标用户的角色，也不把客户端提供的范围当作授权依据。</p>
  *
  * @author order-system
  * @date 2026-10-13
@@ -129,6 +130,7 @@ public class UserScopeAdministrationServiceImpl
         rejectSelfOperation(operatorId, targetUserId);
         requireTargetUser(targetUserId);
 
+        // 空请求按清空范围处理；操作者和目标用户先完成身份及资源校验。
         List<UserScopeSaveRequest.ScopeItem> items =
                 request == null || request.getScopes() == null
                         ? List.of()
@@ -155,6 +157,7 @@ public class UserScopeAdministrationServiceImpl
             }
         }
 
+        // 先保存变更前快照，再在 user-service 内替换并重新读取最终状态用于审计。
         List<UserDataScopeDO> before =
                 userDataScopeService.listByUserId(targetUserId);
         userDataScopeService.replaceScopes(targetUserId, newScopes);
@@ -196,7 +199,7 @@ public class UserScopeAdministrationServiceImpl
             );
         }
 
-        // 只撤销目标用户自己的范围记录。
+        // 先从目标用户自己的记录中定位范围，避免仅凭客户端 scopeId 删除任意记录。
         UserDataScopeDO target = null;
         for (UserDataScopeDO scope
                 : userDataScopeService.listByUserId(targetUserId)) {
@@ -279,6 +282,7 @@ public class UserScopeAdministrationServiceImpl
             DataScopeType scopeType,
             Long scopeRef
     ) {
+        // 不同范围类型的引用含义不同，分别校验存在性和授予者的数据边界。
         switch (scopeType) {
             case PLATFORM -> {
                 // 全平台范围是授权链的根，只有本身持有全平台范围的授予者才能继续授予。

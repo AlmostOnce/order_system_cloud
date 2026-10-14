@@ -7,7 +7,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 商品分类管理接口返回对象。
+ * 商品分类管理接口返回的视图对象。
+ *
+ * <p>用于展示分类归属、排序、启停状态和审计时间；更新请求使用独立的
+ * {@code ProductCategorySaveRequest}，本类不参与持久化。</p>
  *
  * @author order-system
  * @date 2026-09-28
