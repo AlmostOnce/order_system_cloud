@@ -29,5 +29,16 @@ curl -s -X POST "$NACOS/v3/admin/cs/config" \
   --data-urlencode "content@/mnt/e/order_system_cloud/docs/nacos/gateway-service.yaml"
 echo ""
 
-echo "== 4. 回读验证 =="
+echo "== 4. 发布 product-service-degrade-rules（Sentinel 降级规则） =="
+curl -s -X POST "$NACOS/v3/admin/cs/config" \
+  -d "accessToken=$token" \
+  --data-urlencode "dataId=product-service-degrade-rules" \
+  -d "groupName=SENTINEL_GROUP" \
+  -d "type=json" \
+  --data-urlencode "content@/mnt/e/order_system_cloud/docs/nacos/product-service-degrade-rules"
+echo ""
+
+echo "== 5. 回读验证 =="
 curl -s "$NACOS/v3/admin/cs/config?accessToken=$token&dataId=gateway-service.yaml&groupName=DEFAULT_GROUP" | head -c 400
+echo ""
+curl -s "$NACOS/v3/admin/cs/config?accessToken=$token&dataId=product-service-degrade-rules&groupName=SENTINEL_GROUP" | head -c 400

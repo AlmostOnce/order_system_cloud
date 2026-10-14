@@ -111,7 +111,7 @@ FLUSH PRIVILEGES;
 | Redis 7.4 | 9096 → 6379 | 卷 `order-system-cloud-redis-data` |
 | Nacos v3.0.3 API | 9097 → 8848 | gRPC `10097` / `10098` |
 | Nacos 控制台 | 9098 → 8080 | 账号 `nacos` / `.env` 中的 `NACOS_PASSWORD` |
-| Sentinel Dashboard | 9099 | 仅 `order-service` 接入所在 Dashboard 通信端口为 `9100` |
+| Sentinel Dashboard | 9099 | `order-service` 通信端口 `9100`，`product-service` 通信端口 `9102` |
 
 核对命令：`wsl -- docker ps --format "table {{.Names}}\t{{.Ports}}"`
 

@@ -24,6 +24,40 @@ spring:
     name: product-service
 
   cloud:
+    sentinel:
+      # 开启 Sentinel，并在启动时立即初始化。
+      enabled: true
+      eager: true
+      transport:
+        # Sentinel Dashboard 地址，与 order-service 共用同一控制台。
+        dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:9099}
+
+        # 本服务与 Dashboard 通信端口，避开 order-service 的 9100。
+        port: ${SENTINEL_TRANSPORT_PORT:9102}
+      datasource:
+        degrade:
+          nacos:
+            # Nacos API 地址。
+            server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+
+            # Nacos 登录账号。
+            username: ${NACOS_USERNAME:nacos}
+
+            # Nacos 登录密码。
+            password: ${NACOS_PASSWORD:root}
+
+            # Nacos 配置 Data ID。
+            data-id: product-service-degrade-rules
+
+            # Nacos 配置分组。
+            group-id: SENTINEL_GROUP
+
+            # 规则格式。
+            data-type: json
+
+            # 规则类型。
+            rule-type: degrade
+
     nacos:
       discovery:
         # 本机运行时连接 Docker 暴露的 Nacos API 端口。
@@ -51,3 +85,16 @@ internal:
   scope:
     # 数据范围相关内部接口的共享密钥，与 user-service / order-service 保持一致。
     token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+# 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 商品服务接口文档
+  service-description: 餐厅、档口、商品与核价接口。
+  # 网关地址与路径前缀，用于修正经网关聚合后 "Try it out" 的目标地址。
+  # 网关路由 StripPrefix=1 只剥离 /api 一段，故前缀固定为 /api，与各服务自身路径拼接。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
