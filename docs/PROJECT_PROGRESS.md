@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-13
+更新时间：2026-10-14
 
 ### 已完成
 
@@ -274,12 +274,63 @@
 - **验收临时数据已清理（本次）**：删除临时账号 `gm01` 及其 `PLATFORM` 范围、验收插入的订单 `order_id=4`、验收新建的餐厅 `R0002`，并还原 `R0001` 的 `phone`/`location`。清理后重启 `user-service`，引导**成功创建** `general_manager`（user_id=8）及其 `PLATFORM` 范围，登录验证通过（JWT `roles=["GENERAL_MANAGER"]`）。保留 `stall01`（WINDOW:1）、`rm01`（RESTAURANT:1）作为 Phase 1 第 8 步要求的可登录测试账号。
 - **环境提醒**：本次发现 IDEA 内运行的是过期代码（进程 09:0x 启动、`target/classes` 12:06 才编译，对新端点一律 500）——改完代码必须在 IDEA 内重启服务；根 pom 未继承 `spring-boot-starter-parent`，`mvn install` 产物是瘦 jar，命令行启动需再执行 `spring-boot:repackage`。
 
+### 2026-10-14 本次完成
+
+#### 账号启用/禁用接口（Phase 1 收尾项）
+
+- `PATCH /users/{userId}/status`（`UserStatusAdministrationController`），仅 `SYSTEM_ADMIN` 可调用；禁止禁用自身，禁止禁用最后一个处于启用状态的 `SYSTEM_ADMIN`（409）。
+- 单测：`UserServiceImplUpdateStatusTest` 6 项通过。
+
+#### 余额支付（余额渠道接入 payment-service）
+
+- **账务归属**：余额扣款与流水记账全部留在 `user-service` 同库同事务，`payment-service` 只做支付编排，通过内部接口调用，不跨服务开分布式事务。
+- **三重幂等记账**：`balance_records` 唯一键 `(user_id, biz_type, biz_ref, change_type)` 保证同一业务单据只记一次；扣款流程为「先插流水占位 → `balance >= amount` 条件扣款 → 回填扣后余额」，并配合 `@Transactional(noRollbackFor = DuplicateKeyException.class)` 把唯一键冲突当作幂等重放而非失败。并发下只有赢家真正扣款，其余请求回读既有流水返回 `idempotent=true`。
+- **支付密码独立于登录密码**：首次设置必须校验登录密码、且新支付密码不得与登录密码相同；修改必须校验原支付密码。校验失败采用 Redis 计数器 `user:pay-password:fail:{userId}`（TTL 15 分钟，满 5 次写 `user:pay-password:lock:{userId}` 锁定 15 分钟），校验成功清空计数；Redis 不可用时 **fail-closed 返回 503**，绝不放过校验。
+- **对外接口**：`GET /users/me/balance`、`PUT /users/pay-password`，仅 `CUSTOMER` 角色，`userId` 一律取自 JWT subject。
+- **内部接口**：`POST /internal/users/{userId}/balance/deduct`，先校验 `INTERNAL_SCOPE_TOKEN` 再执行业务；`payment-service` 侧不为该客户端配置 fallbackFactory，以保证「余额不足 / 未设密码 / 密码错误 / 已锁定」等业务拒绝不被吞成 503。
+- **payment-service 渠道改造为路由**：新增 `PaymentChannelRegistry`（按 `channelCode` 路由，未知渠道 400）与 `BalancePaymentChannel`（`BALANCE`，只生成交易号、不参与状态机）；`PaymentCreateRequest` 增加 `channelCode`（缺省 `MOCK`）与 `payPassword`。余额渠道为**同步结算**：创建支付单后立即扣款，扣款成功再条件置成功并推进订单，不产生异步回调；其他渠道仍返回收银台凭证等回调。
+- **`handleNotify` 顺序调整**：由「先验签后查单」改为「先查单、再按 `paymentDO.channelCode` 解析渠道验签」——不同渠道密钥算法不同，必须由支付单上记录的渠道决定验签实现。查不到支付单返回 404，验签失败返回 401。
+- **内部令牌按路径区分**：`PaymentFeignConfig` 仅对 `/internal/orders/**` 追加 `INTERNAL_ORDER_TOKEN`；余额扣款请求的令牌由客户端以方法参数显式传 `INTERNAL_SCOPE_TOKEN`。此前拦截器对所有 Feign 请求统一加同一个头，会产生同名头重复写入、下游取到错误令牌的隐患。
+- **下游失败的语义映射**：`FeignException` 按 HTTP 状态映射为本地业务异常——400 参数/凭据、404 不存在、409 冲突（余额不足、未设支付密码）、429 限流锁定（密码锁定），其余（含连接失败与 5xx）统一 503 服务不可用；提示文案从下游统一响应体的 `message` 解析，解析失败退回错误码默认文案。
+- **`common-web` 补充 429 映射**：`GlobalExceptionHandler` 原先未覆盖 `TOO_MANY_REQUESTS`，会落到 500，导致密码锁定语义丢失；现已映射为 HTTP 429。
+- **测试**：新增 `PayPasswordServiceImplTest`（13 项：首次设置/修改校验、失败计数与 TTL、锁定优先、Redis 故障 fail-closed）、`UserBalanceServiceImplTest`（8 项：正常扣款、既有流水幂等重放、唯一键冲突按重放处理、余额不足回滚、入参校验）；`PaymentServiceImplTest` 扩到 21 项（新增渠道路由、余额同步结算、余额不足与锁定映射，并按新签名与「先查单后验签」调整）。全量 `mvn -B -pl user-service,payment-service,user-api,common-redis,common-web -am test` 通过：user-service 55 项、payment-service 39 项，`BUILD SUCCESS`。
+- **本次未做（按约定留后）**：余额充值、余额退款接口；余额渠道的关闭支付单对账。
+
+#### 接口文档（OpenAPI / Swagger）集成
+
+- **选型**：springdoc-openapi `2.9.1`（Boot 3.x 线），版本由根 `pom.xml` 的 `springdoc-openapi-bom` 统一管理；5 个业务服务用 `springdoc-openapi-starter-webmvc-ui`，Gateway 用 `springdoc-openapi-starter-webflux-ui`，`common-web` 以 `provided` 引入（不向下游传递）。
+- **统一入口**：网关聚合页 `http://localhost:9090/swagger-ui/index.html`，下拉框可切换 auth / user / order / product / payment 五个分组；各服务也可直连查看，如 `http://localhost:9092/swagger-ui/index.html`。
+- **网关文档路由**：在 Nacos 配置 `gateway-service.yaml`（仓库镜像 `docs/nacos/gateway-service.yaml`）中为每个服务新增 `-docs` 路由，**前插**于对应 `/api/xxx/**` 路由之前（Gateway 首个匹配生效），并使用 `RewritePath=/api/xxx/v3/api-docs, /v3/api-docs`（不可用 `StripPrefix=1`，否则落到不存在的路径）。
+- **server 前缀修正**：经网关重写路径后各服务自动生成的 `servers` 地址会偏，故 `OpenApiDocumentationConfig` 显式设置 Server（`springdoc.gateway-base-url` + `springdoc.gateway-path`）。**注意**：网关路由 `StripPrefix=1` 只剥离 `/api` 一段，故 `gateway-path` 五个服务统一为 `/api`（曾误设为 `/api/users`、`/api/orders` 等，会拼出 `/api/users/users/...` 的空地址），对外地址 = `http://localhost:9090/api` + 服务自身路径。
+- **共享文档配置**：`common-web` 新增 `com.hbue.ordering.common.web.docs.OpenApiDocumentationConfig`，统一提供标题/描述/版本、`bearerAuth` 安全方案与全局安全要求（UI 右上角出现 Authorize 按钮），随各服务组件扫描生效。
+- **鉴权白名单**：5 个业务服务的 SecurityConfig 与 `GatewaySecurityConfig` 追加放行 `/v3/api-docs/**`、`/swagger-ui/**`、`/swagger-ui.html`，网关另放行 `/api/*/v3/api-docs`；`/internal/**`、`/mock/**` **不新增网关路由**，维持"内部接口不出网关"边界。
+- **文档标注**：18 个 Controller 全部加 `@Tag`（中文分组名），内部接口统一标为 `内部接口（服务间调用）`。
+- **开关**：各服务（含网关）`springdoc.api-docs.enabled` / `springdoc.swagger-ui.enabled` 取自环境变量 `SWAGGER_ENABLED`，默认 `true`；设为 `false` 即可关闭，无需改代码。
+- **验证**：全量 `mvn -B -pl gateway-service,order-service,user-service,auth-service,product-service,payment-service -am test` 通过（user-service 55、payment-service 39、order 34、auth 25、product 26、gateway 5、common-web 4、common-redis 9），`BUILD SUCCESS`。
+- **导入 Postman**：已生成可直接导入的文件（`docs/postman/`）——合并版 `order-system-cloud.gateway.openapi.json`（33 条对外接口，baseUrl=`http://localhost:9090`）+ 5 个单服务文件（含 `/internal/**`、`/mock/**`，供直连调试）。也可实时导出 `http://localhost:9090/api/{svc}/v3/api-docs`。用法详见 `docs/API_DOCS.md`。
+
+#### 缓存防护（穿透/击穿/雪崩）与 Sentinel 降级
+
+- **Redisson 下沉 common-redis**：`redisson-spring-boot-starter` + `redisson-spring-data-35`（排除 `-41`，Redisson 4.7.0）在 `common-redis` 中以 `optional=true` 声明，配合 `RedissonInfrastructureConfig` 的 `@ConditionalOnClass(RedissonClient.class)` 条件装配——未显式引入 Redisson 的服务（尤其 WebFlux 网关）不受影响。`common-redis` 新增可复用底座 `DistributedLockService`（抢不到锁返回 `null` 而非抛异常，由调用方降级）与 `RedisBloomFilterService`（未初始化或故障时 **fail-open 放行**）。
+- **三防落点（product-service 菜单热点读路径）**：**穿透** = 空值缓存（60s）+ Redisson `RBloomFilter`（窗口/菜品两个过滤器，误判率 1%，启动时由 `ProductBloomFilterInitializer` 全量灌入，写操作提交后补写、不删位）；**击穿** = `RLock` 互斥 + 双重检查（未抢到锁降级直查库、不写缓存）；**雪崩** = 基础 TTL 300s + 0~120s 随机抖动。`getWindowMenu` 执行顺序为 布隆 → 空值标记 → 缓存 → 锁 + 双重检查 → 回源写缓存。
+- **核价不缓存**：`ProductQuoteServiceImpl.quote` 价格与售罄必须实时，只用布隆过滤器拦掉一定不存在的菜品 ID；候选集合为空时提前返回，**绝不用空集合拼装 `in` 条件**（否则生成非法 SQL）。
+- **缓存失效改为事务提交后执行**：9 处写操作原在 `@Transactional` 方法体内、提交前删缓存，存在「T1 更新库 → 删缓存 → T2 未命中读旧值 → 回写 → T1 提交」导致旧值驻留 300~420 秒的竞态。现统一经 `afterCommit` 助手注册到 `TransactionSynchronizationManager`，事务回滚时因不触发回调而自然跳过。
+- **Sentinel 降级接入 product-service**：引入 sentinel 三件套依赖（`spring-cloud-starter-alibaba-sentinel`、`spring-cloud-alibaba-sentinel-datasource`、`sentinel-datasource-nacos`）；`application.yml` 新增 Sentinel 配置（Dashboard `127.0.0.1:9099`，本服务通信端口 `9102` 以避开 order-service 的 `9100`），降级规则从 Nacos `product-service-degrade-rules`（`SENTINEL_GROUP`）动态拉取。
+- **规则用 URL 模式、零业务侵入**：资源名为服务自身映射路径（不含 `/api`，因网关 `StripPrefix=1` 已剥离），针对 `/products/windows/{windowId}/menu` 与 `/products/windows` 两条热点读接口配置慢调用比例降级（慢调用阈值 500ms、统计窗口 10s、最小请求数 20、慢调用占比 ≥50%、熔断时长 10s）；符合 `JAVA_CODING_STANDARDS` 的「规则放服务边界」原则，未在业务类加 `@SentinelResource`。
+- **统一降级响应**：新增 `SentinelBlockExceptionHandler`，把 `BlockException` 由 Sentinel 默认的 429 纯文本转换为项目统一响应体 `ApiResponse` + HTTP 503（`COMMON_503`）。
+- **配置清单落库**：新增 `docs/nacos/product-service-degrade-rules`，`backup/nacos-init.sh` 增加发布与回读步骤（已发布到本机 Nacos 并回读一致）。
+- **验证**：`mvn -B -pl product-service test` 通过 32 项测试（新增事务提交后失效的回调回归用例）；临时实例启动后 `curl http://127.0.0.1:9102/getRules?type=degrade` 返回两条规则，证明从 Nacos 拉取并生效。
+- **运行期端到端验证**：以 `CUSTOMER` 账号预热 `product:windows:active` / `product:menu:window:1` 后，用具备 `WINDOW:1`+`RESTAURANT:1` 范围的档口账号 `PUT /products/admin/windows/1`，响应 200 返回后立即 `EXISTS` 两键为 `0`（证明失效已推迟到事务提交后执行），再次读取后两键回填为 `2`；降级侧临时下发易触发规则后连续请求，第 3 次起返回 `COMMON_503`（HTTP 503），还原规则后恢复正常。
+- **已知约束**：Redis 故障时布隆过滤器 fail-open 放行，最坏退化为一次数据库查询，不会误拦真实数据。
+- **待确认设计点**：`updateWindow` 同时校验窗口范围与目标餐厅范围，因此仅持有 `WINDOW` 范围（未持有 `RESTAURANT` 范围）的档口负责人无法更新本档口；若希望档口负责人可维护本档口基础信息（不改挂餐厅），需放宽为「餐厅范围仅在 `restaurantId` 变更时校验」。
+
 ## 当前下一步
 
-1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"；未覆盖的是账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"（409）。登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
-2. 缓存防护（穿透/击穿/雪崩 + 布隆过滤器）按下方规划实施，优先覆盖商品菜单等热点读路径。
-3. 支付模块可选增强：渠道关闭支付单的定时对账、auto-confirm 开启后的自动化演练、FAILED/CLOSED 分支的界面化演示。
-4. ~~引导账号判重收紧与验收临时数据清理~~ **已完成（2026-10-13）**：判重改为用户名/手机号分开精确查询、手机号被占显式报错；临时数据已清理，`general_manager` 引导创建成功并验证可登录。
+1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"。~~账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"~~ **已完成（2026-10-14）**。登录失败计数与账号锁定、Nginx 接入仍按后续阶段规划。
+2. ~~余额支付（余额渠道接入 payment-service）~~ **已完成（2026-10-14）**，详见"2026-10-14 本次完成"；充值/退款与余额渠道定时对账留后。
+3. ~~缓存防护（穿透/击穿/雪崩 + 布隆过滤器）~~ **已完成（2026-10-14）**，覆盖商品菜单热点读路径并接入 Sentinel 降级，详见"2026-10-14 本次完成"；后续可把同一套防护推广到 user-service 等其它热点读路径。
+4. 支付模块可选增强：渠道关闭支付单的定时对账、auto-confirm 开启后的自动化演练、FAILED/CLOSED 分支的界面化演示。
+5. ~~引导账号判重收紧与验收临时数据清理~~ **已完成（2026-10-13）**：判重改为用户名/手机号分开精确查询、手机号被占显式报错；临时数据已清理，`general_manager` 引导创建成功并验证可登录。
 
 ### 缓存防护规划
 
