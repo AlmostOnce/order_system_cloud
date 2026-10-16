@@ -10,17 +10,21 @@ import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
 import com.hbue.ordering.product.vo.MenuProductVO;
 import com.hbue.ordering.product.vo.ProductCategoryMenuVO;
+import com.hbue.ordering.product.vo.RestaurantSummaryVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,8 +48,14 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     /** 在售状态值。 */
     private static final int ON_SALE_STATUS = 1;
 
+    /** 餐厅未配置展示排序或所属餐厅已停用时使用的兜底排序值，排在已配置餐厅之后。 */
+    private static final int UNRANKED_SORT_ORDER = Integer.MAX_VALUE;
+
     /** 窗口数据 Mapper。 */
     private final DiningWindowMapper diningWindowMapper;
+
+    /** 餐厅数据 Mapper。 */
+    private final RestaurantMapper restaurantMapper;
 
     /** 分类数据 Mapper。 */
     private final ProductCategoryMapper productCategoryMapper;
@@ -66,6 +76,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
      * 创建窗口菜单查询服务。
      *
      * @param diningWindowMapper 窗口数据 Mapper
+     * @param restaurantMapper 餐厅数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper 菜品数据 Mapper
      * @param menuCacheService 商品菜单缓存读写组件
@@ -74,6 +85,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
      */
     public ProductMenuServiceImpl(
             DiningWindowMapper diningWindowMapper,
+            RestaurantMapper restaurantMapper,
             ProductCategoryMapper productCategoryMapper,
             ProductMapper productMapper,
             ProductMenuCacheService menuCacheService,
@@ -81,6 +93,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             DistributedLockService distributedLockService
     ) {
         this.diningWindowMapper = diningWindowMapper;
+        this.restaurantMapper = restaurantMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
         this.menuCacheService = menuCacheService;
@@ -89,7 +102,37 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     }
 
     /**
-     * 查询所有启用窗口，并按 ID 稳定排序。
+     * 查询所有启用餐厅，按展示排序值升序排列。
+     *
+     * <p>排序值小者在前，相同则按餐厅 ID 升序，与数据库查询顺序保持一致。
+     * 餐厅数量有限且展示排序允许随时调整，此处直接回源数据库、不做缓存，
+     * 避免排序改动被缓存延后生效。</p>
+     *
+     * @return 启用餐厅摘要列表
+     */
+    @Override
+    public List<RestaurantSummaryVO> listActiveRestaurants() {
+        List<RestaurantDO> restaurants = restaurantMapper.selectList(
+                new QueryWrapper<RestaurantDO>()
+                        .eq("status", ACTIVE_STATUS)
+                        .orderByAsc("sort_order")
+                        .orderByAsc("restaurant_id")
+        );
+
+        List<RestaurantSummaryVO> summaries = new ArrayList<>();
+        for (RestaurantDO restaurant : restaurants) {
+            summaries.add(new RestaurantSummaryVO(
+                    restaurant.getRestaurantId(),
+                    restaurant.getRestaurantCode(),
+                    restaurant.getRestaurantName(),
+                    restaurant.getLocation()
+            ));
+        }
+        return summaries;
+    }
+
+    /**
+     * 查询所有启用窗口，先按所属餐厅的展示排序、再按窗口 ID 稳定排序。
      *
      * <p>优先读取缓存；未命中时回源数据库组装列表并写回缓存。
      * 窗口列表重建代价低，此路径不加分布式锁。</p>
@@ -109,10 +152,27 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                         .orderByAsc("window_id")
         );
 
+        // 先取启用餐厅的展示排序，让同一餐厅的档口在列表中相邻出现。
+        Map<Long, Integer> restaurantSortOrders = loadRestaurantSortOrders();
+
+        List<DiningWindowDO> orderedWindows = new ArrayList<>(windows);
+        orderedWindows.sort(new Comparator<DiningWindowDO>() {
+            @Override
+            public int compare(DiningWindowDO left, DiningWindowDO right) {
+                int leftOrder = sortOrderOf(restaurantSortOrders, left.getRestaurantId());
+                int rightOrder = sortOrderOf(restaurantSortOrders, right.getRestaurantId());
+                if (leftOrder != rightOrder) {
+                    return Integer.compare(leftOrder, rightOrder);
+                }
+                return Long.compare(left.getWindowId(), right.getWindowId());
+            }
+        });
+
         List<WindowSummaryVO> summaries = new ArrayList<>();
-        for (DiningWindowDO window : windows) {
+        for (DiningWindowDO window : orderedWindows) {
             summaries.add(new WindowSummaryVO(
                     window.getWindowId(),
+                    window.getRestaurantId(),
                     window.getWindowCode(),
                     window.getWindowName(),
                     window.getLocation()
@@ -298,6 +358,45 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 product.getPrice(),
                 product.getSortOrder()
         );
+    }
+
+    /**
+     * 读取启用餐厅的展示排序，构造「餐厅 ID → 排序值」映射。
+     *
+     * @return 餐厅 ID 到展示排序值的映射
+     */
+    private Map<Long, Integer> loadRestaurantSortOrders() {
+        List<RestaurantDO> restaurants = restaurantMapper.selectList(
+                new QueryWrapper<RestaurantDO>()
+                        .eq("status", ACTIVE_STATUS)
+        );
+
+        Map<Long, Integer> sortOrders = new HashMap<>();
+        for (RestaurantDO restaurant : restaurants) {
+            sortOrders.put(restaurant.getRestaurantId(), restaurant.getSortOrder());
+        }
+        return sortOrders;
+    }
+
+    /**
+     * 取餐厅的展示排序值。
+     *
+     * <p>档口未挂餐厅、所属餐厅已停用或餐厅未配置排序值时，一律取兜底值排到最后，
+     * 保证排序结果稳定且不会因空值抛出异常。</p>
+     *
+     * @param sortOrders 餐厅 ID 到展示排序值的映射
+     * @param restaurantId 餐厅 ID
+     * @return 展示排序值
+     */
+    private int sortOrderOf(Map<Long, Integer> sortOrders, Long restaurantId) {
+        if (restaurantId == null) {
+            return UNRANKED_SORT_ORDER;
+        }
+        Integer sortOrder = sortOrders.get(restaurantId);
+        if (sortOrder == null) {
+            return UNRANKED_SORT_ORDER;
+        }
+        return sortOrder;
     }
 
     /**

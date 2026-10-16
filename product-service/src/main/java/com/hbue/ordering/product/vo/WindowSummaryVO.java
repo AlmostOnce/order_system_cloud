@@ -20,6 +20,9 @@ public class WindowSummaryVO {
     /** 窗口 ID。 */
     private Long windowId;
 
+    /** 所属餐厅 ID，供顾客端按餐厅筛选档口。 */
+    private Long restaurantId;
+
     /** 窗口编码。 */
     private String windowCode;
 

@@ -1,12 +1,13 @@
 package com.hbue.ordering.product.service;
 
+import com.hbue.ordering.product.vo.RestaurantSummaryVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 
 import java.util.List;
 
 /**
- * 顾客可见的窗口和菜单查询服务契约。
+ * 顾客可见的餐厅、窗口和菜单查询服务契约。
  *
  * <p>定义菜单查询用例，不暴露数据库 DO，也不承担管理端目录写入；具体缓存、布隆过滤器、
  * 分布式锁和数据库回源策略由实现类负责。</p>
@@ -17,9 +18,16 @@ import java.util.List;
 public interface ProductMenuService {
 
     /**
+     * 查询所有启用餐厅的摘要，按展示排序值升序返回。
+     *
+     * @return 启用餐厅列表
+     */
+    List<RestaurantSummaryVO> listActiveRestaurants();
+
+    /**
      * 查询所有启用窗口的摘要。
      *
-     * @return 按窗口 ID 排序的启用窗口
+     * @return 按所属餐厅展示排序、再按窗口 ID 排序的启用窗口
      */
     List<WindowSummaryVO> listActiveWindows();
 

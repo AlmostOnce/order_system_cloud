@@ -11,8 +11,13 @@ package com.hbue.ordering.product.cache;
  */
 public final class ProductCacheKeys {
 
-    /** 启用窗口列表缓存键。 */
-    public static final String ACTIVE_WINDOWS = "product:windows:active";
+    /**
+     * 启用窗口列表缓存键。
+     *
+     * <p>v2：窗口摘要新增 restaurantId 字段，旧键缓存中缺少该字段会让顾客端
+     * 无法按餐厅筛选档口，故升版键名，让旧缓存自然过期而不必手工清理。</p>
+     */
+    public static final String ACTIVE_WINDOWS = "product:windows:active:v2";
 
     /** 窗口布隆过滤器名称。 */
     public static final String WINDOW_BLOOM_FILTER = "product:bloom:window";
