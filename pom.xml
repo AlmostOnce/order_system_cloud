@@ -24,6 +24,7 @@
         <module>auth-service</module>
         <module>product-service</module>
         <module>payment-service</module>
+        <module>file-service</module>
     </modules>
 
     <properties>

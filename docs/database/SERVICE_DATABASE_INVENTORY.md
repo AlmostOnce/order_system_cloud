@@ -3,7 +3,7 @@
 > 文档性质：**现状清单**。回答两个问题：①我们现在一共有哪些服务；②每个服务对应哪个库、哪些表、哪个账号。
 > 事实来源：根 `docker-compose.yml`、各服务 `application.yml`、`docs/database/migrations/**`、`backup/db-accounts-fix.sh`。
 > 分工：**规划中**（阶段 B/C 未落地的服务与库）见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8 节；本文只记"已经建好"的部分。
-> 最后核对：2026-10-13（以 `wsl -- docker ps` 与本机工作区文件为准）。
+> 最后核对：2026-10-16（以 `wsl -- docker ps` 与本机工作区文件为准）。
 
 ## 1. 服务总表
 
@@ -15,6 +15,7 @@
 | 4 | `order-service` | `order-service` | 9091 | `order_db` | ✅（黑名单） | `/api/orders/**` | ✅ |
 | 5 | `product-service` | `product-service` | 9093 | `product_db` | ✅（黑名单） | `/api/products/**` | ✅ |
 | 6 | `payment-service` | `payment-service` | 9101 | `payment_db` | ✅（黑名单） | `/api/payments/**` | ✅ |
+| 7 | `file-service` | `file-service` | 9102 | `file_db` | ✅（黑名单） | `/api/files/**` | ✅ |
 
 **公共库与契约库（不独立部署）**
 
@@ -22,8 +23,8 @@
 |---|---|---|
 | `common-core` | 通用错误码、异常、角色枚举、`DataScopeService` 契约 | 全部服务 |
 | `common-response` | `ApiResponse`（无 Servlet 依赖，供 WebFlux 用） | 全部服务 |
-| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment |
-| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment |
+| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file |
+| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file |
 | `user-api` | `UserBasicVO` + `UserServiceClient` + 降级工厂 | auth / order |
 | `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order |
 
@@ -37,10 +38,11 @@
 | `user_db` | `users`（含 `pay_password_hash`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) |
 | `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`） | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
+| `file_db` | `file_objects` | file-service | [file_db/V1__create_file_objects_table.sql](migrations/file_db/V1__create_file_objects_table.sql) |
 
 **演示/种子数据（仅开发环境）**：[seeds/product_catalog_dev.sql](seeds/product_catalog_dev.sql) —— 1 个档口、3 个分类（含 1 个停用）、5 个菜品（含未分类与下架示例）。
 
-> ✅ **本机执行状态（2026-10-13）**：上表脚本**已全部在本机 MySQL 执行完毕**，实有 **4 库 10 表**：`order_db`(orders, order_items)、`user_db`(users, user_data_scopes, balance_records)、`product_db`(dining_windows, product_categories, products, restaurants)、`payment_db`(payments)；`dining_windows.restaurant_id` 与 `users.pay_password_hash` 两列已存在，默认餐厅 `R0001 默认餐厅` 已插入。剩余待建项（阶段 B/C）见第 7 节。
+> ✅ **本机执行状态（2026-10-16）**：上表脚本**已全部在本机 MySQL 执行完毕**，实有 **5 库 11 表**：`order_db`(orders, order_items)、`user_db`(users, user_data_scopes, balance_records)、`product_db`(dining_windows, product_categories, products, restaurants)、`payment_db`(payments)、`file_db`(file_objects)；`dining_windows.restaurant_id` 与 `users.pay_password_hash` 两列已存在，默认餐厅 `R0001 默认餐厅` 已插入。剩余待建项（阶段 B/C）见第 7 节。
 
 **表设计说明**：商品库见 [PRODUCT_CATALOG.md](PRODUCT_CATALOG.md)；订单幂等键约定见 [ORDER_IDEMPOTENCY.md](ORDER_IDEMPOTENCY.md)；`user_data_scopes` 的设计见 [2026-10-13-role-authority-design.md](../superpowers/specs/2026-10-13-role-authority-design.md)。
 
@@ -54,8 +56,9 @@
 | `user_service` | `user_db` | **需手工**：仓库无 SQL，仅在 [backup/db-accounts-fix.sh](../../backup/db-accounts-fix.sh) 中 | `USER_DB_PASSWORD` |
 | `product_service` | `product_db` | **需手工**：同上 | `PRODUCT_DB_PASSWORD` |
 | `payment_service` | `payment_db` | **迁移脚本内置**：`payment_db/V1` 中 `CREATE USER` + `GRANT` | `PAYMENT_DB_PASSWORD` |
+| `file_service` | `file_db` | **迁移脚本内置**：`file_db/V1` 中 `CREATE USER` + `GRANT` | `FILE_DB_PASSWORD` |
 
-> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余三个账号必须重新创建（见第 4.2 节）。
+> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余四个账号必须重新创建（见第 4.2 节）。
 
 ## 4. 新建环境（新建数据库）清单
 
@@ -111,7 +114,7 @@ FLUSH PRIVILEGES;
 | Redis 7.4 | 9096 → 6379 | 卷 `order-system-cloud-redis-data` |
 | Nacos v3.0.3 API | 9097 → 8848 | gRPC `10097` / `10098` |
 | Nacos 控制台 | 9098 → 8080 | 账号 `nacos` / `.env` 中的 `NACOS_PASSWORD` |
-| Sentinel Dashboard | 9099 | `order-service` 通信端口 `9100`，`product-service` 通信端口 `9102` |
+| Sentinel Dashboard | 9099 | `order-service` 通信端口 `9100`，`product-service` 通信端口 `9110`（原 9102 已让位给 `file-service`） |
 
 核对命令：`wsl -- docker ps --format "table {{.Names}}\t{{.Ports}}"`
 
@@ -155,7 +158,6 @@ FLUSH PRIVILEGES;
 | — | `order_db.undo_log`（补表） | order-service | Seata 参与库都要有 `undo_log`，随 stock 一起补 |
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
-| `file_db` | `file_objects` | file-service | 若改用对象存储且不需检索，可不建库 |
 | `cart_db` | 购物车备份表 | cart-service | 主存储是 Redis，该库仅在 Redis 故障恢复时用；可延后 |
 | ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建 |
 | `notification_db`（可选） | 离线消息表 | notification-service | 离线消息需要落库才能补投 |

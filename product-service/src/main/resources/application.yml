@@ -32,8 +32,8 @@ spring:
         # Sentinel Dashboard 地址，与 order-service 共用同一控制台。
         dashboard: ${SENTINEL_DASHBOARD:127.0.0.1:9099}
 
-        # 本服务与 Dashboard 通信端口，避开 order-service 的 9100。
-        port: ${SENTINEL_TRANSPORT_PORT:9102}
+        # 本服务与 Dashboard 通信端口，避开 order-service 的 9100 与文件服务的 HTTP 端口 9102。
+        port: ${SENTINEL_TRANSPORT_PORT:9110}
       datasource:
         degrade:
           nacos:
