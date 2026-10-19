@@ -56,7 +56,7 @@
 | 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ⬜ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
 | 8 | `cart-service` | 9103 / 8088 | 仅 Redis（AOF + 数据卷） | B 核心业务已实现 | Redis Hash、Lua 并发修改与 TTL；仅登录顾客使用 |
 | 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B ⬜ | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
-| 10 | `file-service` | 9102 / 8087 | `file_db`（可选） | B ⬜ | 多部分上传、存储抽象、横切复用 |
+| 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
 | 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
 | 12 | `search-service` | 9106 / 8091 | ES 索引 | C ⬜ | **ES 全文检索**、索引同步（RocketMQ）、重建 |
 | 13 | `statistics-service` | 9108 / 8093 | 无（只读聚合） | C ⬜ | 读模型 / CQRS 雏形、Feign 扇出聚合、报表 |
@@ -259,6 +259,9 @@
 | `statistics-service` | 9108 | 8093 |
 | Seata Server | 9109 | 8094 |
 
+> 注：`file-service` 占用 9102 后，`product-service` 的 **Sentinel 通信端口**已由 9102 让位改为 `9110`
+> （见 `product-service/application.yml` 的 `SENTINEL_TRANSPORT_PORT`）。
+
 **两套端口的规矩不变**：9090 段属于另一台设备，当前设备的改动不要合并过去
 （见 `PROJECT_PROGRESS.md`"当前设备本地端口恢复"）。
 
@@ -361,3 +364,4 @@
 | 2026-10-13 | **新增第 6 节「中间件与分布式事务选型」**：MQ 选定 **RocketMQ + Spring Cloud Stream**（理由：国内主流 + 原生事务消息 + Binder 抽象，附直连 starter 降级路径）；分布式事务选定 **Seata AT** 且仅用于 `order × stock`；登记三场景两方案（6.4）、中间件端口（6.5）、落地清单（6.6）；同步替换正文中所有 MQ/Seata/索引同步的待定表述；原第 6~11 节顺延为 7~12，待决策 #1/#4/#6 标记为已收敛 |
 | 2026-10-13 | **评论存储定稿为「混合存储」**（新增 6.7）：评论内容入 **MongoDB**（阶段 B 引入，端口 27017），关系元数据留 **MySQL `comment_db`**；明确写入顺序为"先内容后元数据"+ 孤儿文档清理；9.2 新增两行风险（内容/元数据跨库不一致、菜品评分跨服务不一致）；第 3/4.1/6.1/6.5/6.6/8.2/11 节同步更新，待决策 #2 标记为已收敛 |
 | 2026-10-13 | **待决策全部收敛 + 用户裁定落档**：待决策 #3 购物车定为"纯 Redis 为主 + MySQL 备份表"、#5 餐厅统一命名"餐厅/`restaurants`"；6.4 追加**余额支付密码必须独立于登录密码**（`users.pay_password_hash`，不进 JWT，含失败计数与锁定）；新增第 12 节"已确认的口径"（含归属授予权归餐厅经理+总经理、SYSTEM_ADMIN 不再拥有数据范围分配权、业务端点改角色须与数据范围校验同时上线）；原"变更记录"顺延为第 13 节 |
+| 2026-10-16 | **`file-service` 落地（阶段 B 第 4 个）**：独立 `file_db`（`file_objects`），端口 9102；存储抽象接口 `FileStorage` + 本地实现，落盘路径按内容摘要生成（天然秒传去重），魔数校验真实类型；内容接口 `/files/{fileKey}/content` 匿名开放供图片直接引用、上传/元数据/删除需登录；网关新增 `file-service` 与 `file-service-docs` 路由；因占用 9102，`product-service` 的 Sentinel 通信端口让位改为 `9110`；第 3 节总表与 `SERVICE_DATABASE_INVENTORY.md` 同步更新 |

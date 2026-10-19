@@ -2,6 +2,7 @@ package com.hbue.ordering.product.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.service.ProductMenuService;
+import com.hbue.ordering.product.vo.RestaurantSummaryVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +25,7 @@ import java.util.List;
 @Validated
 @RestController
 @Tag(name = "商品菜单接口")
-@RequestMapping("/products/windows")
+@RequestMapping("/products")
 @PreAuthorize("hasRole('CUSTOMER')")
 public class ProductMenuController {
 
@@ -41,11 +42,21 @@ public class ProductMenuController {
     }
 
     /**
+     * 查询所有当前启用的餐厅。
+     *
+     * @return 启用餐厅摘要列表，已按展示排序值升序
+     */
+    @GetMapping("/restaurants")
+    public ApiResponse<List<RestaurantSummaryVO>> listActiveRestaurants() {
+        return ApiResponse.success(productMenuService.listActiveRestaurants());
+    }
+
+    /**
      * 查询所有当前启用的窗口。
      *
-     * @return 启用窗口摘要列表
+     * @return 启用窗口摘要列表，已按所属餐厅展示排序值排序
      */
-    @GetMapping
+    @GetMapping("/windows")
     public ApiResponse<List<WindowSummaryVO>> listActiveWindows() {
         return ApiResponse.success(productMenuService.listActiveWindows());
     }
@@ -56,7 +67,7 @@ public class ProductMenuController {
      * @param windowId 窗口 ID
      * @return 窗口菜单
      */
-    @GetMapping("/{windowId}/menu")
+    @GetMapping("/windows/{windowId}/menu")
     public ApiResponse<WindowMenuVO> getWindowMenu(
             @PathVariable("windowId") @Positive Long windowId
     ) {

@@ -1,0 +1,75 @@
+server:
+  # 文件服务本机端口。
+  port: 9102
+
+spring:
+  datasource:
+    # 文件服务只连接自己的数据库。
+    url: ${FILE_DB_URL:jdbc:mysql://127.0.0.1:9095/file_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${FILE_DB_USERNAME:file_service}
+    password: ${FILE_DB_PASSWORD:file_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      # JWT 注销状态与其他服务共用 Redis 黑名单。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+  application:
+    name: file-service
+
+  cloud:
+    nacos:
+      discovery:
+        # 本机运行时连接 Docker 暴露的 Nacos API 端口。
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+
+  servlet:
+    multipart:
+      # 单文件大小上限，超出由 Service 与容器双重拦截。
+      max-file-size: 5MB
+      # 单次请求大小上限，略大于单文件上限以容纳表单其他字段。
+      max-request-size: 6MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+file:
+  storage:
+    # 本地存储根目录，形如 file:/home/user/data/order-system/files，由 ResourceLoader 解析为 Path。
+    root: ${FILE_STORAGE_ROOT:file:/home/user/data/order-system/files}
+  # 拼接对外访问地址的公共前缀，指向网关。
+  public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:9090/api}
+
+# 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 文件服务接口文档
+  service-description: 文件上传、元数据与内容读取接口。
+  # 网关地址与路径前缀，用于修正经网关聚合后 "Try it out" 的目标地址。
+  # 网关路由 StripPrefix=1 只剥离 /api 一段，故前缀固定为 /api，与各服务自身路径拼接。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
