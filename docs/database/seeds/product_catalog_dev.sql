@@ -1,7 +1,9 @@
+-- 文件使用 UTF-8；显式设置连接编码，避免命令行默认 latin1 导致中文乱码。
+SET NAMES utf8mb4;
 USE product_db;
 
 -- 仅用于本机开发和接口验证；唯一编码使脚本可以重复执行。
-INSERT IGNORE INTO dining_windows (
+INSERT INTO dining_windows (
     window_code,
     window_name,
     location,
@@ -11,7 +13,11 @@ INSERT IGNORE INTO dining_windows (
     '一楼测试窗口',
     '一楼东侧',
     1
-);
+)
+ON DUPLICATE KEY UPDATE
+    window_name = VALUES(window_name),
+    location = VALUES(location),
+    status = VALUES(status);
 
 SET @demo_window_id = (
     SELECT window_id

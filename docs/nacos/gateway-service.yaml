@@ -42,6 +42,20 @@ spring:
               filters:
                 - RewritePath=/api/payments/v3/api-docs, /v3/api-docs
 
+            - id: cart-service-docs
+              uri: lb://cart-service
+              predicates:
+                - Path=/api/cart/v3/api-docs
+              filters:
+                - RewritePath=/api/cart/v3/api-docs, /v3/api-docs
+
+            - id: cart-service
+              uri: lb://cart-service
+              predicates:
+                - Path=/api/cart,/api/cart/**
+              filters:
+                - StripPrefix=1
+
             - id: order-service
               uri: lb://order-service
               predicates:

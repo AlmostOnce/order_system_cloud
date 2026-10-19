@@ -1,0 +1,72 @@
+server:
+  # 沿用项目为购物车服务预留的端口；不同设备可通过启动环境变量覆盖。
+  port: ${CART_SERVICE_PORT:9103}
+
+feign:
+  sentinel:
+    # 为商品核价和订单读取的 FallbackFactory 启用 Sentinel Feign 适配。
+    enabled: true
+
+spring:
+  application:
+    name: cart-service
+  cloud:
+    openfeign:
+      client:
+        config:
+          product-service:
+            # 单窗口批量核价采用有限超时，依赖故障时返回 503。
+            connectTimeout: 2000
+            readTimeout: 3000
+          cartOrderServiceClient:
+            # 配置键必须匹配 @FeignClient.contextId，而不是仅匹配服务名。
+            # 核实订单超时只影响清理，不创建或回滚订单；允许使用原始快照重试。
+            connectTimeout: 2000
+            readTimeout: 3000
+    nacos:
+      discovery:
+        # 与现有业务服务使用同一个注册中心，不在代码中固定服务实例地址。
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+  data:
+    redis:
+      # 共享 Redis 实例，通过 cart: 前缀隔离购物车业务数据。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+security:
+  jwt:
+    # 必须与认证服务的签发方、公钥和黑名单前缀保持一致。
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 购物车服务接口文档
+  service-description: 按窗口分组的购物车增删改查、当前核价与失效菜品标记。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
+
+cart:
+  # 所有窗口合计的菜品种类上限，最大不超过商品核价契约的 100 项。
+  max-items: ${CART_MAX_ITEMS:100}
+  # 单项菜品累加后的数量上限。
+  max-quantity: ${CART_MAX_QUANTITY:99}
+  # 最后一次修改后保留 30 天，普通读取不会刷新过期时间。
+  time-to-live: ${CART_TTL:30d}
+  key-prefix: ${CART_KEY_PREFIX:cart:user:}

@@ -12,11 +12,12 @@
 
 | 维度 | 现状 | 阶段 B 完成后 | 阶段 C 完成后 |
 |---|---|---|---|
-| 可部署服务 | 6 个 | **10 个** | **13 个**（上限） |
-| Maven 模块 | 12 个 | 约 17 个 | 约 21 个（服务 + 公共库 4 + 按需契约模块） |
+| 可部署服务 | 7 个（购物车核心业务已实现） | **10 个** | **13 个**（上限） |
+| Maven 模块 | 15 个 | 约 18 个 | 约 21 个（服务 + 公共库 4 + 按需契约模块） |
 | 数据库 Schema | 4 个 | + `stock_db`、`comment_db`、`file_db` | + ES 索引、（可选）`notification_db` |
 
 - **已有 6 个**：`gateway` / `auth` / `user` / `order` / `product` / `payment`
+- **阶段 B 已开始**：`cart-service` 已实现 Redis 增删改查、商品实时核价和订单成功后的快照清理接口；调用方显式串联流程见 [购物车计划](CART_MODULE_PLAN.md)。不做 MySQL 备份和游客合并。
 - **阶段 B（交易闭环与内容，4 个）**：`stock` / `cart` / `comment` / `file`
 - **阶段 C（技术扩展，3 个）**：`notification`（WebSocket）/ `search`（ES）/ `statistics`
 - **并入不拆**：餐厅层级 → `product-service`；订单超时取消 → `order-service`；余额流水 → `user-service`
@@ -53,7 +54,7 @@
 | 5 | `product-service` | 9093 / 8086 | `product_db` | A ✅ | 目录层级、软停用 |
 | 6 | `payment-service` | 9101 / 9101 | `payment_db` | A ✅ | 渠道隔离、HMAC 验签、回调幂等 |
 | 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ⬜ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
-| 8 | `cart-service` | 9103 / 8088 | Redis（+ 可选 `cart_db`） | B ⬜ | Redis Hash 购物车、登录/未登录合并、TTL |
+| 8 | `cart-service` | 9103 / 8088 | 仅 Redis（AOF + 数据卷） | B 核心业务已实现 | Redis Hash、Lua 并发修改与 TTL；仅登录顾客使用 |
 | 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B ⬜ | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
 | 10 | `file-service` | 9102 / 8087 | `file_db`（可选） | B ⬜ | 多部分上传、存储抽象、横切复用 |
 | 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
@@ -121,8 +122,9 @@
 | | `common-redis` | Redis 基础操作、缓存键常量 |
 | | `common-response` | `ApiResponse`（无 Servlet 依赖，供 Gateway WebFlux 使用） |
 | | `common-web` | 全局异常处理（仅 Servlet 服务） |
-| 契约库（2 → 按需） | `user-api` | `UserBasicVO` + `UserServiceClient` |
+| 契约库（3 → 按需） | `user-api` | `UserBasicVO` + `UserServiceClient` |
 | | `product-api` | 报价契约 + `ProductServiceClient` |
+| | `order-api` | 订单详情的购买事实只读投影 + `OrderServiceClient`，供购物车核实下单结果 |
 | | `xxx-api` | **当且仅当**该服务被别的服务经 Feign 调用时才建（如 `stock-api`、`comment-api`） |
 
 **规则**：契约模块按"被 Feign 调用"才建。只被前端调用、不被服务调用的服务（如 `cart`、`file`），
@@ -265,7 +267,7 @@
 | 服务 | 存储 | 说明 |
 |---|---|---|
 | `stock-service` | `stock_db`（`stock`、`stock_flow`）+ Redis | 库存量在 Redis 做原子扣减，流水落 MySQL 供对账 |
-| `cart-service` | Redis 为主 | 购物车是临时数据；如需跨设备持久化再落 `cart_db` |
+| `cart-service` | 仅 Redis | 共享 Redis 即可跨设备访问；开启 AOF 与数据卷，不建 cart_db，不做游客合并 |
 | `comment-service` | **MongoDB**（评论内容）+ `comment_db`（关系元数据） | 混合存储：内容免 join，元数据供关联与统计（见 6.7） |
 | `file-service` | `file_db`（`file_objects`） | 元数据；若用对象存储且无需检索，可不建库 |
 | `search-service` | ES 索引 | 与 MySQL 的主从式关系：**MySQL 为准，索引可随时重建** |
@@ -280,8 +282,8 @@
 ```text
 阶段 A（已完成，6 个）  gateway · auth · user · order · product · payment
 阶段 B（交易闭环与内容，4 个）
-    1) stock        先补真实漏洞（当前可无限下单）+ Seata AT 主战场
-    2) cart         交易链路前置环节
+    1) cart         核心业务与订单安全清理接口已实现；调用方待串联，不做 MySQL 备份与游客合并
+    2) stock        补库存约束 + Seata AT 主战场
     3) comment      缓存练习载体
     4) file         前端上传依赖
 阶段 C（技术扩展，3 个）
@@ -329,7 +331,7 @@
 |---|---|---|
 | 1 | 库存一致性方案 | ✅ **已定**：`order × stock` 用 **Seata AT**（见 6.3 / 6.4①）；本地消息表作为对比课题 |
 | 2 | 评论存储 | ✅ **已定**：**混合存储** —— 内容入 MongoDB，关系元数据留 MySQL（见 6.7） |
-| 3 | 购物车存储 | ✅ **已定**：**纯 Redis 为主 + MySQL 备份表**（Redis 挂了可从 `cart_db` 恢复） |
+| 3 | 购物车存储 | ✅ **已定（2026-10-17 修订）**：仅 Redis，AOF + 数据卷；不建 MySQL 备份，仅登录顾客使用，不做游客合并 |
 | 4 | 余额与支付的关系 | ✅ **已定**：余额作为**支付渠道**接入 `payment-service`，扣款与流水记账归 `user-service`（见 6.4） |
 | 5 | 餐厅命名 | ✅ **已定**：统一用**餐厅**（表名 `restaurants`）；原单体的"食堂 / `canteen`"只作为历史对照，不再出现在新代码中 |
 | 6 | ES 索引同步方式 | ✅ **已定**：**RocketMQ 消息驱动**（见 6.1）；Canal / 定时全量不再作为首选 |
@@ -351,6 +353,9 @@
 
 | 日期 | 变更 |
 |---|---|
+| 2026-10-17 | 新增 order-api 只读购买事实契约，Maven 模块增至 15 个；cart-service 提供订单成功后的按提交快照清理接口，保留并发修改项；调用方显式串联，无跨服务事务与自动补偿。 |
+| 2026-10-17 | 用户确认简化购物车：Redis 为唯一业务存储，保留 AOF 和数据卷；取消 MySQL 备份与游客合并，仅登录顾客使用。覆盖此前双存储规划。 |
+| 2026-10-17 | 按用户安排优先构建 cart-service；新增 9103 服务骨架、JWT/Redis 与网关配置，MySQL 备份仍保留为后续步骤；详细计划见 CART_MODULE_PLAN.md。 |
 | 2026-10-13 | 初版（按"生产项目"判据：服务 7 ~ 8 个，购物车/ES/推送列为反模式） |
 | 2026-10-13 | **修订**：判据改为"技术学习价值第一优先"；服务数 6 → 13（分 A/B/C 三阶段）；`cart`/`search`/`notification` 由"不建"改为"纳入规划"；新增第 4 节三个待定服务分析（`comment` 建、`stock` 建但须配一致性方案、`restaurant` 不建并入 product）；新增风险表 |
 | 2026-10-13 | **新增第 6 节「中间件与分布式事务选型」**：MQ 选定 **RocketMQ + Spring Cloud Stream**（理由：国内主流 + 原生事务消息 + Binder 抽象，附直连 starter 降级路径）；分布式事务选定 **Seata AT** 且仅用于 `order × stock`；登记三场景两方案（6.4）、中间件端口（6.5）、落地清单（6.6）；同步替换正文中所有 MQ/Seata/索引同步的待定表述；原第 6~11 节顺延为 7~12，待决策 #1/#4/#6 标记为已收敛 |

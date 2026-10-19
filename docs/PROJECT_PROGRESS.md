@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-14
+更新时间：2026-10-17
 
 ### 已完成
 
@@ -339,7 +339,46 @@
 - 登录在调用 `user-service` 前检查锁定状态；错误凭据计数，达到阈值返回 `COMMON_429`；凭据校验成功后清除失败计数与锁定 Key。Redis 无法确认或更新保护状态时 fail-closed，返回 `COMMON_503`。
 - 新增认证服务链路和 Redis 保护服务测试，覆盖阈值、锁定拦截、成功清理、摘要 Key 与 Redis 故障场景；全项目 `mvn test` 通过，13 个 Reactor 项目均为 `SUCCESS`。运行期 Postman 验收仍待进行。
 
+### 2026-10-17 购物车服务骨架
+
+- 按用户安排先进入购物车模块，详细设计与后续步骤写入 `docs/CART_MODULE_PLAN.md`。
+- 新增 `cart-service` 并注册到父工程；包名 `com.hbue.ordering.cart`，端口默认 9103，可用 `CART_SERVICE_PORT` 覆盖。
+- 接入 Nacos 服务发现、Redis、无状态 JWT 资源服务器、RSA 公钥、roles 角色转换与共享黑名单校验；购物车端点只允许 CUSTOMER，安全过滤链统一返回 401/403 JSON。
+- 新增 `GET /cart/ping` 和 Swagger 文档；已更新仓库 Nacos 路由模板及 Gateway Swagger 分组。本机 Nacos 在线配置与仓库模板存在历史差异，已仅增量合并两条购物车路由，回读确认一致并保留原在线路由。
+- 第一阶段无 MySQL 数据源，无 cart-api；商品远程调用、购物车业务 Service/Impl、Redis Hash 增删改查与 MySQL 备份仍待后续实现。
+- 验证：新增 9 项安全测试通过，全项目 `mvn -B test` 的 14 个 Reactor 项目全部 SUCCESS；`mvn -B -pl cart-service -am -DskipTests install` 成功，`git diff --check` 通过。
+- 已临时启动 cart-service，日志确认 Nacos 注册成功；真实 Redis 健康检查 `GET :9103/actuator/health` 返回 200/UP，未登录 `GET :9103/cart/ping` 返回统一 401；经运行中的 Gateway 请求 `/api/cart/v3/api-docs` 返回 200，内容包含购物车 ping 路径和正确的网关 Server 前缀。
+- 临时运行实例已停止且 9103 端口已释放，后续继续由用户在 IDEA 启动；带真实顾客登录 Token 的手动 ping 验收可在 IDEA 启动后进行，顾客/非顾客授权规则已由过滤链测试覆盖。
+
+### 2026-10-17 购物车核心业务
+
+- 新增六个业务接口：查询、添加累加、设置数量、勾选、删除单项及清空窗口；身份仅取 JWT sub，数量与路径参数均有校验。接口示例和响应含义见 `docs/CART_API.md`。
+- 按 Controller → CartService → CartServiceImpl → CartRedisRepository 分层；请求 DTO、展示 VO 和 Redis CartItemDO 分包管理，不为无 MySQL 表的服务继承 IService。
+- 用户 Hash 使用 `cart:user:<userId>`，Field 为 `windowId:productId`；默认每用户最多 100 类菜品，每项最多 99 份，最后修改后保留 30 天，读取不续期。
+- Lua 将容量检查、数量累加/修改、状态更新和 TTL 续期放在同一个原子操作内；大主键以 JSON 字符串保存，避免超过 2^53 后发生 Lua 浮点精度丢失。每次修改使用新 UUID revision，供后续按快照清理使用。
+- 复用 product-api、OpenFeign、LoadBalancer 和 Sentinel Feign 降级工厂，透传当前 Authorization；添加时校验可售状态，GET 每窗口批量核价并以 BigDecimal 聚合勾选可售金额。失效项保留、价格为 null；商品故障返回 503，删除与本地修改不依赖商品服务。
+- 已用回归测试复现并补齐 common-web 的参数类型异常映射：路径 ID 不是数字时返回统一 400，而不是 500。
+- 新增业务、控制器、Token 透传及真实 Redis 集成测试，覆盖用户隔离、版本、TTL、大主键和并发数量/容量上限；真实 Redis 测试使用随机前缀并仅清理自身 Key。
+- 最终验证：开启 CART_REDIS_IT 后执行全项目 `mvn -B test`，14 个 Reactor 项目全部 SUCCESS，购物车模块 36 项测试全部通过（含 9 项真实 Redis 集成测试，无跳过）；受影响依赖的 Maven install 通过。
+- 使用临时端口 19103 启动完整应用并禁用该临时实例的 Nacos 注册，确认 Feign/LoadBalancer、Sentinel、配置与业务 Bean 均正常装配；真实 Redis 健康检查返回 200/UP，未登录 GET /cart 返回统一 401，OpenAPI 返回 200 并包含六个业务操作与 ping。临时实例验证后已停止，未覆盖正在运行的 9103 实例；真实顾客经 Gateway 到商品服务的联调需在重启 IDEA 实例后进行。
+- 本次未操作用户在 IDEA 启动的 9103 实例；更新代码后需重启该实例。下单后的安全清理、MySQL 备份及游客合并仍未实现。
+
+### 2026-10-17 购物车下单后安全清理
+
+- 已确认仅 Redis 存储、仅登录顾客使用；不引入购物车 MySQL 库、游客合并、MQ 或新的库存逻辑。
+- 新增第七个业务接口 `POST /cart/orders/{orderId}/cleanup`，经 Gateway 为 `/api/cart/orders/{orderId}/cleanup`；按 Controller → CartCleanupService → CartCleanupServiceImpl → Repository 分层，补齐中文注释与参数校验。
+- 保持原有 `POST /orders` 和 Idempotency-Key。调用方在下单前保留选中商品的 ID、数量和 revision，订单成功后显式提交清理；后端接口已实现，但尚无前端自动串联或后台补偿。
+- 按实际远程调用需要新增 order-api，只读消费订单详情的购买事实投影；通过 Nacos/OpenFeign 透传当前顾客 Token，订单服务原有接口继续校验归属，购物车再校验订单 ID、用户、窗口和完整商品数量集合。
+- 新增 cart-cleanup.lua，原子比较原始版本、数量及勾选状态；并发修改、删除重建、其它用户/窗口和不存在项均不误删。先校验全部候选再删除，坏数据不部分删除；清理不刷新剩余购物车 TTL。
+- 清理与下单为两个独立请求，不建立跨服务事务。订单失败不调用清理；清理失败不回滚订单，使用原订单 ID 和原快照重试，禁止刷新版本后再次清理或更换幂等键重复下单。
+- 验证：全项目 `mvn -B test`（启用 CART_REDIS_IT）15 个 Reactor 项目全部 SUCCESS；购物车 59 项测试通过、无跳过，其中 16 项真实 Redis 用例含清理与加购并发。订单生产方真实详情 JSON 与 order-api 的兼容测试通过。
+- 独立代码审查发现订单 Feign 超时配置未匹配 contextId；已由真实 Feign 装配测试复现默认 10 秒连接超时，修正为 cartOrderServiceClient 配置键后，连接 2 秒/读取 3 秒及 Token 透传验证通过。
+- 受影响模块 `mvn -B -pl cart-service -am -DskipTests install` 成功；未重启或停止 IDEA 实例，未写入真实订单或清理业务购物车，仅使用随机前缀测试 Key。真实顾客经运行中网关的全链路联调未在本轮执行。
+- 使用前在 IDEA 重新加载 Maven，重启 cart-service；原有 `/api/cart/**` 路由无需新增。具体顺序、请求体、重试及计数含义见 `docs/CART_API.md`。
+
 ## 当前下一步
+
+0. **购物车后端主线已实现**：Redis 增删改查、商品核价及订单成功后的快照清理接口已完成，前端接入时需显式串联订单与清理。MySQL 备份和游客合并已取消。后续开发按架构规划进入库存服务设计，不重复搭建购物车骨架。
 
 1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"。~~账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"~~ **已完成（2026-10-14）**。~~登录失败计数与账号临时锁定~~ **已实现（2026-10-14），待运行期 Postman 验收**。Nginx 接入仍按后续阶段规划。
 2. ~~余额支付（余额渠道接入 payment-service）~~ **已完成（2026-10-14）**，详见"2026-10-14 本次完成"；充值/退款与余额渠道定时对账留后。
@@ -371,6 +410,22 @@
 2. **后端 Redisson 分布式锁：** 多个并发刷新请求仍可能来自不同浏览器标签页、客户端重试或绕过前端的请求，并被负载均衡到不同 `auth-service` 实例。后端按同一枚 Refresh Token 的安全摘要生成锁 Key；获取锁后重新校验旧 Token，再完成旧 Token 失效和新 Token 签发，避免同一枚旧 Token 被多个实例重复轮换。
 - 锁按 Refresh Token 区分，不使用全局锁：不同用户持有不同 Token 时使用不同锁、可以并行刷新；Redisson 锁用于解决同一旧 Token 的并发竞态，不是限制多个用户同时刷新。前端互斥只能减少正常客户端产生的重复请求，不能替代后端锁。
 - 锁 Key 不直接包含原始 Refresh Token；同一用户按顺序使用新 Token 刷新属于正常轮换，不应被并发锁当作冲突长期阻止。
+
+## 2026-10-17：商品演示数据编码修复
+
+- 已确认本机 MySQL 命令行连接默认使用 latin1，旧演示数据的中文已被错误转码存储；表本身仍是 utf8mb4。
+- 修复前已备份 product_db 到本机 `/home/user/.local/state/order-system/db-backups/product_db-before-encoding-repair-20261017.sql`，备份不进入仓库。
+- 演示脚本增加 `SET NAMES utf8mb4`，窗口改为按唯一编码更新，支持重复导入时恢复名称和位置。
+- 新增 `docs/database/seeds/product_catalog_encoding_repair.sql`，按演示商品编码定位原分类并恢复中文，保留分类 ID。
+- 已使用 utf8mb4 连接，在同一事务中执行分类修复和演示数据重导；未删除表或清空数据库。
+- 导入后逐条核对：1 个窗口、3 个分类、5 个商品，中文名称与描述正常，原有主键和分类关联不变。
+
+## 2026-10-17：购物车范围最终确认
+
+- 用户确认 Redis 为购物车唯一业务存储，不建设 cart_db/MySQL 备份，不实现游客购物车和登录合并；覆盖此前双存储规划，历史日志保留作为过程记录。
+- 现有接口继续要求有效 JWT 与 CUSTOMER 角色；未来前端以路由守卫处理未登录跳转，后端鉴权仍独立执行。
+- 已核对 docker-compose.yml：Redis 配置 `--appendonly yes`，命名卷挂载 `/data`；不承诺磁盘损坏、误删等极端故障下零丢失。
+- 本次仅同步已确认方案与配置核对，不新增端点、不重启服务；下一步仍为下单成功后的按提交快照安全清理。
 
 ## 后续架构规划
 

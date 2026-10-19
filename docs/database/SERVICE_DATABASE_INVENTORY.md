@@ -15,6 +15,7 @@
 | 4 | `order-service` | `order-service` | 9091 | `order_db` | ✅（黑名单） | `/api/orders/**` | ✅ |
 | 5 | `product-service` | `product-service` | 9093 | `product_db` | ✅（黑名单） | `/api/products/**` | ✅ |
 | 6 | `payment-service` | `payment-service` | 9101 | `payment_db` | ✅（黑名单） | `/api/payments/**` | ✅ |
+| 7 | `cart-service` | `cart-service` | 9103 | 不建 MySQL 库，仅使用 Redis | ✅（黑名单、购物车主存储） | `/api/cart/**` | 核心业务及商品核价已实现；仅登录顾客使用，不做游客合并 |
 
 **公共库与契约库（不独立部署）**
 
@@ -25,7 +26,8 @@
 | `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment |
 | `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment |
 | `user-api` | `UserBasicVO` + `UserServiceClient` + 降级工厂 | auth / order |
-| `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order |
+| `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order / cart（批量核价） |
+| `order-api` | 当前用户订单的只读购买事实契约与降级工厂 | cart（清理前核实）；order 仅在测试范围校验 JSON 契约 |
 
 > 端口为**当前设备工作区**实际值（`9090` 段）。另一台设备使用的旧端口段见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8.1 节；两套端口不要互相合并。
 
@@ -156,7 +158,7 @@ FLUSH PRIVILEGES;
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
 | `file_db` | `file_objects` | file-service | 若改用对象存储且不需检索，可不建库 |
-| `cart_db` | 购物车备份表 | cart-service | 主存储是 Redis，该库仅在 Redis 故障恢复时用；可延后 |
+| `cart_db`（取消） | 不建设购物车备份表 | cart-service | 2026-10-17 用户确认仅使用 Redis，AOF + 数据卷，不做 MySQL 双存储 |
 | ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建 |
 | `notification_db`（可选） | 离线消息表 | notification-service | 离线消息需要落库才能补投 |
 | 无库 | — | statistics-service | 只读聚合，经 Feign 从 order/product 拉取 |
