@@ -69,5 +69,7 @@ springdoc:
         url: /api/payments/v3/api-docs
       - name: file-service
         url: /api/files/v3/api-docs
+      - name: cart-service
+        url: /api/cart/v3/api-docs
       - name: stock-service
         url: /api/stocks/v3/api-docs

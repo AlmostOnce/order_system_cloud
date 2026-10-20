@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-19
+更新时间：2026-10-20
 
 ### 已完成
 
@@ -339,6 +339,27 @@
 - 登录在调用 `user-service` 前检查锁定状态；错误凭据计数，达到阈值返回 `COMMON_429`；凭据校验成功后清除失败计数与锁定 Key。Redis 无法确认或更新保护状态时 fail-closed，返回 `COMMON_503`。
 - 新增认证服务链路和 Redis 保护服务测试，覆盖阈值、锁定拦截、成功清理、摘要 Key 与 Redis 故障场景；全项目 `mvn test` 通过，13 个 Reactor 项目均为 `SUCCESS`。运行期 Postman 验收仍待进行。
 
+### 2026-10-17 本次完成
+
+#### 购物车服务（cart-service）
+
+- **骨架与安全**：新增 `cart-service`（包名 `com.hbue.ordering.cart`，端口 9103，可用 `CART_SERVICE_PORT` 覆盖）并注册到父工程；接入 Nacos 服务发现、Redis、无状态 JWT 资源服务器、RSA 公钥、roles 角色转换与共享黑名单校验；购物车端点只允许 `CUSTOMER`，安全过滤链统一返回 401/403 JSON。新增 `GET /cart/ping` 与 Swagger 文档，更新仓库 Nacos 路由模板与网关 Swagger 分组。
+- **核心业务**：新增七个业务接口——查询、添加累加、设置数量、勾选、删除单项、清空窗口，以及订单成功后的 `POST /cart/orders/{orderId}/cleanup`（经网关为 `/api/cart/orders/{orderId}/cleanup`）；身份仅取 JWT `sub`，数量与路径参数均有校验，接口示例见 `docs/CART_API.md`。分层为 Controller → `CartService` → `CartServiceImpl` → `CartRedisRepository`，请求 DTO、展示 VO 与 Redis `CartItemDO` 分包管理。
+- **存储口径（2026-10-17 用户确认）**：**Redis 为唯一业务存储**，`cart:user:<userId>` Hash，Field 为 `windowId:productId`；每用户最多 100 类菜品、每项最多 99 份、最后修改后保留 30 天（读取不续期）；开启 AOF + 数据卷；**取消 MySQL 备份库（`cart_db`）与游客合并，仅登录顾客使用**，覆盖此前双存储规划。
+- **并发与一致性**：Lua 脚本把容量检查、数量累加/修改、状态更新与 TTL 续期放在同一原子操作内；大主键以 JSON 字符串保存，避免超过 2^53 后 Lua 浮点精度丢失。每次修改生成新 UUID `revision`，供按快照清理使用；`cart-cleanup.lua` 原子比较原始版本、数量与勾选状态，并发修改、删除重建、其它用户/窗口与不存在项均不误删，坏数据不部分删除。
+- **跨服务调用**：复用 `product-api` + OpenFeign + LoadBalancer + Sentinel 降级工厂，透传当前 `Authorization`；添加时校验可售状态，GET 每窗口批量核价并以 `BigDecimal` 聚合计勾选可售金额，失效项保留、价格为 `null`，商品故障返回 503，删除与本地修改不依赖商品服务。新增 `order-api` 只读购买事实契约（`OrderCartSnapshotVO` / `OrderPurchasedItemVO` / `OrderServiceClient` + 降级工厂），清理前按订单 ID、用户、窗口与完整商品数量集合核实。
+- **未建立跨服务事务**：清理与下单为两个独立请求；订单失败不调用清理，清理失败不回滚订单，使用原订单 ID 与原快照重试，禁止刷新版本后再次清理或更换幂等键重复下单。
+- **其它修复**：补齐 `common-web` 的参数类型异常映射（路径 ID 非数字时返回统一 400 而非 500）；修正订单 Feign 超时配置未匹配 `contextId` 的问题（改为 `cartOrderServiceClient` 配置键后连接 2 秒 / 读取 3 秒并按真实装配测试验证 Token 透传）。
+- **验证**：开启 `CART_REDIS_IT` 后全项目 `mvn -B test` 通过，购物车模块 59 项测试全部通过（其中 16 项真实 Redis 用例，无跳过）；订单生产方真实详情 JSON 与 `order-api` 的兼容测试通过；临时端口实例装配验证后已停止，未覆盖 IDEA 运行实例。
+- **使用前提示**：需在 IDEA 重新加载 Maven 并重启 `cart-service`；`/api/cart/**` 路由已就绪，前端需显式串联下单与清理。
+
+#### 商品演示数据编码修复（2026-10-17）
+
+- 已确认本机 MySQL 命令行连接默认使用 latin1，旧演示数据的中文被错误转码存储；表本身仍是 utf8mb4。
+- 修复前已备份 `product_db` 到本机 `/home/user/.local/state/order-system/db-backups/product_db-before-encoding-repair-20261017.sql`（备份不进仓库）。
+- 演示脚本增加 `SET NAMES utf8mb4`，窗口改为按唯一编码更新，支持重复导入时恢复名称与位置；新增 `docs/database/seeds/product_catalog_encoding_repair.sql`，按演示商品编码定位原分类并恢复中文，保留分类 ID。
+- 已使用 utf8mb4 连接，在同一事务中执行分类修复与演示数据重导，未删除表或清空数据库；导入后逐条核对：1 个窗口、3 个分类、5 个商品，中文名称与描述正常，原有主键与分类关联不变。
+
 ### 2026-10-19 本次完成
 
 #### 库存服务（stock-service）与 Seata AT 分布式事务
@@ -347,7 +368,7 @@
 - **新增 `stock-service`（端口 9104）与契约模块 `stock-api`**：库存从"无校验"变为真实扣减，消除"当前可无限下单"的缺陷。`stock-api` 提供 `StockDeductRequest` / `StockRestoreRequest` / `StockVO` 与 `StockServiceClient` + 降级工厂；`order-service` 与 `stock-service` 同时依赖，保证契约一致。
 - **独立库 `stock_db`**：`stock`（唯一事实来源，`uk_window_product` 唯一键、`version` 乐观锁）、`stock_flow`（流水，`uk_biz_flow(biz_type, biz_ref, stock_id)` 保证同一单据只记一次）、`undo_log`（AT 回滚日志）；同时补 `order_db.undo_log`。两个迁移脚本均幂等，已在本机 MySQL 执行，账号 `stock_service` 仅授权 `stock_db`。
 - **库存三重防线**：① Redis Lua 原子预扣（脚本原子判断 + 扣减，Redis 不可用时**降级直查/直改 DB**，Redis 只是加速快照、带 TTL 到期自动回源）；② DB 行锁 + `version` 乐观锁条件更新（`available_qty >= ? AND version = ?`），并发下不会扣成负数；③ `stock_flow` 唯一键幂等，重复扣减/重复回补只记一次账。任一环节失败均抛出明确业务错误码。
-- **Seata AT 落地**：Seata Server `apache/seata-server:2.5.0` 加入 `docker-compose.yml`，`file` 存储模式，端口 `9109:9109`（控制台 `9108:7091`），以 `seata-server` 之名注册到现有 Nacos（`SEATA_GROUP` 组、cluster `default`）；服务端事务分组 `order-system-tx-group`，客户端 `vgroup-mapping` 指向 `default`。注意：本机运行的是 **2.5.0**（镜像 tag `2.5.0`，包名已迁至 `org.apache.seata`），注解为 `org.apache.seata.spring.annotation.GlobalTransactional`，不是教程里常见的 `io.seata.*`。
+- **Seata AT 落地**：Seata Server `apache/seata-server:2.5.0` 加入 `docker-compose.yml`，`file` 存储模式，端口 `9109:9109`（控制台 `9108:7091`），以 `seata-server` 之名注册到现有 Nacos（`SEATA_GROUP` 组、cluster `default`）；服务端事务分组 `order-system-tx-group`，客户端 `vgroup-mapping` 指向 `default`。**注意（2026-10-20 修正）**：TC 注册到 Nacos 的地址是容器内网 IP，Windows 宿主机不可达，因此本机开发时客户端改为直连 `127.0.0.1:9109`，详见下方"2026-10-20 / Seata 客户端连接方式修正"。注意：本机运行的是 **2.5.0**（镜像 tag `2.5.0`，包名已迁至 `org.apache.seata`），注解为 `org.apache.seata.spring.annotation.GlobalTransactional`，不是教程里常见的 `io.seata.*`。
 - **order-service 接入**：`createOrder` 标 `@GlobalTransactional(name = "create-order-deduct-stock", rollbackFor = Exception.class)`；订单与明细落库后调用 `StockServiceClient.deduct`，库存不足或库存服务不可用时抛异常 → 全局回滚，订单、明细、库存、`undo_log` 一并回滚。
 - **内部接口错误语义**：`POST /internal/stocks/deduct`、`POST /internal/stocks/restore`、`GET /internal/stocks/{windowId}/{productId}` 校验 `X-Internal-Token`；**业务失败返回 HTTP 200 + 失败业务码**——若按 4xx 返回，调用方 `FeignException` 会走 Sentinel 降级工厂，把"库存不足"替换成笼统的"服务不可用"，用户看不到真实原因。
 - **定时对账兜底**：`StockReconcileTask` 默认启动 60 秒后首次执行、之后每 10 分钟一次（`stock.reconcile.*` 可调/可关）：Redis 快照与 `stock.available_qty` 不一致时以 **DB 为准回写快照**；`total_qty + sum(change_qty)` 与 `available_qty` 不等时**只告警不改数**（流水异常属于需要人看的信号）。结束时打印"检查 X 条 / 修正快照 Y 条 / 流水不一致 Z 条"。
@@ -356,8 +377,27 @@
 - **全量验证（2026-10-19）**：`mvn -B -o test` → **BUILD SUCCESS**，16 个 Reactor 模块全部 `SUCCESS`，41 个测试类共 **236 项测试全部通过**（common-redis 10、gateway 5、common-web 4、order 36、user 55、auth 34、product 32、payment 39、file 11、stock 10）。过程中发现 `product-service` 的 `ProductMenuServiceImplTest` 已与实现脱节（实现早前新增了 `RestaurantMapper` 入参，测试仍按 6 参构造），因增量编译复用陈旧 class 才一直"通过"；已补 `@Mock RestaurantMapper` 与构造参数，修正后该模块 32 项全通过。
 - **遗留（已知，未做）**：① **取消订单不回补库存**——`cancelOrder` 仍只改状态，`StockRestoreRequest` 与 `/internal/stocks/restore` 已备好但尚未接入；② `stock_db.stock` 目前是空表，需按档口菜品初始化库存记录（`stock.reconcile` 对无快照的行会跳过）；③ 下单扣库存的**端到端验证**（库存不足全局回滚、并发下单不超卖）需在 IDEA 重启 `order-service` 并启动 `stock-service` 后执行。
 
+### 2026-10-20 本次完成
+
+#### 购物车模块合并修复
+
+- 另一台设备推送的购物车模块（`cart-service` + `order-api`）与本机库存模块合并后，Git 未报冲突标记，但**整段取了库存一侧**，静默丢失了购物车侧的改动。以共同祖先 `ab3785d` 为基点比对两侧改动后逐项修复。
+- 根 `pom.xml` 丢失 `<module>order-api</module>` 与 `<module>cart-service</module>`，导致全量构建在 `order-service` 处报 `Could not find artifact com.hbue.ordering:order-api`；补回后 Reactor 恢复为 18 个模块。
+- `docs/nacos/gateway-service.yaml` 中购物车路由覆盖了 `file-service-docs` 与 `/api/files/**` 两条路由，导致文件服务从网关消失；补回后 cart / file / stock 三套路由共存，并已重新发布到本机 Nacos 回读校验。
+- 网关 `application.yml` 的 Swagger 聚合下拉框丢失 `cart-service`；三份文档（`ARCHITECTURE.md` / `PROJECT_PROGRESS.md` / `SERVICE_DATABASE_INVENTORY.md`）中购物车侧的登记内容被整段丢弃，已补回并订正服务数（9 个）、模块数（17 个）、购物车"仅 Redis"存储口径与 `cart_db` 取消登记。
+- 验证：`mvn -B -o clean test-compile` 18 个模块全 `SUCCESS`；`mvn -B -o test` **BUILD SUCCESS**。
+
+#### Seata 客户端连接方式修正（本机开发）
+
+- **现象**：`stock-service` 在 IDEA 中启动到 `globalTransactionScanner` 时报 `can not connect to [172.19.0.3:9109]`，进程退出码 1，日志尾部只剩若干 Nacos `NotifyCenter` 的 `InterruptedException`（属**关闭阶段的次要噪音**，非根因）。
+- **根因**：TC（Seata Server）跑在 WSL 的 Docker 内，注册到 Nacos 的地址是**容器内网 IP**（`172.19.0.3:9109`）；WSL2 默认 NAT 模式下 Windows 宿主机没有到容器网段的路由，该网段流量被本机代理软件的 TUN 接口接管（实测连接 `172.19.0.3:9109` 的本地地址为 `198.18.0.1`），表现为"TCP 看似可连、但 30 秒无响应"。
+- **试过但无效**：`docker-compose.yml` 为 seata 容器加 `SEATA_IP=127.0.0.1`——本镜像（jib 构建，`apache/seata-server:2.5.0`）并不会把它转成注册地址，重建后 Nacos 中仍是 `172.19.0.3`，已移除该无效配置并留注释说明。
+- **落地修复**：`order-service`（TM）与 `stock-service`（RM）的 Seata 客户端不再走注册中心发现，改为 `seata.registry.type=file` + `seata.service.grouplist.default=${SEATA_TC_GROUPLIST:127.0.0.1:9109}`，直连 Docker 映射到宿主机的 9109 端口。**容器化部署时需改回 `type: nacos`**（或在 compose 网络内使用容器可达地址），两个服务的 yml 已就地注明。
+- **验证**：`stock-service` 启动成功（`will connect to 127.0.0.1:9109`、Tomcat 9104、`Started StockServiceApplication`），`GET /internal/stocks/1/1` 带 `X-Internal-Token` 返回 200、不带返回 401，`/actuator/health` 为 `UP`；`order-service` 同样启动成功（Tomcat 9091）并注册到 Nacos。验证后已停止两个手工启动的实例。
+
 ## 当前下一步
 
+0. ~~购物车服务（cart-service）~~ **已完成（2026-10-17）**：Redis 增删改查、商品实时核价与订单成功后的按提交快照清理接口已实现，详见"2026-10-17 本次完成"；**取消** MySQL 备份与游客合并。前端接入时需显式串联下单与清理。
 1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"。~~账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"~~ **已完成（2026-10-14）**。~~登录失败计数与账号临时锁定~~ **已实现（2026-10-14），待运行期 Postman 验收**。Nginx 接入仍按后续阶段规划。
 2. ~~余额支付（余额渠道接入 payment-service）~~ **已完成（2026-10-14）**，详见"2026-10-14 本次完成"；充值/退款与余额渠道定时对账留后。
 3. ~~缓存防护（穿透/击穿/雪崩 + 布隆过滤器）~~ **已完成（2026-10-14）**，覆盖商品菜单热点读路径并接入 Sentinel 降级，详见"2026-10-14 本次完成"；后续可把同一套防护推广到 user-service 等其它热点读路径。

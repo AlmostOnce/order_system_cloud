@@ -17,6 +17,7 @@
 | 6 | `payment-service` | `payment-service` | 9101 | `payment_db` | ✅（黑名单） | `/api/payments/**` | ✅ |
 | 7 | `file-service` | `file-service` | 9102 | `file_db` | ✅（黑名单） | `/api/files/**` | ✅ |
 | 8 | `stock-service` | `stock-service` | 9104 | `stock_db` | ✅（库存快照 + 黑名单） | 仅 `-docs` 路由 | ✅ |
+| 9 | `cart-service` | `cart-service` | 9103 | 不建 MySQL 库，仅使用 Redis | ✅（购物车主存储 + 黑名单） | `/api/cart/**` | ✅ |
 
 > `stock-service` 当前对外**只有** `/internal/stocks/**` 三个内部接口（扣减、回补、查询），
 > 按项目约定 `/internal/**` 不进网关，故 Nacos 路由中只有 `stock-service-docs`
@@ -30,10 +31,11 @@
 |---|---|---|
 | `common-core` | 通用错误码、异常、角色枚举、`DataScopeService` 契约 | 全部服务 |
 | `common-response` | `ApiResponse`（无 Servlet 依赖，供 WebFlux 用） | 全部服务 |
-| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file / stock |
-| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file / stock |
+| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file / stock / cart |
+| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file / stock / cart |
 | `user-api` | `UserBasicVO` + `UserServiceClient` + 降级工厂 | auth / order |
-| `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order |
+| `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order / cart（批量核价） |
+| `order-api` | 当前用户订单的只读购买事实契约 + `OrderServiceClient` + 降级工厂 | cart（清理前核实）；order 仅在测试范围校验 JSON 契约 |
 | `stock-api` | `StockDeductRequest` / `StockRestoreRequest` / `StockVO` + `StockServiceClient` + 降级工厂 | order |
 
 > 端口为**当前设备工作区**实际值（`9090` 段）。另一台设备使用的旧端口段见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8.1 节；两套端口不要互相合并。
@@ -170,7 +172,7 @@ FLUSH PRIVILEGES;
 | ~~`order_db.undo_log`（补表）~~ | ~~`undo_log`~~ | order-service | ✅ **2026-10-19 已补**（`migrations/V4__add_undo_log.sql`），Seata 参与库都要有 `undo_log` |
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
-| `cart_db` | 购物车备份表 | cart-service | 主存储是 Redis，该库仅在 Redis 故障恢复时用；可延后 |
+| `cart_db`（取消） | 不建设购物车备份表 | cart-service | 2026-10-17 用户确认仅使用 Redis（AOF + 数据卷），不做 MySQL 双存储，也不做游客合并 |
 | ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建 |
 | `notification_db`（可选） | 离线消息表 | notification-service | 离线消息需要落库才能补投 |
 | 无库 | — | statistics-service | 只读聚合，经 Feign 从 order/product 拉取 |

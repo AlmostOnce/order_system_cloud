@@ -59,18 +59,19 @@ seata:
   # 事务分组名必须与 order-service（TM）保持一致，二者才能落到同一个 TC 集群。
   tx-service-group: ${SEATA_TX_SERVICE_GROUP:order-system-tx-group}
   service:
-    # 事务分组到 TC 集群的映射，集群名与 seata-server 注册到 Nacos 时使用的 cluster 一致。
+    # 事务分组到 TC 集群的映射，集群名与 seata-server 侧 cluster 配置一致。
     vgroup-mapping:
       order-system-tx-group: default
+    # 本机开发直连 TC：TC 跑在 WSL 的 Docker 里，只能用容器内网 IP 注册到 Nacos，
+    # 而 WSL2 NAT 下 Windows 宿主机没有到该网段的路由（流量还会被本机代理软件的 TUN
+    # 接管成假连接），因此不做注册中心发现，直接使用 Docker 映射到宿主机的 9109 端口。
+    # 容器化部署（服务与 seata-server 同处一个 Docker 网络）时，
+    # 应改回 seata.registry.type=nacos 并补回 nacos 段，或把本项改写成容器内可达地址。
+    grouplist:
+      default: ${SEATA_TC_GROUPLIST:127.0.0.1:9109}
   registry:
-    # 通过 Nacos 发现 seata-server，无需在各服务硬编码 TC 地址。
-    type: nacos
-    nacos:
-      application: seata-server
-      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
-      group: ${SEATA_REGISTRY_GROUP:SEATA_GROUP}
-      username: ${NACOS_USERNAME:nacos}
-      password: ${NACOS_PASSWORD:root}
+    # file 表示地址来自本地配置（上面的 grouplist），不查注册中心。
+    type: file
   config:
     # 客户端不引入配置中心，事务参数使用 starter 默认值。
     type: file

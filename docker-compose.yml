@@ -67,7 +67,12 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD}
       # 全局会话 file 存储目录与日志目录均落在挂载卷中，重启不丢。
       LOG_HOME: /seata-server/logs
-    # TC 注册到 Nacos 使用的地址为容器网络内的 nacos:8848，见 docker/seata/application.yml。
+    # 注意：本镜像对 TC 注册到 Nacos 的地址无法通过 SEATA_IP 覆盖（实测仍注册容器内网 IP，
+    # 如 172.19.0.3）。而本机开发时 TM/RM 跑在 Windows 宿主机上，WSL2 NAT 下宿主机没有到
+    # 容器网段的路由（该网段还会被本机代理软件的 TUN 接管，表现成 198.18.x.x 的假连接），
+    # 因此 order-service / stock-service 的 Seata 客户端不使用 Nacos 注册中心，
+    # 改为直连宿主机 127.0.0.1:9109，见两个服务 application.yml 的 seata.registry/service 配置。
+    # TC 注册到 Nacos 使用的配置中心地址为容器网络内的 nacos:8848，见 docker/seata/application.yml。
     volumes:
       - ./docker/seata/application.yml:/seata-server/resources/application.yml:ro
       - order-system-cloud-seata-data:/seata-server/sessionStore
@@ -76,8 +81,8 @@ services:
       nacos:
         condition: service_started
     ports:
-      # 容器内 TC 监听 9109，与宿主机 1:1 映射，便于直接 telnet 检查；
-      # 7091 为控制台端口。客户端经 Nacos 拿到的是容器地址 172.x:9109，已验证宿主机可达。
+      # 容器内 TC 监听 9109，与宿主机 1:1 映射，
+      # 供宿主机侧 Seata 客户端按 127.0.0.1:9109 直连；7091 为控制台端口。
       - "9109:9109"
       - "9108:7091"
 

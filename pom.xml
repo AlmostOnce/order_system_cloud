@@ -21,9 +21,11 @@
         <module>user-service</module>
         <module>user-api</module>
         <module>product-api</module>
+        <module>order-api</module>
         <module>auth-service</module>
         <module>product-service</module>
         <module>payment-service</module>
+        <module>cart-service</module>
         <module>file-service</module>
         <module>stock-api</module>
         <module>stock-service</module>

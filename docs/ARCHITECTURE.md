@@ -12,12 +12,13 @@
 
 | 维度 | 现状 | 阶段 B 完成后 | 阶段 C 完成后 |
 |---|---|---|---|
-| 可部署服务 | 6 个 | **10 个** | **13 个**（上限） |
-| Maven 模块 | 12 个 | 约 17 个 | 约 21 个（服务 + 公共库 4 + 按需契约模块） |
-| 数据库 Schema | 4 个 | + `stock_db`、`comment_db`、`file_db` | + ES 索引、（可选）`notification_db` |
+| 可部署服务 | 9 个 | **10 个** | **13 个**（上限） |
+| Maven 模块 | 17 个 | 约 19 个 | 约 21 个（服务 + 公共库 4 + 按需契约模块） |
+| 数据库 Schema | 6 个 | + `comment_db` | + ES 索引、（可选）`notification_db` |
 
-- **已有 6 个**：`gateway` / `auth` / `user` / `order` / `product` / `payment`
-- **阶段 B（交易闭环与内容，4 个）**：`stock` / `cart` / `comment` / `file`
+- **阶段 A 已有 6 个**：`gateway` / `auth` / `user` / `order` / `product` / `payment`
+- **阶段 B 已落地 3 个**：`cart`（Redis 增删改查、商品实时核价、订单成功后的快照清理）、`stock`（Seata AT + Lua 原子扣减）、`file`（上传与存储抽象）
+- **阶段 B 剩余 1 个**：`comment`（混合存储）
 - **阶段 C（技术扩展，3 个）**：`notification`（WebSocket）/ `search`（ES）/ `statistics`
 - **并入不拆**：餐厅层级 → `product-service`；订单超时取消 → `order-service`；余额流水 → `user-service`
 - **中间件选型**：**RocketMQ（+ Spring Cloud Stream）**、**Seata**、**Elasticsearch** —— 见第 6 节
@@ -53,7 +54,7 @@
 | 5 | `product-service` | 9093 / 8086 | `product_db` | A ✅ | 目录层级、软停用 |
 | 6 | `payment-service` | 9101 / 9101 | `payment_db` | A ✅ | 渠道隔离、HMAC 验签、回调幂等 |
 | 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ✅ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
-| 8 | `cart-service` | 9103 / 8088 | Redis（+ 可选 `cart_db`） | B ⬜ | Redis Hash 购物车、登录/未登录合并、TTL |
+| 8 | `cart-service` | 9103 / 8088 | 仅 Redis（AOF + 数据卷） | B ✅ | Redis Hash、Lua 并发修改与 TTL；仅登录顾客使用 |
 | 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B ⬜ | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
 | 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
 | 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
@@ -121,8 +122,9 @@
 | | `common-redis` | Redis 基础操作、缓存键常量 |
 | | `common-response` | `ApiResponse`（无 Servlet 依赖，供 Gateway WebFlux 使用） |
 | | `common-web` | 全局异常处理（仅 Servlet 服务） |
-| 契约库（2 → 按需） | `user-api` | `UserBasicVO` + `UserServiceClient` |
+| 契约库（3 → 按需） | `user-api` | `UserBasicVO` + `UserServiceClient` |
 | | `product-api` | 报价契约 + `ProductServiceClient` |
+| | `order-api` | 订单详情的购买事实只读投影 + `OrderServiceClient`，供购物车核实下单结果 |
 | | `xxx-api` | **当且仅当**该服务被别的服务经 Feign 调用时才建（如 `stock-api`、`comment-api`） |
 
 **规则**：契约模块按"被 Feign 调用"才建。只被前端调用、不被服务调用的服务（如 `cart`、`file`），
@@ -260,8 +262,14 @@
 > 注：`file-service` 占用 9102 后，`product-service` 的 **Sentinel 通信端口**已由 9102 让位改为 `9110`
 > （见 `product-service/application.yml` 的 `SENTINEL_TRANSPORT_PORT`）。
 >
-> `stock-service`（9104）与 `file-service`（9102）已按上表落地；Seata Server 已占用 9109
-> （容器内 `seata.server.service-port` 与宿主映射端口一致，避免注册到 Nacos 的地址不可达）。
+> `stock-service`（9104）与 `file-service`（9102）已按上表落地；Seata Server 已占用 9109。
+>
+> **注意（2026-10-20 修正）**：TC 注册到 Nacos 的地址是**容器内网 IP**（如 `172.19.0.3:9109`），
+> 该镜像无法用 `SEATA_IP` 覆盖。而本机开发时 TM/RM 跑在 Windows 宿主机上，WSL2 NAT 下宿主机
+> 没有到容器网段的路由（该网段还会被本机代理软件的 TUN 接管，连过去只是 `198.18.x.x` 的假连接），
+> 表现为 TCP 看似可连、30 秒无响应。因此 `order-service` / `stock-service` 的 Seata 客户端
+> **不走注册中心发现**，改为 `seata.registry.type: file` + `seata.service.grouplist.default`
+> 直连 `127.0.0.1:9109`。容器化部署（服务与 TC 同处一个 Docker 网络）时改回 `type: nacos`。
 
 **两套端口的规矩不变**：9090 段属于另一台设备，当前设备的改动不要合并过去
 （见 `PROJECT_PROGRESS.md`"当前设备本地端口恢复"）。
@@ -271,7 +279,7 @@
 | 服务 | 存储 | 说明 |
 |---|---|---|
 | `stock-service` | `stock_db`（`stock`、`stock_flow`）+ Redis | 库存量在 Redis 做原子扣减，流水落 MySQL 供对账 |
-| `cart-service` | Redis 为主 | 购物车是临时数据；如需跨设备持久化再落 `cart_db` |
+| `cart-service` | 仅 Redis | 共享 Redis 即可跨设备访问；开启 AOF 与数据卷，不建 cart_db，不做游客合并 |
 | `comment-service` | **MongoDB**（评论内容）+ `comment_db`（关系元数据） | 混合存储：内容免 join，元数据供关联与统计（见 6.7） |
 | `file-service` | `file_db`（`file_objects`） | 元数据；若用对象存储且无需检索，可不建库 |
 | `search-service` | ES 索引 | 与 MySQL 的主从式关系：**MySQL 为准，索引可随时重建** |
@@ -287,7 +295,7 @@
 阶段 A（已完成，6 个）  gateway · auth · user · order · product · payment
 阶段 B（交易闭环与内容，4 个）
     1) stock        先补真实漏洞（当前可无限下单）+ Seata AT 主战场   ✅ 已完成
-    2) cart         交易链路前置环节
+    2) cart         交易链路前置环节   ✅ 已完成（仅 Redis，不含 MySQL 备份与游客合并）
     3) comment      缓存练习载体
     4) file         前端上传依赖   ✅ 已完成
 阶段 C（技术扩展，3 个）
@@ -335,7 +343,7 @@
 |---|---|---|
 | 1 | 库存一致性方案 | ✅ **已定**：`order × stock` 用 **Seata AT**（见 6.3 / 6.4①）；本地消息表作为对比课题 |
 | 2 | 评论存储 | ✅ **已定**：**混合存储** —— 内容入 MongoDB，关系元数据留 MySQL（见 6.7） |
-| 3 | 购物车存储 | ✅ **已定**：**纯 Redis 为主 + MySQL 备份表**（Redis 挂了可从 `cart_db` 恢复） |
+| 3 | 购物车存储 | ✅ **已定（2026-10-17 修订）**：仅 Redis，AOF + 数据卷；不建 MySQL 备份，仅登录顾客使用，不做游客合并 |
 | 4 | 余额与支付的关系 | ✅ **已定**：余额作为**支付渠道**接入 `payment-service`，扣款与流水记账归 `user-service`（见 6.4） |
 | 5 | 餐厅命名 | ✅ **已定**：统一用**餐厅**（表名 `restaurants`）；原单体的"食堂 / `canteen`"只作为历史对照，不再出现在新代码中 |
 | 6 | ES 索引同步方式 | ✅ **已定**：**RocketMQ 消息驱动**（见 6.1）；Canal / 定时全量不再作为首选 |
@@ -363,4 +371,7 @@
 | 2026-10-13 | **评论存储定稿为「混合存储」**（新增 6.7）：评论内容入 **MongoDB**（阶段 B 引入，端口 27017），关系元数据留 **MySQL `comment_db`**；明确写入顺序为"先内容后元数据"+ 孤儿文档清理；9.2 新增两行风险（内容/元数据跨库不一致、菜品评分跨服务不一致）；第 3/4.1/6.1/6.5/6.6/8.2/11 节同步更新，待决策 #2 标记为已收敛 |
 | 2026-10-13 | **待决策全部收敛 + 用户裁定落档**：待决策 #3 购物车定为"纯 Redis 为主 + MySQL 备份表"、#5 餐厅统一命名"餐厅/`restaurants`"；6.4 追加**余额支付密码必须独立于登录密码**（`users.pay_password_hash`，不进 JWT，含失败计数与锁定）；新增第 12 节"已确认的口径"（含归属授予权归餐厅经理+总经理、SYSTEM_ADMIN 不再拥有数据范围分配权、业务端点改角色须与数据范围校验同时上线）；原"变更记录"顺延为第 13 节 |
 | 2026-10-16 | **`file-service` 落地（阶段 B 第 4 个）**：独立 `file_db`（`file_objects`），端口 9102；存储抽象接口 `FileStorage` + 本地实现，落盘路径按内容摘要生成（天然秒传去重），魔数校验真实类型；内容接口 `/files/{fileKey}/content` 匿名开放供图片直接引用、上传/元数据/删除需登录；网关新增 `file-service` 与 `file-service-docs` 路由；因占用 9102，`product-service` 的 Sentinel 通信端口让位改为 `9110`；第 3 节总表与 `SERVICE_DATABASE_INVENTORY.md` 同步更新 |
+| 2026-10-17 | 按用户安排优先构建 `cart-service`；新增 9103 服务骨架、JWT/Redis 与网关路由配置，MySQL 备份仍保留为后续步骤；详细计划见 [CART_MODULE_PLAN.md](CART_MODULE_PLAN.md) |
+| 2026-10-17 | 用户确认简化购物车：**Redis 为唯一业务存储**，保留 AOF 和数据卷；取消 MySQL 备份与游客合并，仅登录顾客使用。覆盖此前双存储规划（第 11 节待决策 #3 同步修订） |
+| 2026-10-17 | 新增 `order-api` 只读购买事实契约（`OrderCartSnapshotVO` / `OrderPurchasedItemVO` / `OrderServiceClient`），供购物车核实下单结果；`cart-service` 提供订单成功后的按提交快照清理接口，保留并发修改项；调用方显式串联，无跨服务事务与自动补偿 |
 | 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |
