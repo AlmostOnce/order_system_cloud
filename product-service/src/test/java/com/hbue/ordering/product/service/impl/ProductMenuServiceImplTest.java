@@ -9,6 +9,7 @@ import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
@@ -42,6 +43,9 @@ class ProductMenuServiceImplTest {
 
     @Mock
     private DiningWindowMapper diningWindowMapper;
+
+    @Mock
+    private RestaurantMapper restaurantMapper;
 
     @Mock
     private ProductCategoryMapper productCategoryMapper;
@@ -211,6 +215,7 @@ class ProductMenuServiceImplTest {
     private ProductMenuServiceImpl service() {
         return new ProductMenuServiceImpl(
                 diningWindowMapper,
+                restaurantMapper,
                 productCategoryMapper,
                 productMapper,
                 menuCacheService,

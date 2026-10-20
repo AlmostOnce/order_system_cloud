@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-14
+更新时间：2026-10-19
 
 ### 已完成
 
@@ -339,6 +339,23 @@
 - 登录在调用 `user-service` 前检查锁定状态；错误凭据计数，达到阈值返回 `COMMON_429`；凭据校验成功后清除失败计数与锁定 Key。Redis 无法确认或更新保护状态时 fail-closed，返回 `COMMON_503`。
 - 新增认证服务链路和 Redis 保护服务测试，覆盖阈值、锁定拦截、成功清理、摘要 Key 与 Redis 故障场景；全项目 `mvn test` 通过，13 个 Reactor 项目均为 `SUCCESS`。运行期 Postman 验收仍待进行。
 
+### 2026-10-19 本次完成
+
+#### 库存服务（stock-service）与 Seata AT 分布式事务
+
+- **补记（2026-10-16）**：`file-service`（端口 9102、独立 `file_db.file_objects`）已落地——`FileStorage` 存储抽象 + 本地实现（落盘路径按内容摘要生成，天然去重）、魔数校验真实类型、内容接口匿名开放供图片直引；因占用 9102，`product-service` 的 Sentinel 通信端口让位改为 `9110`；网关新增 `file-service` / `file-service-docs` 路由。
+- **新增 `stock-service`（端口 9104）与契约模块 `stock-api`**：库存从"无校验"变为真实扣减，消除"当前可无限下单"的缺陷。`stock-api` 提供 `StockDeductRequest` / `StockRestoreRequest` / `StockVO` 与 `StockServiceClient` + 降级工厂；`order-service` 与 `stock-service` 同时依赖，保证契约一致。
+- **独立库 `stock_db`**：`stock`（唯一事实来源，`uk_window_product` 唯一键、`version` 乐观锁）、`stock_flow`（流水，`uk_biz_flow(biz_type, biz_ref, stock_id)` 保证同一单据只记一次）、`undo_log`（AT 回滚日志）；同时补 `order_db.undo_log`。两个迁移脚本均幂等，已在本机 MySQL 执行，账号 `stock_service` 仅授权 `stock_db`。
+- **库存三重防线**：① Redis Lua 原子预扣（脚本原子判断 + 扣减，Redis 不可用时**降级直查/直改 DB**，Redis 只是加速快照、带 TTL 到期自动回源）；② DB 行锁 + `version` 乐观锁条件更新（`available_qty >= ? AND version = ?`），并发下不会扣成负数；③ `stock_flow` 唯一键幂等，重复扣减/重复回补只记一次账。任一环节失败均抛出明确业务错误码。
+- **Seata AT 落地**：Seata Server `apache/seata-server:2.5.0` 加入 `docker-compose.yml`，`file` 存储模式，端口 `9109:9109`（控制台 `9108:7091`），以 `seata-server` 之名注册到现有 Nacos（`SEATA_GROUP` 组、cluster `default`）；服务端事务分组 `order-system-tx-group`，客户端 `vgroup-mapping` 指向 `default`。注意：本机运行的是 **2.5.0**（镜像 tag `2.5.0`，包名已迁至 `org.apache.seata`），注解为 `org.apache.seata.spring.annotation.GlobalTransactional`，不是教程里常见的 `io.seata.*`。
+- **order-service 接入**：`createOrder` 标 `@GlobalTransactional(name = "create-order-deduct-stock", rollbackFor = Exception.class)`；订单与明细落库后调用 `StockServiceClient.deduct`，库存不足或库存服务不可用时抛异常 → 全局回滚，订单、明细、库存、`undo_log` 一并回滚。
+- **内部接口错误语义**：`POST /internal/stocks/deduct`、`POST /internal/stocks/restore`、`GET /internal/stocks/{windowId}/{productId}` 校验 `X-Internal-Token`；**业务失败返回 HTTP 200 + 失败业务码**——若按 4xx 返回，调用方 `FeignException` 会走 Sentinel 降级工厂，把"库存不足"替换成笼统的"服务不可用"，用户看不到真实原因。
+- **定时对账兜底**：`StockReconcileTask` 默认启动 60 秒后首次执行、之后每 10 分钟一次（`stock.reconcile.*` 可调/可关）：Redis 快照与 `stock.available_qty` 不一致时以 **DB 为准回写快照**；`total_qty + sum(change_qty)` 与 `available_qty` 不等时**只告警不改数**（流水异常属于需要人看的信号）。结束时打印"检查 X 条 / 修正快照 Y 条 / 流水不一致 Z 条"。
+- **网关与文档**：Nacos `gateway-service.yaml` 只新增 `stock-service-docs` 路由（`/api/stocks/v3/api-docs` → `RewritePath` 到 `/v3/api-docs`），**不加 `/api/stocks/**` 业务路由**——该服务当前对外只有 `/internal/**`，而项目约定内部接口不出网关；网关 Swagger 聚合下拉框同步补上 `file-service` / `stock-service`。
+- **测试**：`stock-service` 单测 10 项（并发扣减不超卖、重复扣减幂等、回补幂等、Redis 降级、快照读取异常等）；`order-service` 36 项（新增"库存不足 → 409"与"库存服务不可用 → 503"两个用例）。
+- **全量验证（2026-10-19）**：`mvn -B -o test` → **BUILD SUCCESS**，16 个 Reactor 模块全部 `SUCCESS`，41 个测试类共 **236 项测试全部通过**（common-redis 10、gateway 5、common-web 4、order 36、user 55、auth 34、product 32、payment 39、file 11、stock 10）。过程中发现 `product-service` 的 `ProductMenuServiceImplTest` 已与实现脱节（实现早前新增了 `RestaurantMapper` 入参，测试仍按 6 参构造），因增量编译复用陈旧 class 才一直"通过"；已补 `@Mock RestaurantMapper` 与构造参数，修正后该模块 32 项全通过。
+- **遗留（已知，未做）**：① **取消订单不回补库存**——`cancelOrder` 仍只改状态，`StockRestoreRequest` 与 `/internal/stocks/restore` 已备好但尚未接入；② `stock_db.stock` 目前是空表，需按档口菜品初始化库存记录（`stock.reconcile` 对无快照的行会跳过）；③ 下单扣库存的**端到端验证**（库存不足全局回滚、并发下单不超卖）需在 IDEA 重启 `order-service` 并启动 `stock-service` 后执行。
+
 ## 当前下一步
 
 1. ~~后续补管理员身份初始化/授权流程~~ **已完成（2026-10-13）**：`SYSTEM_ADMIN` 引导 + manager 数据范围权限体系已落地，详见"2026-10-13 本次完成"。~~账号启用/禁用接口与"最后一个启用的 `SYSTEM_ADMIN` 不可禁用"~~ **已完成（2026-10-14）**。~~登录失败计数与账号临时锁定~~ **已实现（2026-10-14），待运行期 Postman 验收**。Nginx 接入仍按后续阶段规划。
@@ -346,6 +363,7 @@
 3. ~~缓存防护（穿透/击穿/雪崩 + 布隆过滤器）~~ **已完成（2026-10-14）**，覆盖商品菜单热点读路径并接入 Sentinel 降级，详见"2026-10-14 本次完成"；后续可把同一套防护推广到 user-service 等其它热点读路径。
 4. 支付模块可选增强：渠道关闭支付单的定时对账、auto-confirm 开启后的自动化演练、FAILED/CLOSED 分支的界面化演示。
 5. ~~引导账号判重收紧与验收临时数据清理~~ **已完成（2026-10-13）**：判重改为用户名/手机号分开精确查询、手机号被占显式报错；临时数据已清理，`general_manager` 引导创建成功并验证可登录。
+6. ~~库存服务（stock-service + Seata AT）~~ **代码已完成（2026-10-19）**，详见"2026-10-19 本次完成"，余下三件：① 取消订单接入 `/internal/stocks/restore` 回补库存；② 给 `stock_db.stock` 初始化档口菜品库存；③ 在 IDEA 重启 `order-service` + 启动 `stock-service` 后做端到端验证（库存不足全局回滚、并发下单不超卖）。
 
 ### 缓存防护规划
 

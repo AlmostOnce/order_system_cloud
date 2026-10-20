@@ -25,6 +25,8 @@
         <module>product-service</module>
         <module>payment-service</module>
         <module>file-service</module>
+        <module>stock-api</module>
+        <module>stock-service</module>
     </modules>
 
     <properties>

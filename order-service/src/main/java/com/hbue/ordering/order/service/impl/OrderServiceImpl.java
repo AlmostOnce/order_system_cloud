@@ -21,8 +21,13 @@ import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
+import com.hbue.ordering.stock.api.client.StockServiceClient;
+import com.hbue.ordering.stock.api.dto.StockDeductRequest;
+import com.hbue.ordering.stock.api.dto.StockItemRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
+import org.apache.seata.spring.annotation.GlobalTransactional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
@@ -88,6 +93,12 @@ public class OrderServiceImpl
     /** 管理操作审计日志记录器。 */
     private final ManagementAuditLogger auditLogger;
 
+    /** 库存服务内部扣减客户端。 */
+    private final StockServiceClient stockServiceClient;
+
+    /** 服务间内部接口共享密钥，调用库存服务时通过请求头传递。 */
+    private final String internalScopeToken;
+
     /**
      * 创建订单业务服务。
      *
@@ -97,6 +108,8 @@ public class OrderServiceImpl
      * @param orderItemMapper 订单明细 Mapper
      * @param dataScopeService 数据范围判定服务
      * @param auditLogger 管理操作审计日志记录器
+     * @param stockServiceClient 库存服务内部扣减客户端
+     * @param internalScopeToken 服务间内部接口共享密钥
      */
     public OrderServiceImpl(
             UserServiceClient userServiceClient,
@@ -104,7 +117,9 @@ public class OrderServiceImpl
             OrderPersistenceService orderPersistenceService,
             OrderItemMapper orderItemMapper,
             DataScopeService dataScopeService,
-            ManagementAuditLogger auditLogger
+            ManagementAuditLogger auditLogger,
+            StockServiceClient stockServiceClient,
+            @Value("${internal.scope.token:}") String internalScopeToken
     ) {
         this.userServiceClient = userServiceClient;
         this.productServiceClient = productServiceClient;
@@ -112,6 +127,8 @@ public class OrderServiceImpl
         this.orderItemMapper = orderItemMapper;
         this.dataScopeService = dataScopeService;
         this.auditLogger = auditLogger;
+        this.stockServiceClient = stockServiceClient;
+        this.internalScopeToken = internalScopeToken;
     }
 
     /**
@@ -165,12 +182,17 @@ public class OrderServiceImpl
     /**
      * 创建订单，商品价格始终以商品服务返回值为准。
      *
+     * <p>整个方法运行在 Seata 全局事务中：订单与明细写入本地库后调用库存服务扣减库存，
+     * 任一环节失败（包括库存不足、库存服务不可用）都会回滚全局事务，
+     * 使「订单落库」与「库存扣减」要么同时成功、要么同时不发生。</p>
+     *
      * @param userId 当前登录用户 ID
      * @param idempotencyKey 客户端幂等键
      * @param request 窗口、菜品清单和备注
      * @return 新订单详情；同键同请求时返回已有订单
      */
     @Override
+    @GlobalTransactional(name = "create-order-deduct-stock", rollbackFor = Exception.class)
     public OrderDetailVO createOrder(
             Long userId,
             String idempotencyKey,
@@ -228,6 +250,9 @@ public class OrderServiceImpl
         try {
             // 订单头和明细必须在同一事务保存，避免出现缺少明细的半成品订单。
             orderPersistenceService.saveOrderWithItems(orderDO, orderItems);
+            // 订单与明细已写入本地库，紧接着扣减库存：
+            // 库存不足或库存服务不可用时抛出业务异常，由方法上的全局事务回滚订单写入。
+            deductStock(orderDO.getOrderNo(), userId, request);
         } catch (DuplicateKeyException exception) {
             // 原子写入事务已回滚；使用新的一致性读取取得并发请求的赢家订单。
             OrderDO concurrentOrder = baseMapper.selectByUserIdAndIdempotencyKey(
@@ -241,6 +266,75 @@ public class OrderServiceImpl
         }
 
         return OrderDetailVO.from(orderDO, userBasicVO, orderItems);
+    }
+
+    /**
+     * 调用库存服务扣减本单菜品库存。
+     *
+     * <p>只有库存服务返回成功业务码才算扣减成功；库存不足等业务失败会保留原始提示抛出，
+     * 库存服务不可用则按 503 抛出。两种失败都会让调用方的全局事务回滚订单写入，
+     * 绝不会出现「订单已落库但库存未扣减」的超卖窗口。</p>
+     *
+     * @param orderNo 订单号，作为库存流水的幂等业务单据号
+     * @param userId 下单用户 ID，作为库存流水操作者
+     * @param request 创建订单请求，提供档口与菜品明细
+     */
+    private void deductStock(
+            String orderNo,
+            Long userId,
+            OrderCreateRequest request
+    ) {
+        // 把订单明细转换为库存扣减明细：菜品 ID、数量与下单内容完全一致。
+        List<StockItemRequest> stockItems = new ArrayList<>();
+        for (OrderItemCreateRequest item : request.getItems()) {
+            stockItems.add(StockItemRequest.builder()
+                    .productId(item.getProductId())
+                    .quantity(item.getQuantity())
+                    .build());
+        }
+
+        StockDeductRequest deductRequest = StockDeductRequest.builder()
+                // 订单号是库存扣减的幂等键，重复下单请求不会重复扣减同一订单的库存。
+                .bizRef(orderNo)
+                .windowId(request.getWindowId())
+                .items(stockItems)
+                .operatorId(userId)
+                .remark(request.getRemark())
+                .build();
+
+        // 内部接口不携带用户 JWT，改由共享密钥鉴权。
+        ApiResponse<Void> response = stockServiceClient.deduct(
+                internalScopeToken,
+                deductRequest
+        );
+
+        if (response == null) {
+            // 无响应说明远程调用异常，按服务不可用处理，触发全局回滚。
+            throw new BusinessException(
+                    CommonErrorCode.SERVICE_UNAVAILABLE,
+                    "库存服务暂时不可用"
+            );
+        }
+        if (CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
+            return;
+        }
+
+        // 区分两类失败：服务不可用可稍后重试；业务拒绝（如库存不足）需要用户调整订单。
+        String message = response.getMessage();
+        if (CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
+            throw new BusinessException(
+                    CommonErrorCode.SERVICE_UNAVAILABLE,
+                    message == null || message.isBlank()
+                            ? "库存服务暂时不可用"
+                            : message
+            );
+        }
+        throw new BusinessException(
+                CommonErrorCode.CONFLICT,
+                message == null || message.isBlank()
+                        ? "库存扣减失败，请调整后重试"
+                        : message
+        );
     }
 
     /**

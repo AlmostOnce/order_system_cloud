@@ -59,6 +59,28 @@ services:
       timeout: 5s
       retries: 5
 
+  seata:
+    image: apache/seata-server:2.5.0
+    restart: unless-stopped
+    environment:
+      NACOS_USERNAME: ${NACOS_USERNAME}
+      NACOS_PASSWORD: ${NACOS_PASSWORD}
+      # 全局会话 file 存储目录与日志目录均落在挂载卷中，重启不丢。
+      LOG_HOME: /seata-server/logs
+    # TC 注册到 Nacos 使用的地址为容器网络内的 nacos:8848，见 docker/seata/application.yml。
+    volumes:
+      - ./docker/seata/application.yml:/seata-server/resources/application.yml:ro
+      - order-system-cloud-seata-data:/seata-server/sessionStore
+      - order-system-cloud-seata-logs:/seata-server/logs
+    depends_on:
+      nacos:
+        condition: service_started
+    ports:
+      # 容器内 TC 监听 9109，与宿主机 1:1 映射，便于直接 telnet 检查；
+      # 7091 为控制台端口。客户端经 Nacos 拿到的是容器地址 172.x:9109，已验证宿主机可达。
+      - "9109:9109"
+      - "9108:7091"
+
   gateway:
     profiles:
       - app
@@ -85,3 +107,5 @@ volumes:
   order-system-cloud-nacos-data:
   order-system-cloud-nacos-logs:
   order-system-cloud-redis-data:
+  order-system-cloud-seata-data:
+  order-system-cloud-seata-logs:

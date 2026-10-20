@@ -3,7 +3,7 @@
 > 文档性质：**现状清单**。回答两个问题：①我们现在一共有哪些服务；②每个服务对应哪个库、哪些表、哪个账号。
 > 事实来源：根 `docker-compose.yml`、各服务 `application.yml`、`docs/database/migrations/**`、`backup/db-accounts-fix.sh`。
 > 分工：**规划中**（阶段 B/C 未落地的服务与库）见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8 节；本文只记"已经建好"的部分。
-> 最后核对：2026-10-16（以 `wsl -- docker ps` 与本机工作区文件为准）。
+> 最后核对：2026-10-19（以 `wsl -- docker ps` 与本机工作区文件为准）。
 
 ## 1. 服务总表
 
@@ -16,6 +16,13 @@
 | 5 | `product-service` | `product-service` | 9093 | `product_db` | ✅（黑名单） | `/api/products/**` | ✅ |
 | 6 | `payment-service` | `payment-service` | 9101 | `payment_db` | ✅（黑名单） | `/api/payments/**` | ✅ |
 | 7 | `file-service` | `file-service` | 9102 | `file_db` | ✅（黑名单） | `/api/files/**` | ✅ |
+| 8 | `stock-service` | `stock-service` | 9104 | `stock_db` | ✅（库存快照 + 黑名单） | 仅 `-docs` 路由 | ✅ |
+
+> `stock-service` 当前对外**只有** `/internal/stocks/**` 三个内部接口（扣减、回补、查询），
+> 按项目约定 `/internal/**` 不进网关，故 Nacos 路由中只有 `stock-service-docs`
+> （`/api/stocks/v3/api-docs`），**没有 `/api/stocks/**` 业务路由**。后续若新增顾客侧的
+> 库存查询接口，再补业务路由（注意 `StripPrefix=1` 会把 `/api/stocks/internal/...`
+> 映射成 `/internal/...`，届时需先把内部路径排除在业务路由之外）。
 
 **公共库与契约库（不独立部署）**
 
@@ -23,10 +30,11 @@
 |---|---|---|
 | `common-core` | 通用错误码、异常、角色枚举、`DataScopeService` 契约 | 全部服务 |
 | `common-response` | `ApiResponse`（无 Servlet 依赖，供 WebFlux 用） | 全部服务 |
-| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file |
-| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file |
+| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file / stock |
+| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file / stock |
 | `user-api` | `UserBasicVO` + `UserServiceClient` + 降级工厂 | auth / order |
 | `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order |
+| `stock-api` | `StockDeductRequest` / `StockRestoreRequest` / `StockVO` + `StockServiceClient` + 降级工厂 | order |
 
 > 端口为**当前设备工作区**实际值（`9090` 段）。另一台设备使用的旧端口段见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8.1 节；两套端口不要互相合并。
 
@@ -34,15 +42,16 @@
 
 | 数据库 | 表 | 归属服务 | 迁移脚本（按执行顺序） |
 |---|---|---|---|
-| `order_db` | `orders`、`order_items` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) |
+| `order_db` | `orders`、`order_items`、`undo_log` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) |
 | `user_db` | `users`（含 `pay_password_hash`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) |
 | `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`） | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
 | `file_db` | `file_objects` | file-service | [file_db/V1__create_file_objects_table.sql](migrations/file_db/V1__create_file_objects_table.sql) |
+| `stock_db` | `stock`、`stock_flow`、`undo_log` | stock-service | [stock_db/V1__create_stock_tables.sql](migrations/stock_db/V1__create_stock_tables.sql) |
 
 **演示/种子数据（仅开发环境）**：[seeds/product_catalog_dev.sql](seeds/product_catalog_dev.sql) —— 1 个档口、3 个分类（含 1 个停用）、5 个菜品（含未分类与下架示例）。
 
-> ✅ **本机执行状态（2026-10-16）**：上表脚本**已全部在本机 MySQL 执行完毕**，实有 **5 库 11 表**：`order_db`(orders, order_items)、`user_db`(users, user_data_scopes, balance_records)、`product_db`(dining_windows, product_categories, products, restaurants)、`payment_db`(payments)、`file_db`(file_objects)；`dining_windows.restaurant_id` 与 `users.pay_password_hash` 两列已存在，默认餐厅 `R0001 默认餐厅` 已插入。剩余待建项（阶段 B/C）见第 7 节。
+> ✅ **本机执行状态（2026-10-19）**：上表脚本**已全部在本机 MySQL 执行完毕**，实有 **6 库 15 表**：`order_db`(orders, order_items, undo_log)、`user_db`(users, user_data_scopes, balance_records)、`product_db`(dining_windows, product_categories, products, restaurants)、`payment_db`(payments)、`file_db`(file_objects)、`stock_db`(stock, stock_flow, undo_log)；`dining_windows.restaurant_id` 与 `users.pay_password_hash` 两列已存在，默认餐厅 `R0001 默认餐厅` 已插入。`stock_db.stock` 当前为空表（尚无库存记录，需按档口菜品初始化）。剩余待建项（阶段 B/C）见第 7 节。
 
 **表设计说明**：商品库见 [PRODUCT_CATALOG.md](PRODUCT_CATALOG.md)；订单幂等键约定见 [ORDER_IDEMPOTENCY.md](ORDER_IDEMPOTENCY.md)；`user_data_scopes` 的设计见 [2026-10-13-role-authority-design.md](../superpowers/specs/2026-10-13-role-authority-design.md)。
 
@@ -57,8 +66,9 @@
 | `product_service` | `product_db` | **需手工**：同上 | `PRODUCT_DB_PASSWORD` |
 | `payment_service` | `payment_db` | **迁移脚本内置**：`payment_db/V1` 中 `CREATE USER` + `GRANT` | `PAYMENT_DB_PASSWORD` |
 | `file_service` | `file_db` | **迁移脚本内置**：`file_db/V1` 中 `CREATE USER` + `GRANT` | `FILE_DB_PASSWORD` |
+| `stock_service` | `stock_db` | **迁移脚本内置**：`stock_db/V1` 中 `CREATE USER` + `GRANT` | `STOCK_DB_PASSWORD` |
 
-> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余四个账号必须重新创建（见第 4.2 节）。
+> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余五个账号必须重新创建（见第 4.2 节）。
 
 ## 4. 新建环境（新建数据库）清单
 
@@ -115,6 +125,7 @@ FLUSH PRIVILEGES;
 | Nacos v3.0.3 API | 9097 → 8848 | gRPC `10097` / `10098` |
 | Nacos 控制台 | 9098 → 8080 | 账号 `nacos` / `.env` 中的 `NACOS_PASSWORD` |
 | Sentinel Dashboard | 9099 | `order-service` 通信端口 `9100`，`product-service` 通信端口 `9110`（原 9102 已让位给 `file-service`） |
+| Seata Server（TC） | 9109 → 9109 | 控制台 `9108 → 7091`；`apache/seata-server:2.5.0`，存储模式 `file`，以 `seata-server` 之名注册到 Nacos（`SEATA_GROUP` 组，cluster `default`）；下单扣库存的全局事务由它协调 |
 
 核对命令：`wsl -- docker ps --format "table {{.Names}}\t{{.Ports}}"`
 
@@ -129,6 +140,7 @@ FLUSH PRIVILEGES;
 | user → product | 同上两个查询接口（校验范围引用是否真实存在） | `X-Internal-Token` |
 | user → 内部 | `GET /internal/users/{userId}/scopes` | `X-Internal-Token` |
 | payment → order | `GET /internal/orders/{orderId}`、`PATCH /internal/orders/{orderId}/paid` | `X-Internal-Token`（`INTERNAL_ORDER_TOKEN`） |
+| **order → stock** | `POST /internal/stocks/deduct`、`POST /internal/stocks/restore`、`GET /internal/stocks/{windowId}/{productId}` | `X-Internal-Token`（`INTERNAL_SCOPE_TOKEN`）；业务失败（如库存不足）返回 **HTTP 200 + 失败业务码**，避免 Feign 降级把原因吞成 503 |
 | 支付渠道 → payment | `POST /internal/payments/notify` | HMAC-SHA256 验签（`PAYMENT_CHANNEL_SECRET`） |
 
 统一约定：透传用户 JWT = "代表用户"；`X-Internal-Token` = "系统事件"（无用户上下文），密钥变量 `INTERNAL_SCOPE_TOKEN`，请求头 `X-Internal-Token`。
@@ -148,14 +160,14 @@ FLUSH PRIVILEGES;
 
 > 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现（临时状态，无需持久化）。`V3` 目前只建结构，余额充值与余额支付的**业务代码尚未实现**。
 
-### 7.2 未建服务（阶段 B / C）的库 —— 仍未开始
+### 7.2 未建服务（阶段 B / C）的库 —— 部分已落地
 
 以下库属于**尚未创建的服务**，等该服务开工时再建（新增服务的标准动作见第 8 节）：
 
 | 库 | 表 | 归属服务 | 备注 |
 |---|---|---|---|
-| `stock_db` | `stock`、`stock_flow`、`undo_log` | stock-service | 库存量走 Redis Lua 原子扣减，流水落库供对账；`undo_log` 是 Seata AT 必需 |
-| — | `order_db.undo_log`（补表） | order-service | Seata 参与库都要有 `undo_log`，随 stock 一起补 |
+| ~~`stock_db`~~ | ~~`stock`、`stock_flow`、`undo_log`~~ | stock-service | ✅ **2026-10-19 已建**，见第 2 节 |
+| ~~`order_db.undo_log`（补表）~~ | ~~`undo_log`~~ | order-service | ✅ **2026-10-19 已补**（`migrations/V4__add_undo_log.sql`），Seata 参与库都要有 `undo_log` |
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
 | `cart_db` | 购物车备份表 | cart-service | 主存储是 Redis，该库仅在 Redis 故障恢复时用；可延后 |
@@ -167,12 +179,12 @@ FLUSH PRIVILEGES;
 
 | 中间件 | 端口 | 阶段 | 用途 |
 |---|---|---|---|
-| Seata Server（TC） | 9109（旧端口段 8094） | B | 下单扣库存的分布式事务，注册到现有 Nacos |
+| ~~Seata Server（TC）~~ | 9109（旧端口段 8094） | B | ✅ **2026-10-19 已落地**：下单扣库存的分布式事务协调者，注册到现有 Nacos（见第 5 节） |
 | RocketMQ NameServer / Broker / Dashboard | 9876 / 10911 / 8180 | B | 最终一致、ES 索引同步、站内消息 |
 | MongoDB | 27017 | B | 评论内容 |
 | Elasticsearch | 9200 | C | 菜单全文检索 |
 
-> 目标状态：数据库 Schema 从现有 **4 个** → 阶段 B 后 **7 个**（+`stock_db`、`comment_db`、`file_db`）→ 阶段 C 再加 ES 索引与（可选）`notification_db`。服务数从 6 → 13，见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 1、3 节。
+> 目标状态：数据库 Schema 从阶段 A 的 **4 个** → 阶段 B 后 **7 个**（+`stock_db`、`comment_db`、`file_db`）→ 阶段 C 再加 ES 索引与（可选）`notification_db`。当前已建 **6 个**（含 `stock_db`），仅剩 `comment_db` + MongoDB 未落地。服务数从 6 → 13，见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 1、3 节。
 
 
 ## 8. 新增服务时的标准动作

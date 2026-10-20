@@ -10,7 +10,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * 订单微服务启动入口。
  *
  * <p>负责启动 Spring 容器、启用服务发现，并扫描订单业务与共享基础组件；
- * 同时注册 user-api、product-api 中定义的 Feign 客户端。该类只负责应用装配，
+ * 同时注册 user-api、product-api、stock-api 中定义的 Feign 客户端。该类只负责应用装配，
  * 不承载订单业务逻辑或运行时业务状态。</p>
  *
  * @author order-system
@@ -21,7 +21,8 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableFeignClients(
         basePackages = {
                 "com.hbue.ordering.user.api.client",
-                "com.hbue.ordering.product.api.client"
+                "com.hbue.ordering.product.api.client",
+                "com.hbue.ordering.stock.api.client"
         },
         defaultConfiguration = FeignTokenRelayConfiguration.class
 )

@@ -52,7 +52,7 @@
 | 4 | `order-service` | 9091 / 8081 | `order_db` | A ✅ | 状态机、乐观锁、幂等键、定时任务 |
 | 5 | `product-service` | 9093 / 8086 | `product_db` | A ✅ | 目录层级、软停用 |
 | 6 | `payment-service` | 9101 / 9101 | `payment_db` | A ✅ | 渠道隔离、HMAC 验签、回调幂等 |
-| 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ⬜ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
+| 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ✅ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
 | 8 | `cart-service` | 9103 / 8088 | Redis（+ 可选 `cart_db`） | B ⬜ | Redis Hash 购物车、登录/未登录合并、TTL |
 | 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B ⬜ | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
 | 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
@@ -259,6 +259,9 @@
 
 > 注：`file-service` 占用 9102 后，`product-service` 的 **Sentinel 通信端口**已由 9102 让位改为 `9110`
 > （见 `product-service/application.yml` 的 `SENTINEL_TRANSPORT_PORT`）。
+>
+> `stock-service`（9104）与 `file-service`（9102）已按上表落地；Seata Server 已占用 9109
+> （容器内 `seata.server.service-port` 与宿主映射端口一致，避免注册到 Nacos 的地址不可达）。
 
 **两套端口的规矩不变**：9090 段属于另一台设备，当前设备的改动不要合并过去
 （见 `PROJECT_PROGRESS.md`"当前设备本地端口恢复"）。
@@ -283,10 +286,10 @@
 ```text
 阶段 A（已完成，6 个）  gateway · auth · user · order · product · payment
 阶段 B（交易闭环与内容，4 个）
-    1) stock        先补真实漏洞（当前可无限下单）+ Seata AT 主战场
+    1) stock        先补真实漏洞（当前可无限下单）+ Seata AT 主战场   ✅ 已完成
     2) cart         交易链路前置环节
     3) comment      缓存练习载体
-    4) file         前端上传依赖
+    4) file         前端上传依赖   ✅ 已完成
 阶段 C（技术扩展，3 个）
     5) notification WebSocket 长连接（消费 RocketMQ 事件）
     6) search       ES 检索（RocketMQ 消息同步索引）
@@ -297,8 +300,8 @@
 
 | 风险 | 触发点 | 缓解措施 |
 |---|---|---|
-| **超卖 / 库存不一致** | `stock-service` | Redis Lua 原子预扣；Seata 全局回滚；**库存流水 + 定时对账**作为 TC 故障时的最后防线 |
-| 分布式事务不可收敛 | `order × stock` | 用 Seata AT 的全局回滚做主路径；全局锁 + `undo_log` 保证一致性；禁止"先建单后扣库存无补偿"的写法 |
+| **超卖 / 库存不一致** | `stock-service` | Redis Lua 原子预扣；Seata 全局回滚；**库存流水 + 定时对账**作为 TC 故障时的最后防线。**已落地**（2026-10-19）：Redis Lua 预扣可降级、DB 行锁 + 版本号乐观锁条件更新、`stock_flow` 唯一键幂等、`StockReconcileTask` 定时对账 |
+| 分布式事务不可收敛 | `order × stock` | 用 Seata AT 的全局回滚做主路径；全局锁 + `undo_log` 保证一致性；禁止"先建单后扣库存无补偿"的写法。**已落地**（2026-10-19）：`createOrder` 标 `@GlobalTransactional`，订单与明细落库后调用 `StockServiceClient.deduct`，扣减失败即整体回滚 |
 | Seata TC 单点 | `seata-server` | 本地单 TC 即可；TC 不可用时事务挂起 → 必须靠对账修复，因此对账不能省 |
 | ES 与 MySQL 数据漂移 | `search-service` | 以 MySQL 为唯一事实来源；提供全量重建索引脚本，索引随时可丢弃重建 |
 | 消息重复 / 丢失 | RocketMQ 消费方 | 消费端幂等（用业务唯一键）+ 消费失败重试 + 死信队列 |
@@ -360,3 +363,4 @@
 | 2026-10-13 | **评论存储定稿为「混合存储」**（新增 6.7）：评论内容入 **MongoDB**（阶段 B 引入，端口 27017），关系元数据留 **MySQL `comment_db`**；明确写入顺序为"先内容后元数据"+ 孤儿文档清理；9.2 新增两行风险（内容/元数据跨库不一致、菜品评分跨服务不一致）；第 3/4.1/6.1/6.5/6.6/8.2/11 节同步更新，待决策 #2 标记为已收敛 |
 | 2026-10-13 | **待决策全部收敛 + 用户裁定落档**：待决策 #3 购物车定为"纯 Redis 为主 + MySQL 备份表"、#5 餐厅统一命名"餐厅/`restaurants`"；6.4 追加**余额支付密码必须独立于登录密码**（`users.pay_password_hash`，不进 JWT，含失败计数与锁定）；新增第 12 节"已确认的口径"（含归属授予权归餐厅经理+总经理、SYSTEM_ADMIN 不再拥有数据范围分配权、业务端点改角色须与数据范围校验同时上线）；原"变更记录"顺延为第 13 节 |
 | 2026-10-16 | **`file-service` 落地（阶段 B 第 4 个）**：独立 `file_db`（`file_objects`），端口 9102；存储抽象接口 `FileStorage` + 本地实现，落盘路径按内容摘要生成（天然秒传去重），魔数校验真实类型；内容接口 `/files/{fileKey}/content` 匿名开放供图片直接引用、上传/元数据/删除需登录；网关新增 `file-service` 与 `file-service-docs` 路由；因占用 9102，`product-service` 的 Sentinel 通信端口让位改为 `9110`；第 3 节总表与 `SERVICE_DATABASE_INVENTORY.md` 同步更新 |
+| 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |

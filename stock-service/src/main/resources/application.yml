@@ -1,0 +1,98 @@
+server:
+  # 库存服务本机端口。
+  port: 9104
+
+spring:
+  datasource:
+    # 库存服务只连接自己的数据库。
+    url: ${STOCK_DB_URL:jdbc:mysql://127.0.0.1:9095/stock_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${STOCK_DB_USERNAME:stock_service}
+    password: ${STOCK_DB_PASSWORD:stock_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      # 库存预扣快照与 JWT 注销状态共用同一 Redis。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+
+  application:
+    name: stock-service
+
+  cloud:
+    nacos:
+      discovery:
+        # 本机运行时连接 Docker 暴露的 Nacos API 端口。
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+internal:
+  scope:
+    # 服务间内部接口共享密钥，与 order-service / product-service 保持一致。
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+seata:
+  # 库存扣减作为下单全局事务的本地分支（RM）。
+  enabled: true
+  application-id: stock-service
+  # 事务分组名必须与 order-service（TM）保持一致，二者才能落到同一个 TC 集群。
+  tx-service-group: ${SEATA_TX_SERVICE_GROUP:order-system-tx-group}
+  service:
+    # 事务分组到 TC 集群的映射，集群名与 seata-server 注册到 Nacos 时使用的 cluster 一致。
+    vgroup-mapping:
+      order-system-tx-group: default
+  registry:
+    # 通过 Nacos 发现 seata-server，无需在各服务硬编码 TC 地址。
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+      group: ${SEATA_REGISTRY_GROUP:SEATA_GROUP}
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:root}
+  config:
+    # 客户端不引入配置中心，事务参数使用 starter 默认值。
+    type: file
+
+stock:
+  snapshot:
+    # Redis 库存快照 Key 前缀，按 (档口, 菜品) 定位。
+    key-prefix: ${STOCK_SNAPSHOT_KEY_PREFIX:stock:available:}
+    # 快照过期秒数：过期后回源数据库重新加载，
+    # 使「Redis 预扣与数据库」的短期漂移能自动收敛，Redis 不作为事实来源。
+    ttl-seconds: ${STOCK_SNAPSHOT_TTL_SECONDS:300}
+  reconcile:
+    # 库存对账定时任务开关，便于本地按需关闭。
+    enabled: ${STOCK_RECONCILE_ENABLED:true}
+
+# 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 库存服务接口文档
+  service-description: 仅供服务间调用的库存扣减、回补与查询接口。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api

@@ -1,0 +1,40 @@
+# Seata Server（TC）容器配置：注册到 Nacos，存储模式为 file。
+# 该文件挂载到镜像内 /seata-server/resources/application.yml，覆盖镜像默认配置。
+# 本地开发只用于 order × stock 下单扣库存的 AT 模式全局事务。
+
+server:
+  port: 8091
+
+spring:
+  application:
+    name: seata-server
+  main:
+    web-application-type: none
+
+logging:
+  config: classpath:logback-spring.xml
+  file:
+    path: ${log.home:${user.home}/logs/seata}
+
+seata:
+  config:
+    # 本地开发不引入配置中心，TC 参数直接读本文件。
+    type: file
+  registry:
+    # 注册到项目共用的 Nacos，服务名固定 seata-server，供 TM/RM 发现。
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: nacos:8848
+      group: SEATA_GROUP
+      cluster: default
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:root}
+  store:
+    # 本地开发使用 file 存储，全局会话落在挂载卷中，重启不丢。
+    mode: file
+    file:
+      dir: sessionStore
+  server:
+    # TC 客户端通信端口：容器内固定 9109，与宿主机的 9109 端口 1:1 映射。
+    service-port: 9109

@@ -97,6 +97,31 @@ internal:
     # 数据范围相关内部接口的共享密钥，与 user-service / product-service 保持一致。
     token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
 
+seata:
+  # 下单扣库存使用 Seata AT 模式：order-service 既是全局事务发起者，也是订单库本地分支。
+  enabled: true
+  application-id: order-service
+  # 由 Seata 自动代理数据源，本地分支才能写入 order_db.undo_log 支持全局回滚。
+  enable-auto-data-source-proxy: true
+  # 事务分组名必须与 stock-service（RM）一致，二者才能落到同一个 TC 集群。
+  tx-service-group: ${SEATA_TX_SERVICE_GROUP:order-system-tx-group}
+  service:
+    # 事务分组到 TC 集群的映射，集群名与 seata-server 注册到 Nacos 时使用的 cluster 一致。
+    vgroup-mapping:
+      order-system-tx-group: default
+  registry:
+    # 通过 Nacos 发现 seata-server，无需硬编码 TC 地址。
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+      group: ${SEATA_REGISTRY_GROUP:SEATA_GROUP}
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:root}
+  config:
+    # 客户端不引入配置中心，事务参数使用 starter 默认值。
+    type: file
+
 # 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
 springdoc:
   api-docs:

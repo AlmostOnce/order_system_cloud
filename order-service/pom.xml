@@ -51,6 +51,23 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- 库存服务内部扣减接口契约：下单时调用库存服务扣减库存。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>stock-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
+        <!--
+            Seata 客户端：下单事务是全局事务的发起者（TM），同时也是订单库的本地分支（RM）。
+            引入后 order-service 由 Seata 代理数据源，本地分支写入 undo_log，
+            全局回滚时可撤销已落库的订单写入。
+        -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+        </dependency>
+
         <!-- Web 接口 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

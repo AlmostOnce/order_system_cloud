@@ -49,6 +49,16 @@ spring:
               filters:
                 - RewritePath=/api/files/v3/api-docs, /v3/api-docs
 
+            # 库存服务只注册「文档路由」：它当前对外只有 /internal/stocks/**
+            # 三个内部接口（由 order-service 直连调用并校验 X-Internal-Token），
+            # 按项目约定 /internal/** 不进网关，因此这里不配 /api/stocks/** 业务路由。
+            - id: stock-service-docs
+              uri: lb://stock-service
+              predicates:
+                - Path=/api/stocks/v3/api-docs
+              filters:
+                - RewritePath=/api/stocks/v3/api-docs, /v3/api-docs
+
             - id: order-service
               uri: lb://order-service
               predicates:

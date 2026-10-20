@@ -10,6 +10,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
+import com.hbue.ordering.stock.api.client.StockServiceClient;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,9 @@ class OrderMarkOrderPaidTest {
     @Mock
     private ManagementAuditLogger auditLogger;
 
+    @Mock
+    private StockServiceClient stockServiceClient;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -67,7 +71,9 @@ class OrderMarkOrderPaidTest {
                 orderPersistenceService,
                 orderItemMapper,
                 dataScopeService,
-                auditLogger
+                auditLogger,
+                stockServiceClient,
+                "test-internal-token"
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
     }

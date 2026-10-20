@@ -16,6 +16,8 @@ import com.hbue.ordering.order.vo.OrderDetailVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
+import com.hbue.ordering.stock.api.client.StockServiceClient;
+import com.hbue.ordering.stock.api.error.StockErrorCode;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -72,6 +75,9 @@ class OrderServiceImplTest {
     @Mock
     private ManagementAuditLogger auditLogger;
 
+    @Mock
+    private StockServiceClient stockServiceClient;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -82,9 +88,14 @@ class OrderServiceImplTest {
                 orderPersistenceService,
                 orderItemMapper,
                 dataScopeService,
-                auditLogger
+                auditLogger,
+                stockServiceClient,
+                "test-internal-token"
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
+        // 默认库存扣减成功；不关心库存的用例不会因此产生多余打桩失败。
+        lenient().when(stockServiceClient.deduct(any(), any()))
+                .thenReturn(ApiResponse.success(null));
     }
 
     @Test
@@ -310,6 +321,86 @@ class OrderServiceImplTest {
 
         assertEquals(CommonErrorCode.BAD_REQUEST.code(), exception.getErrorCode().code());
         verify(orderMapper, never()).selectByUserIdAndIdempotencyKey(any(), any());
+    }
+
+    @Test
+    void shouldFailCreationWhenStockNotEnough() {
+        when(orderMapper.selectByUserIdAndIdempotencyKey(
+                USER_ID,
+                IDEMPOTENCY_KEY
+        )).thenReturn(null);
+        stubQuotes(new ProductQuoteVO(
+                101L,
+                "A101",
+                "鸡肉饭",
+                new BigDecimal("5.25")
+        ));
+        stubUser();
+        doAnswer(invocation -> {
+            OrderDO order = invocation.getArgument(0);
+            order.setOrderId(808L);
+            return order;
+        }).when(orderPersistenceService).saveOrderWithItems(any(OrderDO.class), any());
+        // 库存服务返回库存不足：订单创建必须失败，由全局事务回滚订单写入。
+        when(stockServiceClient.deduct(any(), any())).thenReturn(
+                ApiResponse.failure(
+                        StockErrorCode.STOCK_NOT_ENOUGH,
+                        "档口 3 的菜品 101 库存不足：可售 1，需要 2"
+                )
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.createOrder(
+                        USER_ID,
+                        IDEMPOTENCY_KEY,
+                        createRequest(null, item(101L, 2))
+                )
+        );
+
+        assertEquals(CommonErrorCode.CONFLICT.code(), exception.getErrorCode().code());
+        verify(stockServiceClient, times(1)).deduct(any(), any());
+    }
+
+    @Test
+    void shouldFailCreationWhenStockServiceUnavailable() {
+        when(orderMapper.selectByUserIdAndIdempotencyKey(
+                USER_ID,
+                IDEMPOTENCY_KEY
+        )).thenReturn(null);
+        stubQuotes(new ProductQuoteVO(
+                101L,
+                "A101",
+                "鸡肉饭",
+                new BigDecimal("5.25")
+        ));
+        stubUser();
+        doAnswer(invocation -> {
+            OrderDO order = invocation.getArgument(0);
+            order.setOrderId(809L);
+            return order;
+        }).when(orderPersistenceService).saveOrderWithItems(any(OrderDO.class), any());
+        // 库存服务不可用（如降级工厂返回）时同样必须失败，不能当作扣减成功。
+        when(stockServiceClient.deduct(any(), any())).thenReturn(
+                ApiResponse.failure(
+                        CommonErrorCode.SERVICE_UNAVAILABLE,
+                        "库存服务暂时不可用"
+                )
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.createOrder(
+                        USER_ID,
+                        IDEMPOTENCY_KEY,
+                        createRequest(null, item(101L, 2))
+                )
+        );
+
+        assertEquals(
+                CommonErrorCode.SERVICE_UNAVAILABLE.code(),
+                exception.getErrorCode().code()
+        );
     }
 
     private void stubQuotes(ProductQuoteVO... quotes) {

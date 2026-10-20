@@ -35,14 +35,14 @@
 **Files:**
 - Modify `docker-compose.yml`（新增 `seata` 服务）
 - Add `docs/database/migrations/stock_db/V1__create_stock_tables.sql`
-- Add `docs/database/migrations/order_db/V4__add_undo_log.sql`
+- Add `docs/database/migrations/V4__add_undo_log.sql`（order_db 的补表脚本，与既有 order_db 脚本同目录）
 - Modify `.env`、`.env.example`（新增 `STOCK_DB_*`）
 
-- [ ] 编写 `stock_db` 迁移脚本（建库 + `stock_service` 账号 + 三张表，DDL 见文末「参考结构」）。
-- [ ] 编写 `order_db` 的 `undo_log` 补表脚本。
-- [ ] 在 `docker-compose.yml` 增加 Seata Server：镜像 `apache/seata-server:2.5.0`，端口 `9109:8091`，注册到容器内 Nacos（`nacos:8848`），存储模式 `file`。
-- [ ] 启动 Seata 容器，确认 Nacos 服务列表出现 `seata-server`。
-- [ ] 在本机 MySQL 执行两个迁移脚本，确认库、表、账号就绪。
+- [x] 编写 `stock_db` 迁移脚本（建库 + `stock_service` 账号 + 三张表，DDL 见文末「参考结构」）。
+- [x] 编写 `order_db` 的 `undo_log` 补表脚本。
+- [x] 在 `docker-compose.yml` 增加 Seata Server：镜像 `apache/seata-server:2.5.0`，端口 `9109:9109`，注册到容器内 Nacos，存储模式 `file`。
+- [x] 启动 Seata 容器，确认注册到 Nacos（`seata-server` / `SEATA_GROUP` / cluster `default`）。
+- [x] 在本机 MySQL 执行两个迁移脚本，确认库、表、账号就绪。
 
 ### Task 2: 契约模块 `stock-api`
 
@@ -50,9 +50,9 @@
 - Add `stock-api/pom.xml`、`stock-api/src/main/java/**`
 - Modify 根 `pom.xml`（注册模块）
 
-- [ ] 定义 `StockDeductRequest` / `StockRestoreRequest` / `StockVO`（字段级中文 Javadoc，不做逐步注释）。
-- [ ] 定义 `StockServiceClient`（Feign 内部接口）+ 降级工厂（Sentinel fallback，TC/服务不可用时快速失败）。
-- [ ] 根 `pom.xml` 注册 `<module>stock-api</module>`。
+- [x] 定义 `StockDeductRequest` / `StockRestoreRequest` / `StockVO`（字段级中文 Javadoc，不做逐步注释）。
+- [x] 定义 `StockServiceClient`（Feign 内部接口）+ 降级工厂（Sentinel fallback，TC/服务不可用时快速失败）。
+- [x] 根 `pom.xml` 注册 `<module>stock-api</module>`。
 
 ### Task 3: `stock-service` 骨架与领域层
 
@@ -63,11 +63,11 @@
 - Add `service/StockService` + `service/impl/StockServiceImpl`
 - Add `support/StockRedisScript`（Lua 脚本加载与执行）
 
-- [ ] 建模块骨架（端口 9104；datasource / redis / nacos / 安全 配置照 `file-service` 模板）。
-- [ ] 实现 Redis Lua 原子预扣：库存不足直接失败并返回剩余量。
-- [ ] 实现 DB 乐观锁扣减 + `stock_flow` 幂等记账（同一订单同一菜品只记一次）。
-- [ ] 实现回补（`ORDER_RESTORE`）与库存查询。
-- [ ] 单元测试：并发扣减不超卖、重复扣减幂等、回补幂等。
+- [x] 建模块骨架（端口 9104；datasource / redis / nacos / 安全 配置照 `file-service` 模板）。
+- [x] 实现 Redis Lua 原子预扣：库存不足直接失败并返回剩余量。
+- [x] 实现 DB 乐观锁扣减 + `stock_flow` 幂等记账（同一订单同一菜品只记一次）。
+- [x] 实现回补（`ORDER_RESTORE`）与库存查询。
+- [x] 单元测试：并发扣减不超卖、重复扣减幂等、回补幂等（`StockServiceImplTest` 10 项通过）。
 
 ### Task 4: `stock-service` 内部接口与定时对账
 
@@ -75,9 +75,9 @@
 - Add `controller/StockInternalController`
 - Add `task/StockReconcileTask`
 
-- [ ] 内部接口：`POST /internal/stocks/deduct`、`POST /internal/stocks/restore`、`GET /internal/stocks/{windowId}/{productId}`（校验 `X-Internal-Token`）。
-- [ ] 定时对账：比对 Redis 快照与 `stock.available_qty`、流水累计与主表差值，漂移则修正并记录日志。
-- [ ] 网关**不配置** `/internal/**` 路由（保持仅直连）。
+- [x] 内部接口：`POST /internal/stocks/deduct`、`POST /internal/stocks/restore`、`GET /internal/stocks/{windowId}/{productId}`（校验 `X-Internal-Token`）。
+- [x] 定时对账：比对 Redis 快照与 `stock.available_qty`、流水累计与主表差值，漂移则修正并记录日志（`StockReconcileTask`）。
+- [x] 网关**不配置** `/internal/**` 路由（保持仅直连）。
 
 ### Task 5: `order-service` 接入 Seata 与扣库存改造
 
@@ -86,10 +86,11 @@
 - Modify `order-service/src/main/resources/application.yml`（seata 配置）
 - Modify 下单流程实现类（`@GlobalTransactional` + 调用扣库存）
 
-- [ ] 引入 `com.alibaba.cloud:spring-cloud-starter-alibaba-seata`，配置 `tx-service-group` / `registry` / `vgroup-mapping`。
-- [ ] 下单流程在创建订单后调用 `StockServiceClient.deduct`，整段标 `@GlobalTransactional`。
-- [ ] 校验：库存不足时全局回滚，订单与库存流水均不落库。
-- [ ] 端到端验证：并发下单不超卖；模拟 stock 服务失败验证回滚。
+- [x] 引入 `com.alibaba.cloud:spring-cloud-starter-alibaba-seata`，配置 `tx-service-group` / `registry` / `vgroup-mapping`。
+- [x] 下单流程在创建订单后调用 `StockServiceClient.deduct`，整段标 `@GlobalTransactional`。
+- [x] 单测校验：库存不足 → `COMMON_409`，库存服务不可用 → `COMMON_503`（`OrderServiceImplTest` 已覆盖）。
+- [ ] 端到端验证：并发下单不超卖；模拟 stock 服务失败验证回滚（**需先在 IDEA 重启 order-service 并启动 stock-service**）。
+- [ ] 取消订单回补库存（`cancelOrder` → `/internal/stocks/restore`）：本次计划外，留作后续任务。
 
 ### Task 6: 网关、文档回填与全量验证
 
@@ -99,10 +100,11 @@
 - Modify `docs/database/SERVICE_DATABASE_INVENTORY.md`（§1/§2/§3/§5/§7）
 - Modify `docs/PROJECT_PROGRESS.md`
 
-- [ ] 新增网关路由并发布到 Nacos（只放行业务路径 `/api/**`；`/internal/**` 不配路由）。
-- [ ] 回填架构文档：服务总表、端口表、阶段状态与变更记录。
-- [ ] 回填数据库清单：`stock_db` 表、账号、端口、执行状态。
-- [ ] 全量 `mvn -B test` 并记录实际结果。
+- [x] 新增网关路由并发布到 Nacos（已发布 `stock-service-docs` 并回读校验；因该服务对外仅 `/internal/**`，**不配** `/api/stocks/**` 业务路由）。
+- [x] 回填架构文档：服务总表、端口表、阶段状态与变更记录（第 3 / 8.1 / 9.1 / 9.2 / 13 节）。
+- [x] 回填数据库清单：`stock_db` 表、账号、端口、执行状态（第 1 / 2 / 3 / 5 / 6 / 7 节）。
+- [x] 回填 `docs/PROJECT_PROGRESS.md`（2026-10-19 条目）与网关 Swagger 聚合 urls。
+- [x] 全量 `mvn -B -o test` → **BUILD SUCCESS**，16 个模块全部 SUCCESS，41 个测试类共 236 项全部通过（期间修正 `ProductMenuServiceImplTest` 与实现脱节的陈旧构造参数）。
 
 ---
 
