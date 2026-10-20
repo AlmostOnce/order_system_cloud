@@ -6,12 +6,15 @@
 
 | 入口 | 地址 | 说明 |
 |---|---|---|
-| 网关聚合入口 | `http://localhost:9090/swagger-ui/index.html` | 一个页面查看全部 5 个服务，右上角下拉框切换分组 |
+| 网关聚合入口 | `http://localhost:9090/swagger-ui/index.html` | 一个页面查看全部 6 个服务，右上角下拉框切换分组 |
 | 认证服务 | `http://localhost:9094/swagger-ui/index.html` | 直连查看 |
 | 订单服务 | `http://localhost:9091/swagger-ui/index.html` | 直连查看 |
 | 用户服务 | `http://localhost:9092/swagger-ui/index.html` | 直连查看 |
 | 商品服务 | `http://localhost:9093/swagger-ui/index.html` | 直连查看 |
 | 支付服务 | `http://localhost:9101/swagger-ui/index.html` | 直连查看 |
+| 购物车服务 | `http://localhost:9103/swagger-ui/index.html` | 七个业务接口：增删改查、核价与下单后快照清理，示例见 CART_API.md |
+
+2026-10-17 新增购物车 Swagger 分组（第 6 个服务）：本机 Nacos 路由已发布并验证文档转发，重启 Gateway 后聚合页加载新增分组。旧静态 Postman 导出仍为原 5 个服务，购物车请实时导出 `/api/cart/v3/api-docs`。
 
 > 无论从聚合页还是直连页点 "Try it out"，请求都会发往网关 `http://localhost:9090`（由 `springdoc.gateway-base-url` + `springdoc.gateway-path` 决定），因此调用前需保证网关已启动。
 

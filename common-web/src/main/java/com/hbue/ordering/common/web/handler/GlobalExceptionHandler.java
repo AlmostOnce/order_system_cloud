@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * 全局异常处理器。
@@ -158,6 +159,23 @@ public class GlobalExceptionHandler {
 
         // 返回 HTTP 400，避免将客户端错误误报为系统内部异常。
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 处理路径或查询参数无法转换为声明类型的异常。
+     *
+     * <p>例如将窗口 ID 填为字母属于请求错误，不应进入未知异常处理并返回 500。</p>
+     *
+     * @param exception MVC 参数类型转换失败信息
+     * @return HTTP 400 与统一参数错误响应
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException exception) {
+        // 仅记录参数名，不把客户端输入或底层转换异常内容返回给调用方。
+        log.warn("请求参数类型错误，parameter={}", exception.getName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ApiResponse.failure(CommonErrorCode.BAD_REQUEST, "路径或查询参数格式错误"));
     }
 
     /**

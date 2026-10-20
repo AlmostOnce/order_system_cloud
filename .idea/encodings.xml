@@ -3,6 +3,8 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/auth-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/auth-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cart-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/cart-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-core/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-core/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-redis/src/main/java" charset="UTF-8" />
@@ -15,6 +17,8 @@
     <file url="file://$PROJECT_DIR$/file-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/gateway-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/gateway-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/order-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/order-api/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/order-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/order-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/payment-service/src/main/java" charset="UTF-8" />

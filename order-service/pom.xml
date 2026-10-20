@@ -17,6 +17,13 @@
     <name>order-service</name>
 
     <dependencies>
+        <!-- 仅在测试中校验本服务真实详情 JSON 与远程读取契约兼容，不引入运行时耦合。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>order-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.hbue.ordering</groupId>
             <artifactId>common-web</artifactId>
