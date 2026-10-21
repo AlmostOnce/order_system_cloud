@@ -2,6 +2,7 @@ package com.hbue.ordering.auth.controller;
 
 import com.hbue.ordering.auth.config.SecurityConfig;
 import com.hbue.ordering.auth.service.AuthService;
+import com.hbue.ordering.auth.service.CaptchaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -30,6 +31,9 @@ class AuthLogoutAuthorizationTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private CaptchaService captchaService;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;

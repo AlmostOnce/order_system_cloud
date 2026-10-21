@@ -73,8 +73,9 @@ public class SecurityConfig {
 
                 // 配置接口访问权限。
                 .authorizeHttpRequests(authorize -> authorize
-                        // 登录接口允许匿名访问。
+                        // 登录、注册、刷新与图片验证码接口允许匿名访问。
                         .requestMatchers(
+                                "/auth/captcha",
                                 "/auth/login",
                                 "/auth/register",
                                 "/auth/refresh"

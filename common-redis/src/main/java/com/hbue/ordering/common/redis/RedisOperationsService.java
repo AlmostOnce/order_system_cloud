@@ -99,6 +99,21 @@ public class RedisOperationsService {
     }
 
     /**
+     * 原子读取并删除字符串值。
+     *
+     * <p>底层使用 Redis 的 GETDEL 命令，「取值」和「删除」不可分割。用于
+     * 一次性凭据（如图片验证码）：并发请求同时到达时只有一个能拿到原值，
+     * 其余请求拿到 null，避免同一凭据被重复使用。</p>
+     *
+     * @param key Redis Key
+     * @return Key 对应的字符串值；Key 不存在时返回 null
+     */
+    public String getAndDelete(String key) {
+        // 返回 GETDEL 的读取结果，Key 已被同一次操作删除。
+        return stringRedisTemplate.opsForValue().getAndDelete(key);
+    }
+
+    /**
      * 保存 Hash 中的多个字段和值。
      *
      * @param key Redis Key

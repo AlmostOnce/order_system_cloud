@@ -6,6 +6,7 @@ import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
 import com.hbue.ordering.auth.service.AuthService;
 import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
+import com.hbue.ordering.auth.service.CaptchaService;
 import com.hbue.ordering.auth.service.LoginAttemptService;
 import com.hbue.ordering.auth.service.JwtTokenService;
 import com.hbue.ordering.auth.service.RefreshTokenService;
@@ -53,6 +54,11 @@ public class AuthServiceImpl implements AuthService {
     private final LoginAttemptService loginAttemptService;
 
     /**
+     * 图片验证码服务。
+     */
+    private final CaptchaService captchaService;
+
+    /**
      * JWT Token 服务。
      */
     private final JwtTokenService jwtTokenService;
@@ -77,6 +83,7 @@ public class AuthServiceImpl implements AuthService {
      *
      * @param userServiceClient 用户服务远程调用客户端
      * @param loginAttemptService 登录失败计数与账号临时锁定服务
+     * @param captchaService 图片验证码服务
      * @param jwtTokenService JWT Token 服务
      * @param refreshTokenService Refresh Token 服务
      * @param accessTokenBlacklistService Access Token 黑名单服务
@@ -85,6 +92,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthServiceImpl(
             UserServiceClient userServiceClient,
             LoginAttemptService loginAttemptService,
+            CaptchaService captchaService,
             JwtTokenService jwtTokenService,
             RefreshTokenService refreshTokenService,
             AccessTokenBlacklistService accessTokenBlacklistService,
@@ -92,6 +100,7 @@ public class AuthServiceImpl implements AuthService {
     ) {
         this.userServiceClient = userServiceClient;
         this.loginAttemptService = loginAttemptService;
+        this.captchaService = captchaService;
         this.jwtTokenService = jwtTokenService;
         this.refreshTokenService = refreshTokenService;
         this.accessTokenBlacklistService = accessTokenBlacklistService;
@@ -107,6 +116,18 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginVO login(LoginRequest request) {
+        // 先校验图片验证码：验证失败时立即返回，不触发任何账号级状态变更。
+        // 验证码失败不能计入登录失败次数，否则攻击者可用他人用户名刷错验证码把账号锁死。
+        if (!captchaService.verify(
+                request.getCaptchaId(),
+                request.getCaptchaCode()
+        )) {
+            throw new BusinessException(
+                    CommonErrorCode.BAD_REQUEST,
+                    "验证码错误或已过期"
+            );
+        }
+
         // 在调用用户服务前检查账号锁定状态，锁定期间不再执行密码校验。
         if (loginAttemptService.isLocked(request.getUsername())) {
             throw new BusinessException(

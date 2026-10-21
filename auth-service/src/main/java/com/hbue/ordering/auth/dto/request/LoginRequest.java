@@ -29,4 +29,18 @@ public class LoginRequest {
     @NotBlank(message = "密码不能为空")
     @Size(max = 64, message = "密码长度不能超过 64 个字符")
     private String password;
+
+    /**
+     * 图片验证码标识，由获取验证码接口下发。
+     */
+    @NotBlank(message = "验证码标识不能为空")
+    @Size(max = 64, message = "验证码标识长度不能超过 64 个字符")
+    private String captchaId;
+
+    /**
+     * 用户从图片中读取并输入的验证码字符。
+     */
+    @NotBlank(message = "验证码不能为空")
+    @Size(max = 8, message = "验证码长度不能超过 8 个字符")
+    private String captchaCode;
 }

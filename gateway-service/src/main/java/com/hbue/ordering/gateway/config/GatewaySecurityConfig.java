@@ -110,6 +110,10 @@ public class GatewaySecurityConfig {
 
                 // 配置接口访问权限。
                 .authorizeExchange(exchange -> exchange
+                        // 图片验证码接口允许匿名访问，登录前必须先拿到验证码。
+                        .pathMatchers("/api/auth/captcha")
+                        .permitAll()
+
                         // 登录接口允许匿名访问。
                         .pathMatchers("/api/auth/login")
                         .permitAll()

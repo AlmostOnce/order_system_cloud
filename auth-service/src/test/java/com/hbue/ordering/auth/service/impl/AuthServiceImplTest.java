@@ -4,6 +4,7 @@ import com.hbue.ordering.auth.dto.request.LoginRequest;
 import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
 import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
+import com.hbue.ordering.auth.service.CaptchaService;
 import com.hbue.ordering.auth.service.JwtTokenService;
 import com.hbue.ordering.auth.service.LoginAttemptService;
 import com.hbue.ordering.auth.service.RefreshTokenLockService;
@@ -28,6 +29,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -265,6 +267,7 @@ class AuthServiceImplTest {
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
                 mock(LoginAttemptService.class),
+                mock(CaptchaService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -335,6 +338,7 @@ class AuthServiceImplTest {
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
                 mock(LoginAttemptService.class),
+                mock(CaptchaService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -379,6 +383,7 @@ class AuthServiceImplTest {
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
                 mock(LoginAttemptService.class),
+                mock(CaptchaService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -422,6 +427,7 @@ class AuthServiceImplTest {
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
                 mock(LoginAttemptService.class),
+                mock(CaptchaService.class),
                 jwtTokenService,
                 refreshTokenService,
                 accessTokenBlacklistService,
@@ -503,14 +509,60 @@ class AuthServiceImplTest {
             UserServiceClient userServiceClient,
             LoginAttemptService loginAttemptService
     ) {
+        // 登录相关测试默认验证码校验通过，避免每个用例都重复打桩。
+        CaptchaService captchaService = mock(CaptchaService.class);
+        when(captchaService.verify(any(), any())).thenReturn(true);
+
         // 登录失败测试不会执行 Token 服务，使用 Mockito 隔离外部依赖。
         return new AuthServiceImpl(
                 userServiceClient,
                 loginAttemptService,
+                captchaService,
                 mock(JwtTokenService.class),
                 mock(RefreshTokenService.class),
                 mock(AccessTokenBlacklistService.class),
                 mock(RefreshTokenLockService.class)
         );
+    }
+
+    /**
+     * 验证验证码错误时登录直接失败，且不触发账号锁定相关状态变更。
+     */
+    @Test
+    void shouldRejectLoginWhenCaptchaIsInvalid() {
+        UserServiceClient userServiceClient = mock(UserServiceClient.class);
+        LoginAttemptService loginAttemptService =
+                mock(LoginAttemptService.class);
+        CaptchaService captchaService = mock(CaptchaService.class);
+        when(captchaService.verify("captcha-id", "wrong")).thenReturn(false);
+
+        AuthServiceImpl authService = new AuthServiceImpl(
+                userServiceClient,
+                loginAttemptService,
+                captchaService,
+                mock(JwtTokenService.class),
+                mock(RefreshTokenService.class),
+                mock(AccessTokenBlacklistService.class),
+                mock(RefreshTokenLockService.class)
+        );
+        LoginRequest request = new LoginRequest();
+        request.setUsername("test-user");
+        request.setPassword("any-password");
+        request.setCaptchaId("captcha-id");
+        request.setCaptchaCode("wrong");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> authService.login(request)
+        );
+
+        assertEquals(
+                CommonErrorCode.BAD_REQUEST,
+                exception.getErrorCode()
+        );
+
+        // 验证码错误不能计入账号失败次数，也不能调用用户服务校验密码。
+        verifyNoInteractions(userServiceClient);
+        verifyNoInteractions(loginAttemptService);
     }
 }
