@@ -132,6 +132,8 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 本地开发数据位于 `migrations` 之外的 `seeds/product_catalog_dev.sql`。脚本使用窗口编码、窗口内分类名称和窗口内菜品编码定位记录，可重复执行；测试数据包括下架菜品、停用分类菜品和未分类菜品，用于核对菜单过滤规则。执行方式：
 
 ```bash
-docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot' \
+docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --default-character-set=utf8mb4' \
   < docs/database/seeds/product_catalog_dev.sql
 ```
+
+导入时必须指定 `--default-character-set=utf8mb4`：MySQL 命令行客户端默认按 latin1 解释文件内容，会把中文写成二次编码乱码。若数据已经被写成乱码，执行 `seeds/product_catalog_encoding_repair.sql` 还原（脚本幂等，可重复执行）。
