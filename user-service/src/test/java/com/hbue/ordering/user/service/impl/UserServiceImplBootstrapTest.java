@@ -62,14 +62,14 @@ class UserServiceImplBootstrapTest {
     @Test
     void shouldCreateSystemAdminWhenAccountAbsent() {
         when(userMapper.selectByUsername("admin")).thenReturn(null);
-        when(userMapper.selectByPhone("13800000001")).thenReturn(null);
+        when(userMapper.selectByEmail("100000001@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("admin_password_dev_2026"))
                 .thenReturn("$2a$10$encoded-hash");
         when(userMapper.insert(any(UserDO.class))).thenReturn(1);
 
         boolean created = userService.bootstrapSystemAdmin(
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_password_dev_2026"
         );
 
@@ -77,7 +77,7 @@ class UserServiceImplBootstrapTest {
         ArgumentCaptor<UserDO> captor = ArgumentCaptor.forClass(UserDO.class);
         verify(userMapper).insert(captor.capture());
         assertEquals("admin", captor.getValue().getUsername());
-        assertEquals("13800000001", captor.getValue().getPhone());
+        assertEquals("100000001@qq.com", captor.getValue().getEmail());
         assertEquals("SYSTEM_ADMIN", captor.getValue().getRoleCode());
         assertEquals(Integer.valueOf(1), captor.getValue().getStatus());
         assertEquals(Integer.valueOf(0), captor.getValue().getVersion());
@@ -90,7 +90,7 @@ class UserServiceImplBootstrapTest {
     @Test
     void shouldCreateGeneralManagerAndGrantPlatformScope() {
         when(userMapper.selectByUsername("manager")).thenReturn(null);
-        when(userMapper.selectByPhone("13800000002")).thenReturn(null);
+        when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("manager_password_dev_2026"))
                 .thenReturn("$2a$10$manager-hash");
         // 模拟自增主键回填，让范围写入拿到真实用户 ID。
@@ -102,7 +102,7 @@ class UserServiceImplBootstrapTest {
 
         boolean created = userService.bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_password_dev_2026"
         );
 
@@ -122,7 +122,7 @@ class UserServiceImplBootstrapTest {
 
         boolean created = userService.bootstrapSystemAdmin(
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_password_dev_2026"
         );
 
@@ -139,7 +139,7 @@ class UserServiceImplBootstrapTest {
                 BusinessException.class,
                 () -> userService.bootstrapGeneralManager(
                         "manager",
-                        "13800000002",
+                        "100000002@qq.com",
                         "manager_password_dev_2026"
                 )
         );
@@ -149,17 +149,17 @@ class UserServiceImplBootstrapTest {
     }
 
     @Test
-    void shouldRejectWhenPhoneOccupiedByAnotherAccount() {
-        // 目标用户名可用，但手机号已被另一个账号占用。
+    void shouldRejectWhenEmailOccupiedByAnotherAccount() {
+        // 目标用户名可用，但邮箱已被另一个账号占用。
         when(userMapper.selectByUsername("manager")).thenReturn(null);
-        when(userMapper.selectByPhone("13800000002"))
+        when(userMapper.selectByEmail("100000002@qq.com"))
                 .thenReturn(existingUser("gm01", "GENERAL_MANAGER", 1));
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> userService.bootstrapGeneralManager(
                         "manager",
-                        "13800000002",
+                        "100000002@qq.com",
                         "manager_password_dev_2026"
                 )
         );
@@ -180,7 +180,7 @@ class UserServiceImplBootstrapTest {
 
         boolean created = userService.bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_password_dev_2026"
         );
 
@@ -192,13 +192,13 @@ class UserServiceImplBootstrapTest {
     @Test
     void shouldReturnFalseWhenConcurrentCreationConflicts() {
         when(userMapper.selectByUsername("manager")).thenReturn(null);
-        when(userMapper.selectByPhone("13800000002")).thenReturn(null);
+        when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(userMapper.insert(any(UserDO.class)))
                 .thenThrow(new DuplicateKeyException("uk_users_username"));
 
         boolean created = userService.bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_password_dev_2026"
         );
 
@@ -209,11 +209,11 @@ class UserServiceImplBootstrapTest {
     @Test
     void shouldRejectBlankParameters() {
         assertFalse(userService.bootstrapSystemAdmin("", "", "admin_password_dev_2026"));
-        assertFalse(userService.bootstrapSystemAdmin("admin", "13800000001", ""));
+        assertFalse(userService.bootstrapSystemAdmin("admin", "100000001@qq.com", ""));
         assertFalse(userService.bootstrapGeneralManager(null, null, null));
 
         verify(userMapper, never()).selectByUsername(any());
-        verify(userMapper, never()).selectByPhone(any());
+        verify(userMapper, never()).selectByEmail(any());
         verify(userMapper, never()).insert(any(UserDO.class));
     }
 

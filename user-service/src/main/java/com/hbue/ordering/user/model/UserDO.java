@@ -42,7 +42,18 @@ public class UserDO {
     private String roleCode;
 
     /**
+     * 注册邮箱。
+     *
+     * <p>用作账号标识、邮件验证码与找回密码凭据。历史账号可能为空（为 null 表示
+     * 该账号创建于改用邮箱之前），MySQL 唯一索引对多个 NULL 不做冲突判定。</p>
+     */
+    @TableField("email")
+    private String email;
+
+    /**
      * 手机号。
+     *
+     * <p>注册流程已改用邮箱，该字段仅为兼容既有数据保留，新注册不再写入。</p>
      */
     @TableField("phone")
     private String phone;

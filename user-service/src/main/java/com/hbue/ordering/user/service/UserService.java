@@ -49,17 +49,17 @@ public interface UserService extends IService<UserDO> {
      * 安全引导系统管理员账号。
      *
      * <p>已存在启用且未删除的 {@code SYSTEM_ADMIN} 时跳过且不做任何修改，
-     * 避免环境变量覆盖已有账号；用户名或手机号被其他账号占用时拒绝引导。</p>
+     * 避免环境变量覆盖已有账号；用户名或邮箱被其他账号占用时拒绝引导。</p>
      *
      * @param username 管理员用户名
-     * @param phone 管理员手机号
+     * @param email 管理员邮箱
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
-     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号被其他账号占用时抛出
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或邮箱被其他账号占用时抛出
      */
     boolean bootstrapSystemAdmin(
             String username,
-            String phone,
+            String email,
             String rawPassword
     );
 
@@ -71,14 +71,14 @@ public interface UserService extends IService<UserDO> {
      * "有总经理但没有范围"的半个状态。</p>
      *
      * @param username 总经理用户名
-     * @param phone 总经理手机号
+     * @param email 总经理邮箱
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
      * @throws com.hbue.ordering.common.core.exception.BusinessException 账号冲突或全平台范围写入失败时抛出，事务内账号创建随之回滚
      */
     boolean bootstrapGeneralManager(
             String username,
-            String phone,
+            String email,
             String rawPassword
     );
 

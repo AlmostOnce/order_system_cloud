@@ -248,20 +248,20 @@ public class UserServiceImpl
      * 安全引导系统管理员账号。
      *
      * @param username 管理员用户名
-     * @param phone 管理员手机号
+     * @param email 管理员邮箱
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
-     * @throws BusinessException 检查到用户名或手机号被其他账号占用时抛出
+     * @throws BusinessException 检查到用户名或邮箱被其他账号占用时抛出
      */
     @Override
     public boolean bootstrapSystemAdmin(
             String username,
-            String phone,
+            String email,
             String rawPassword
     ) {
         return createBootstrapAccount(
                 username,
-                phone,
+                email,
                 rawPassword,
                 SYSTEM_ADMIN_ROLE_CODE
         ) != null;
@@ -274,7 +274,7 @@ public class UserServiceImpl
      * 不会留下"有总经理但没有范围"的半个状态。</p>
      *
      * @param username 总经理用户名
-     * @param phone 总经理手机号
+     * @param email 总经理邮箱
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
      * @throws BusinessException 账号冲突或创建全平台范围失败时抛出，事务会回滚账号创建
@@ -283,12 +283,12 @@ public class UserServiceImpl
     @Transactional
     public boolean bootstrapGeneralManager(
             String username,
-            String phone,
+            String email,
             String rawPassword
     ) {
         UserDO createdUser = createBootstrapAccount(
                 username,
-                phone,
+                email,
                 rawPassword,
                 GENERAL_MANAGER_ROLE_CODE
         );
@@ -470,26 +470,26 @@ public class UserServiceImpl
      * 按固定角色安全创建引导账号。
      *
      * <p>三种结果：目标账号已是启用且未删除的目标角色时返回 {@code null} 表示跳过；
-     * 用户名被其他账号占用、手机号被任何其他账号占用、或目标角色处于禁用/删除状态时
+     * 用户名被其他账号占用、邮箱被任何其他账号占用、或目标角色处于禁用/删除状态时
      * 抛出冲突；其余情况创建账号并返回持久化对象。</p>
      *
      * @param username 引导用户名
-     * @param phone 引导手机号
+     * @param email 引导邮箱
      * @param rawPassword 引导明文密码
      * @param roleCode 固定角色编码
      * @return 新建的用户持久化对象；已存在目标角色时返回 null
      */
     private UserDO createBootstrapAccount(
             String username,
-            String phone,
+            String email,
             String rawPassword,
             String roleCode
     ) {
         // 参数为空时不做任何写库动作。
         if (username == null
                 || username.isBlank()
-                || phone == null
-                || phone.isBlank()
+                || email == null
+                || email.isBlank()
                 || rawPassword == null
                 || rawPassword.isBlank()) {
             return null;
@@ -512,21 +512,21 @@ public class UserServiceImpl
             );
         }
 
-        // 再按手机号精确查重：手机号被其他账号占用时显式报错。
-        // 这里不能静默跳过——手机号被占会导致引导账号建不出来，
+        // 再按邮箱精确查重：邮箱被其他账号占用时显式报错。
+        // 这里不能静默跳过——邮箱被占会导致引导账号建不出来，
         // 而数据范围授予链的信任根缺失却无人察觉。
-        UserDO existingByPhone = baseMapper.selectByPhone(phone);
-        if (existingByPhone != null) {
+        UserDO existingByEmail = baseMapper.selectByEmail(email);
+        if (existingByEmail != null) {
             throw new BusinessException(
                     CommonErrorCode.CONFLICT,
-                    "引导账号的手机号已被其他账号占用"
+                    "引导账号的邮箱已被其他账号占用"
             );
         }
 
         // 组装引导账号，除角色外与普通注册保持一致。
         UserDO userDO = new UserDO();
         userDO.setUsername(username);
-        userDO.setPhone(phone);
+        userDO.setEmail(email);
         userDO.setRoleCode(roleCode);
         userDO.setBalance(DEFAULT_BALANCE);
         userDO.setPasswordHash(passwordEncoder.encode(rawPassword));

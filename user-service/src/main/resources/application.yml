@@ -43,14 +43,15 @@ management:
         include: health,info
 
 # 用户账号引导：默认关闭。开启时需同时提供系统管理员与初始总经理
-# 两套账号各三个变量，共七个；真实初始密码只通过运行环境变量注入，
+# 两套账号各三个变量，共六个；真实初始密码只通过运行环境变量注入，
 # 不写入本文件、.env.example 或日志。环境变量优先级高于本文件默认值。
+# 账号标识已由手机号改为邮箱（BOOTSTRAP_EMAIL）。
 USER_ADMIN_BOOTSTRAP_ENABLED: false
 USER_ADMIN_BOOTSTRAP_USERNAME: ""
-USER_ADMIN_BOOTSTRAP_PHONE: ""
+USER_ADMIN_BOOTSTRAP_EMAIL: ""
 USER_ADMIN_BOOTSTRAP_PASSWORD: ""
 USER_MANAGER_BOOTSTRAP_USERNAME: ""
-USER_MANAGER_BOOTSTRAP_PHONE: ""
+USER_MANAGER_BOOTSTRAP_EMAIL: ""
 USER_MANAGER_BOOTSTRAP_PASSWORD: ""
 
 internal:

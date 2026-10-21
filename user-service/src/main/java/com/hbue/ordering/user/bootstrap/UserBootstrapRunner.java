@@ -46,9 +46,14 @@ public class UserBootstrapRunner implements ApplicationRunner {
     /** 用户名最大长度，沿用用户表上限。 */
     private static final int MAX_USERNAME_LENGTH = 50;
 
-    /** 中国大陆 11 位手机号格式。 */
-    private static final Pattern PHONE_PATTERN =
-            Pattern.compile("^1[3-9]\\d{9}$");
+    /**
+     * 邮箱格式校验规则。
+     *
+     * <p>与注册接口保持同一套宽松规则：只要求「本地部分@域名.后缀」，不校验域名真实性。
+     * 引导账号不接收验证码，因此该值仅作格式约束与账号标识。</p>
+     */
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
     /** 系统管理员引导变量前缀。 */
     private static final String ADMIN_PREFIX = "USER_ADMIN_BOOTSTRAP";
@@ -64,8 +69,8 @@ public class UserBootstrapRunner implements ApplicationRunner {
     /** 系统管理员引导用户名。 */
     private final String adminUsername;
 
-    /** 系统管理员引导手机号。 */
-    private final String adminPhone;
+    /** 系统管理员引导邮箱。 */
+    private final String adminEmail;
 
     /** 系统管理员引导明文密码。 */
     private final String adminPassword;
@@ -73,8 +78,8 @@ public class UserBootstrapRunner implements ApplicationRunner {
     /** 初始总经理引导用户名。 */
     private final String managerUsername;
 
-    /** 初始总经理引导手机号。 */
-    private final String managerPhone;
+    /** 初始总经理引导邮箱。 */
+    private final String managerEmail;
 
     /** 初始总经理引导明文密码。 */
     private final String managerPassword;
@@ -85,29 +90,29 @@ public class UserBootstrapRunner implements ApplicationRunner {
      * @param userService 用户业务服务
      * @param enabled 引导总开关
      * @param adminUsername 系统管理员用户名环境变量
-     * @param adminPhone 系统管理员手机号环境变量
+     * @param adminEmail 系统管理员邮箱环境变量
      * @param adminPassword 系统管理员密码环境变量
      * @param managerUsername 初始总经理用户名环境变量
-     * @param managerPhone 初始总经理手机号环境变量
+     * @param managerEmail 初始总经理邮箱环境变量
      * @param managerPassword 初始总经理密码环境变量
      */
     public UserBootstrapRunner(
             UserService userService,
             @Value("${USER_ADMIN_BOOTSTRAP_ENABLED:false}") boolean enabled,
             @Value("${USER_ADMIN_BOOTSTRAP_USERNAME:}") String adminUsername,
-            @Value("${USER_ADMIN_BOOTSTRAP_PHONE:}") String adminPhone,
+            @Value("${USER_ADMIN_BOOTSTRAP_EMAIL:}") String adminEmail,
             @Value("${USER_ADMIN_BOOTSTRAP_PASSWORD:}") String adminPassword,
             @Value("${USER_MANAGER_BOOTSTRAP_USERNAME:}") String managerUsername,
-            @Value("${USER_MANAGER_BOOTSTRAP_PHONE:}") String managerPhone,
+            @Value("${USER_MANAGER_BOOTSTRAP_EMAIL:}") String managerEmail,
             @Value("${USER_MANAGER_BOOTSTRAP_PASSWORD:}") String managerPassword
     ) {
         this.userService = userService;
         this.enabled = enabled;
         this.adminUsername = adminUsername;
-        this.adminPhone = adminPhone;
+        this.adminEmail = adminEmail;
         this.adminPassword = adminPassword;
         this.managerUsername = managerUsername;
-        this.managerPhone = managerPhone;
+        this.managerEmail = managerEmail;
         this.managerPassword = managerPassword;
     }
 
@@ -126,8 +131,8 @@ public class UserBootstrapRunner implements ApplicationRunner {
 
         // 先校验两组引导配置，再开始写库，避免第二组配置错误时只创建出半套账号。
         // 配置错误只报告变量名和格式要求，不把密码等凭据写入日志。
-        validateConfig(ADMIN_PREFIX, adminUsername, adminPhone, adminPassword);
-        validateConfig(MANAGER_PREFIX, managerUsername, managerPhone, managerPassword);
+        validateConfig(ADMIN_PREFIX, adminUsername, adminEmail, adminPassword);
+        validateConfig(MANAGER_PREFIX, managerUsername, managerEmail, managerPassword);
 
         bootstrapSystemAdmin();
         bootstrapGeneralManager();
@@ -142,7 +147,7 @@ public class UserBootstrapRunner implements ApplicationRunner {
     private void bootstrapSystemAdmin() {
         boolean created = userService.bootstrapSystemAdmin(
                 adminUsername,
-                adminPhone,
+                adminEmail,
                 adminPassword
         );
         if (created) {
@@ -161,7 +166,7 @@ public class UserBootstrapRunner implements ApplicationRunner {
     private void bootstrapGeneralManager() {
         boolean created = userService.bootstrapGeneralManager(
                 managerUsername,
-                managerPhone,
+                managerEmail,
                 managerPassword
         );
         if (created) {
@@ -176,18 +181,18 @@ public class UserBootstrapRunner implements ApplicationRunner {
      *
      * @param prefix 变量前缀
      * @param username 引导用户名
-     * @param phone 引导手机号
+     * @param email 引导邮箱
      * @param password 引导明文密码
-     * @throws IllegalStateException 配置缺失或长度、手机号格式不符合要求时抛出
+     * @throws IllegalStateException 配置缺失或长度、邮箱格式不符合要求时抛出
      */
     private void validateConfig(
             String prefix,
             String username,
-            String phone,
+            String email,
             String password
     ) {
         requirePresent(prefix, "USERNAME", username);
-        requirePresent(prefix, "PHONE", phone);
+        requirePresent(prefix, "EMAIL", email);
         requirePresent(prefix, "PASSWORD", password);
 
         int usernameLength = username.length();
@@ -200,9 +205,9 @@ public class UserBootstrapRunner implements ApplicationRunner {
             );
         }
 
-        if (!PHONE_PATTERN.matcher(phone).matches()) {
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
             throw new IllegalStateException(
-                    prefix + "_PHONE 必须是 11 位中国大陆手机号"
+                    prefix + "_EMAIL 必须是合法邮箱地址"
             );
         }
 

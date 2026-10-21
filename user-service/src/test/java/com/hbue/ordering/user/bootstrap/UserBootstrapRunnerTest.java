@@ -28,20 +28,20 @@ class UserBootstrapRunnerTest {
     private UserBootstrapRunner runner(
             boolean enabled,
             String adminUsername,
-            String adminPhone,
+            String adminEmail,
             String adminPassword,
             String managerUsername,
-            String managerPhone,
+            String managerEmail,
             String managerPassword
     ) {
         return new UserBootstrapRunner(
                 userService,
                 enabled,
                 adminUsername,
-                adminPhone,
+                adminEmail,
                 adminPassword,
                 managerUsername,
-                managerPhone,
+                managerEmail,
                 managerPassword
         );
     }
@@ -61,7 +61,7 @@ class UserBootstrapRunnerTest {
                 "",
                 "",
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         );
 
@@ -74,10 +74,10 @@ class UserBootstrapRunnerTest {
         UserBootstrapRunner bootstrapRunner = runner(
                 true,
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026",
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "too_short"
         );
 
@@ -86,14 +86,14 @@ class UserBootstrapRunnerTest {
     }
 
     @Test
-    void shouldRejectInvalidPhoneFormat() {
+    void shouldRejectInvalidEmailFormat() {
         UserBootstrapRunner bootstrapRunner = runner(
                 true,
                 "admin",
-                "12345",
+                "not-an-email",
                 "admin_pass_2026",
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         );
 
@@ -105,33 +105,33 @@ class UserBootstrapRunnerTest {
     void shouldCreateBothAccountsWhenConfigured() {
         when(userService.bootstrapSystemAdmin(
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026"
         )).thenReturn(true);
         when(userService.bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         )).thenReturn(true);
 
         runner(
                 true,
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026",
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         ).run(null);
 
         verify(userService).bootstrapSystemAdmin(
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026"
         );
         verify(userService).bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         );
     }
@@ -140,22 +140,22 @@ class UserBootstrapRunnerTest {
     void shouldNotThrowWhenAccountsAlreadyExist() {
         when(userService.bootstrapSystemAdmin(
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026"
         )).thenReturn(false);
         when(userService.bootstrapGeneralManager(
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         )).thenReturn(false);
 
         assertDoesNotThrow(() -> runner(
                 true,
                 "admin",
-                "13800000001",
+                "100000001@qq.com",
                 "admin_pass_2026",
                 "manager",
-                "13800000002",
+                "100000002@qq.com",
                 "manager_pass_2026"
         ).run(null));
 

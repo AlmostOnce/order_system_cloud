@@ -127,6 +127,29 @@ public interface UserMapper extends BaseMapper<UserDO> {
     UserDO selectByPhone(@Param("phone") String phone);
 
     /**
+     * 按邮箱精确查询用户。
+     *
+     * <p>引导流程用它判断邮箱是否已被其他账号占用：被占用时必须显式报错，
+     * 不能让引导账号静默缺失（否则数据范围授予链的信任根建不出来却无人察觉）。</p>
+     *
+     * @param email 注册邮箱
+     * @return 用户持久化对象，不存在时返回 null
+     */
+    @Select("""
+        SELECT
+            user_id,
+            username,
+            role_code,
+            email,
+            status,
+            deleted_at
+        FROM users
+        WHERE email = #{email}
+        LIMIT 1
+        """)
+    UserDO selectByEmail(@Param("email") String email);
+
+    /**
      * 按用户 ID 查询未删除的用户（不限制状态）。
      *
      * <p>账号启用/禁用需要读到一个已停用账号才能把它重新启用，
