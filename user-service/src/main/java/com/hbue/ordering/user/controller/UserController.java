@@ -7,6 +7,8 @@ import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.service.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,13 +31,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final InternalScopeTokenVerifier verifier;
 
     /**
      * 创建用户控制器。
      *
      * @param userService 用户业务服务
      */
-    public UserController(UserService userService) {
+    public UserController(UserService userService, InternalScopeTokenVerifier verifier) {
+        this.verifier = verifier;
         this.userService = userService;
     }
 
@@ -51,24 +55,6 @@ public class UserController {
     }
 
     /**
-     * 根据用户 ID 查询用户基础信息。
-     *
-     * @param userId 用户 ID
-     * @return 用户基础信息
-     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户不存在、停用或已删除时由统一异常处理转换为响应
-     */
-    @GetMapping("/{userId}")
-    public ApiResponse<UserBasicVO> getUserById(
-            @PathVariable("userId") Long userId
-    ) {
-        // 由用户业务服务负责查询用户信息。
-        UserBasicVO userBasicVO = userService.getUserById(userId);
-
-        // 返回用户基础信息。
-        return ApiResponse.success(userBasicVO);
-    }
-
-    /**
      * 注册用户。
      *
      * @param command 用户注册命令
@@ -77,8 +63,10 @@ public class UserController {
      */
     @PostMapping
     public ApiResponse<UserBasicVO> register(
-            @RequestBody UserRegisterCommand command
+            @RequestBody UserRegisterCommand command,
+            @RequestHeader(value = "X-Internal-Token", required = false) String token
     ) {
+        verifier.verify(token);
         // 由 Service 负责用户名检查、密码加密和用户保存。
         UserBasicVO userBasicVO = userService.register(command);
 
@@ -96,8 +84,10 @@ public class UserController {
      */
     @PostMapping("/authenticate")
     public ApiResponse<UserBasicVO> authenticate(
-            @RequestBody UserPasswordVerifyCommand command
+            @RequestBody UserPasswordVerifyCommand command,
+            @RequestHeader(value = "X-Internal-Token", required = false) String token
     ) {
+        verifier.verify(token);
         // 由 Service 负责查询用户并校验 BCrypt 密码。
         UserBasicVO userBasicVO =
                 userService.authenticate(command);

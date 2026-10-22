@@ -29,6 +29,10 @@ public class UserDO {
     @TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
 
+    /** 对外稳定随机 UUID，内部关联仍使用 user_id。 */
+    @TableField("user_uuid")
+    private String userUuid;
+
     /**
      * 用户名。
      */

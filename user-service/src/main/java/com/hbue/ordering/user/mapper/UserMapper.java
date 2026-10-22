@@ -20,9 +20,15 @@ import java.math.BigDecimal;
 @Mapper
 public interface UserMapper extends BaseMapper<UserDO> {
 
+    @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND status = 1 AND deleted_at IS NULL")
+    Long selectIdByUuid(@Param("userUuid") String userUuid);
+
+    @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND deleted_at IS NULL")
+    Long selectExistingIdByUuid(@Param("userUuid") String userUuid);
+
     /** 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。 */
     @Select("""
-        SELECT user_id, balance, pay_password_hash, status, deleted_at
+        SELECT user_id, user_uuid, balance, pay_password_hash, status, deleted_at
         FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
         """)
     UserDO selectBalanceForUpdate(@Param("userId") Long userId);
@@ -37,7 +43,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /** 本人资料的字段白名单，不查询密码和支付凭据。 */
     @Select("""
-        SELECT user_id, username, role_code, email, phone, avatar_url, created_at, status
+        SELECT user_id, user_uuid, username, role_code, email, phone, avatar_url, created_at, status
         FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
         """)
     UserDO selectOwnProfile(@Param("userId") Long userId);
@@ -52,6 +58,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             phone,
@@ -87,6 +94,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             phone,
@@ -114,6 +122,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             phone,
@@ -137,6 +146,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             phone,
@@ -160,6 +170,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             email,
@@ -183,6 +194,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             username,
             role_code,
             phone,
@@ -203,6 +215,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
     SELECT
         user_id,
+        user_uuid,
         username,
         role_code,
         password_hash,
@@ -228,6 +241,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             balance,
             pay_password_hash,
             status,
@@ -249,6 +263,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
+            user_uuid,
             password_hash,
             pay_password_hash,
             status,

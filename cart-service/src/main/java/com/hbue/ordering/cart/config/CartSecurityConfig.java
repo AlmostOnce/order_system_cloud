@@ -1,5 +1,6 @@
 package com.hbue.ordering.cart.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.cart.security.CartSecurityErrorHandler;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.springframework.beans.factory.annotation.Value;
@@ -105,7 +106,8 @@ public class CartSecurityConfig {
             @Value("${security.jwt.issuer}") String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         // 启动时加载固定公钥，重启不会生成新密钥，也不读取认证服务私钥。
         try (InputStream input = resourceLoader.getResource(publicKeyLocation).getInputStream()) {
@@ -113,7 +115,7 @@ public class CartSecurityConfig {
                     RsaKeyConverters.x509().convert(input), "RSA 公钥不能为空");
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
             decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
-            return token -> decodeAndCheckBlacklist(decoder, token, redisOperationsService, blacklistKeyPrefix);
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(decoder, token, redisOperationsService, blacklistKeyPrefix));
         } catch (IOException exception) {
             throw new IllegalStateException("读取购物车服务 JWT RSA 公钥失败", exception);
         }

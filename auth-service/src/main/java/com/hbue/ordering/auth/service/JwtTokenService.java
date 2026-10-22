@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 /**
  * JWT Token 服务。
  *
- * <p>负责使用 RSA 私钥签发无状态 Access Token，并写入用户 ID、用户名、角色、
+ * <p>负责使用 RSA 私钥签发无状态 Access Token，并写入用户公开 UUID、用户名、角色、
  * 签发方、签发时间、过期时间和唯一 jti。此服务不创建 Refresh Token，也不
  * 保存会话状态；Refresh Token 由 {@link RefreshTokenService} 管理。</p>
  *
@@ -66,17 +66,20 @@ public class JwtTokenService {
     /**
      * 创建访问 Token。
      *
-     * @param userId 用户 ID
+     * @param userUuid 用户公开 UUID
      * @param username 用户名
      * @param roleCode 角色编码
      * @return JWT 访问 Token
      * @throws org.springframework.security.oauth2.jwt.JwtEncodingException JWT 编码或签名失败时抛出
      */
     public String createAccessToken(
-            Long userId,
+            String userUuid,
             String username,
             String roleCode
     ) {
+        if (userUuid == null || !userUuid.matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")) {
+            throw new IllegalArgumentException("用户 UUID 不合法，拒绝签发令牌");
+        }
         // 获取当前时间。
         Instant issuedAt = Instant.now();
 
@@ -90,7 +93,7 @@ public class JwtTokenService {
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .id(UUID.randomUUID().toString())
                 .issuer(issuer)
-                .subject(String.valueOf(userId))
+                .subject(userUuid)
                 .claim("username", username)
                 .claim("roles", List.of(roleCode))
                 .claim("token_type", "access")

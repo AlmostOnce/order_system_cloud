@@ -70,3 +70,7 @@ cart:
   # 最后一次修改后保留 30 天，普通读取不会刷新过期时间。
   time-to-live: ${CART_TTL:30d}
   key-prefix: ${CART_KEY_PREFIX:cart:user:}
+
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}

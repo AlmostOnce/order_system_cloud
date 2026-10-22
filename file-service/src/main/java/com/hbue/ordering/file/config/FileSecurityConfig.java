@@ -1,5 +1,6 @@
 package com.hbue.ordering.file.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.file.security.FileAccessDeniedHandler;
 import com.hbue.ordering.file.security.FileAuthenticationEntryPoint;
@@ -86,6 +87,7 @@ public class FileSecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/internal/files/**").permitAll()
                         // 接口文档路径允许匿名访问，便于本地联调查看。
                         .requestMatchers(
                                 "/v3/api-docs/**",
@@ -136,7 +138,8 @@ public class FileSecurityConfig {
             @Value("${security.jwt.issuer}") String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         Resource publicKeyResource = resourceLoader.getResource(publicKeyLocation);
         try (InputStream inputStream = publicKeyResource.getInputStream()) {
@@ -148,12 +151,12 @@ public class FileSecurityConfig {
                     .withPublicKey(publicKey)
                     .build();
             decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
-            return token -> decodeAndCheckBlacklist(
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(
                     decoder,
                     token,
                     redisOperationsService,
                     blacklistKeyPrefix
-            );
+            ));
         } catch (IOException exception) {
             throw new IllegalStateException("读取 JWT RSA 公钥失败", exception);
         }

@@ -1,5 +1,6 @@
 package com.hbue.ordering.auth.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -126,7 +127,8 @@ public class SecurityConfig {
             @Value("${security.jwt.issuer}") String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         try (
                 InputStream inputStream =
@@ -147,12 +149,12 @@ public class SecurityConfig {
             );
 
             // 在标准 JWT 校验后检查 jti 黑名单。
-            return token -> decodeAndCheckBlacklist(
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(
                     decoder,
                     token,
                     redisOperationsService,
                     blacklistKeyPrefix
-            );
+            ));
         } catch (IOException exception) {
             // 公钥读取失败时，认证服务必须启动失败。
             throw new IllegalStateException(

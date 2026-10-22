@@ -1,5 +1,6 @@
 package com.hbue.ordering.order.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.order.security.OrderAccessDeniedHandler;
 import com.hbue.ordering.order.security.OrderAuthenticationEntryPoint;
@@ -187,7 +188,8 @@ public class OrderSecurityConfig {
             String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         try (
                 InputStream inputStream =
@@ -213,12 +215,12 @@ public class OrderSecurityConfig {
             );
 
             // 返回带 Redis 黑名单校验的 JWT 解码器。
-            return token -> decodeAndCheckBlacklist(
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(
                     decoder,
                     token,
                     redisOperationsService,
                     blacklistKeyPrefix
-            );
+            ));
         } catch (IOException exception) {
             // 公钥读取失败时，订单服务必须启动失败。
             throw new IllegalStateException(

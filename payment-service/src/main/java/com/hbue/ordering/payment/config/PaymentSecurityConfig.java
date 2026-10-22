@@ -1,5 +1,6 @@
 package com.hbue.ordering.payment.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.payment.security.PaymentAccessDeniedHandler;
 import com.hbue.ordering.payment.security.PaymentAuthenticationEntryPoint;
@@ -138,7 +139,8 @@ public class PaymentSecurityConfig {
             @Value("${security.jwt.issuer}") String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         Resource publicKeyResource = resourceLoader.getResource(publicKeyLocation);
         try (InputStream inputStream = publicKeyResource.getInputStream()) {
@@ -150,12 +152,12 @@ public class PaymentSecurityConfig {
                     .withPublicKey(publicKey)
                     .build();
             decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
-            return token -> decodeAndCheckBlacklist(
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(
                     decoder,
                     token,
                     redisOperationsService,
                     blacklistKeyPrefix
-            );
+            ));
         } catch (IOException exception) {
             throw new IllegalStateException("读取 JWT RSA 公钥失败", exception);
         }

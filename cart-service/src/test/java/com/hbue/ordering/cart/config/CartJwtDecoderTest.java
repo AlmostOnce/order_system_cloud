@@ -78,7 +78,9 @@ class CartJwtDecoderTest {
                 .thenReturn(new ByteArrayResource(pem.getBytes(StandardCharsets.UTF_8)));
         redis = mock(RedisOperationsService.class);
         decoder = new CartSecurityConfig().jwtDecoder(
-                loader, "memory:cart-public-key", "test-issuer", redis, "auth:access-token:blacklist:");
+                loader, "memory:cart-public-key", "test-issuer", redis, "auth:access-token:blacklist:",
+                mock(com.hbue.ordering.common.web.security.JwtUserIdentity.class, org.mockito.AdditionalAnswers.returnsFirstArg())
+        );
     }
 
     /** 有效签名、正确签发方且不在黑名单的令牌可以访问。 */

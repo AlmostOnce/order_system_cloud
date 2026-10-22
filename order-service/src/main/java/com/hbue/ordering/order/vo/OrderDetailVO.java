@@ -35,6 +35,7 @@ public class OrderDetailVO {
     private String orderNo;
 
     /** 用户 ID。 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Long userId;
 
     /** 用户名。 */

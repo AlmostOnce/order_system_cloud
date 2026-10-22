@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  */
 @FeignClient(
         name = "user-service",
+        configuration = UserServiceInternalConfiguration.class,
         fallbackFactory = UserServiceClientFallbackFactory.class
 )
 public interface UserServiceClient {
@@ -34,7 +35,7 @@ public interface UserServiceClient {
      * @param userId 用户 ID
      * @return 统一响应中的用户基础信息；用户不存在时由服务端返回业务失败
      */
-    @GetMapping("/users/{userId}")
+    @GetMapping("/internal/users/{userId}/basic")
     ApiResponse<UserBasicVO> getUserById(
             @PathVariable("userId") Long userId
     );
