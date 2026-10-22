@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-20
+更新时间：2026-10-21
 
 ### 已完成
 
@@ -394,6 +394,17 @@
 - **试过但无效**：`docker-compose.yml` 为 seata 容器加 `SEATA_IP=127.0.0.1`——本镜像（jib 构建，`apache/seata-server:2.5.0`）并不会把它转成注册地址，重建后 Nacos 中仍是 `172.19.0.3`，已移除该无效配置并留注释说明。
 - **落地修复**：`order-service`（TM）与 `stock-service`（RM）的 Seata 客户端不再走注册中心发现，改为 `seata.registry.type=file` + `seata.service.grouplist.default=${SEATA_TC_GROUPLIST:127.0.0.1:9109}`，直连 Docker 映射到宿主机的 9109 端口。**容器化部署时需改回 `type: nacos`**（或在 compose 网络内使用容器可达地址），两个服务的 yml 已就地注明。
 - **验证**：`stock-service` 启动成功（`will connect to 127.0.0.1:9109`、Tomcat 9104、`Started StockServiceApplication`），`GET /internal/stocks/1/1` 带 `X-Internal-Token` 返回 200、不带返回 401，`/actuator/health` 为 `UP`；`order-service` 同样启动成功（Tomcat 9091）并注册到 Nacos。验证后已停止两个手工启动的实例。
+
+### 2026-10-21 当前 Linux 设备订单、库存启动故障修复
+
+- 使用现有配置实际运行 order-service 和 stock-service，均复现 `globalTransactionScanner` 初始化失败，根因是 `Connection refused: /127.0.0.1:9109`，不是日志末尾 Nacos 关闭阶段的中断异常。
+- 当前设备未下载/创建 Seata 容器，且未执行库存数据库迁移：缺少 stock_db、stock_service 账号和 order_db.undo_log。代码及迁移文件已同步，不代表另一台设备的数据库和容器也已同步。
+- 备份 order_db 至本机 `/home/user/.local/state/order-system/db-backups/startup-20261021-0jv9Jd/order_db.sql`，随后使用 utf8mb4 连接执行已有 stock_db/V1 与 order_db/V4 迁移；新增库存三张表、专用账号及订单回滚日志表，未删除或清空已有数据。stock_service 登录与表结构、中文注释已验证。
+- 通过现有 Compose 服务拉取并启动 apache/seata-server:2.5.0；TC 监听 9109，Nacos SEATA_GROUP 中实例 healthy，重启策略沿用 unless-stopped。未关闭 Seata 或修改事务边界、应用端口。
+- 再次运行两个 Java 服务：order-service 9091、stock-service 9104 均出现 Started 日志，TM/RM 注册 Seata 成功；两个 `/actuator/health` 均返回 UP，Nacos DEFAULT_GROUP 中实例均 healthy，携带内部凭据的库存读取返回 HTTP 200 / COMMON_000。
+- 全项目 `mvn -B test` 成功，18 个 Reactor 项目全部 SUCCESS；其中库存 10 项测试通过。此轮未开启购物车真实 Redis 集成开关，相关 16 项集成测试按条件跳过，不把它们计为本轮已运行。
+- 验证后仅停止本轮创建并核实 PID 的临时 Java 实例，释放 9091/9104 给 IDEA；Seata、MySQL、Redis、Nacos 容器继续运行，未操作其他项目进程。库存仍为空，本轮未进行真实下单/扣库存或分布式回滚验收。
+- 新增 `docs/ORDER_STOCK_STARTUP.md`，记录新设备基础环境、迁移、IDEA/Maven 启动及健康检查顺序；后续先启动完整 Compose 环境再启动应用。
 
 ## 当前下一步
 
