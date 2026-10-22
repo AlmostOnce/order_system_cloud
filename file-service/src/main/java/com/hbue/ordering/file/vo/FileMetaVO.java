@@ -27,6 +27,7 @@ public class FileMetaVO {
     private String bizType;
 
     /** 关联业务主键，可为空。 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Long bizRef;
 
     /** 原始文件名，仅作展示。 */
@@ -45,6 +46,7 @@ public class FileMetaVO {
     private String sha256;
 
     /** 上传者 user_id。 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Long uploaderId;
 
     /** 创建时间。 */

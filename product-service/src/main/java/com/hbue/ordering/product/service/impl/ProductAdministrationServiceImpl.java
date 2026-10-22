@@ -93,6 +93,33 @@ public class ProductAdministrationServiceImpl
         this.bloomFilterManager = bloomFilterManager;
     }
 
+    @Override
+    @Transactional
+    public WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String url) {
+        validateId(windowId, "窗口");
+        dataScopeService.checkWindowAccess(operatorId, windowId);
+        requireWindow(windowId);
+        int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
+                .eq("window_id", windowId).set("image_url", url));
+        if (updated != 1) throw notFound("窗口不存在");
+        evictActiveWindowsAfterCommit();
+        evictWindowMenuAfterCommit(windowId);
+        return toWindowVO(requireWindow(windowId));
+    }
+
+    @Override
+    @Transactional
+    public ProductAdminVO updateProductImage(Long operatorId, Long productId, String url) {
+        validateId(productId, "菜品");
+        ProductDO product = requireProduct(productId);
+        dataScopeService.checkWindowAccess(operatorId, product.getWindowId());
+        int updated = productMapper.update(null, new UpdateWrapper<ProductDO>()
+                .eq("product_id", productId).set("image_url", url));
+        if (updated != 1) throw notFound("菜品不存在");
+        evictWindowMenuAfterCommit(product.getWindowId());
+        return toProductVO(requireProduct(productId));
+    }
+
     /** {@inheritDoc} */
     @Override
     public List<WindowAdminVO> listWindows(Long operatorId) {

@@ -115,6 +115,8 @@ class ProductMenuServiceImplTest {
 
     @Test
     void shouldOrderWindowsByRestaurantThenWindowAndExposeDescription() {
+        // 显式模拟未命中；Mockito 对 List 默认返回空集合，空集合也是有效缓存。
+        when(menuCacheService.findActiveWindows()).thenReturn(null);
         RestaurantDO first = new RestaurantDO();
         first.setRestaurantId(1L);
         first.setSortOrder(10);

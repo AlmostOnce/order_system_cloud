@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -287,6 +288,31 @@ class ProductAdministrationServiceImplTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldUpdateOnlyWindowImageAndEvictBothCaches() {
+        when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
+        when(diningWindowMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+        service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content");
+        ArgumentCaptor<UpdateWrapper<DiningWindowDO>> update = ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(diningWindowMapper).update(isNull(), update.capture());
+        assertTrue(update.getValue().getSqlSet().contains("image_url="));
+        assertTrue(!update.getValue().getSqlSet().contains("window_name="));
+        verify(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
+        verify(menuCacheService).evictActiveWindows();
+        verify(menuCacheService).evictWindowMenu(7L);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldRejectImageChangeOutsideManagedWindow() {
+        doThrow(new BusinessException(CommonErrorCode.FORBIDDEN, "无管理权限"))
+                .when(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
+        assertThrows(BusinessException.class, () -> service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content"));
+        verify(diningWindowMapper, never()).update(isNull(), any(UpdateWrapper.class));
+        verify(menuCacheService, never()).evictWindowMenu(7L);
     }
 
     private ProductAdministrationService service() {

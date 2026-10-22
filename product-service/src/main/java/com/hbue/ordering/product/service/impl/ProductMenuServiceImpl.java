@@ -193,7 +193,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getWindowName(),
                     window.getDescription(),
                     window.getSortOrder(),
-                    window.getLocation()
+                    window.getLocation(),
+                    window.getImageUrl()
             ));
         }
         menuCacheService.saveActiveWindows(summaries);
@@ -357,7 +358,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 window.getDescription(),
                 window.getLocation(),
                 categoryMenus,
-                uncategorizedProducts
+                uncategorizedProducts,
+                window.getImageUrl()
         );
     }
 
