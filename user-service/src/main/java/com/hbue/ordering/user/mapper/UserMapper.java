@@ -20,6 +20,28 @@ import java.math.BigDecimal;
 @Mapper
 public interface UserMapper extends BaseMapper<UserDO> {
 
+    /** 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。 */
+    @Select("""
+        SELECT user_id, balance, pay_password_hash, status, deleted_at
+        FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
+        """)
+    UserDO selectBalanceForUpdate(@Param("userId") Long userId);
+
+    /** 充值与消费共用同一余额行；原子累加，不覆盖并发扣款结果。 */
+    @Update("""
+        UPDATE users SET balance = balance + #{amount}, version = version + 1, updated_at = NOW()
+        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+          AND balance <= 99999999.99 - #{amount}
+        """)
+    int creditBalance(@Param("userId") Long userId, @Param("amount") BigDecimal amount);
+
+    /** 本人资料的字段白名单，不查询密码和支付凭据。 */
+    @Select("""
+        SELECT user_id, username, role_code, email, phone, avatar_url, created_at, status
+        FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+        """)
+    UserDO selectOwnProfile(@Param("userId") Long userId);
+
     /**
      * 查询正常且未删除的用户。
      *

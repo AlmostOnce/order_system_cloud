@@ -116,7 +116,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
             );
         }
 
-        UserDO user = requireEnabledUser(userId);
+        UserDO user = requireEnabledUser(userMapper.selectPasswordsById(userId));
         String newPayPassword = request.getNewPayPassword();
         String existingHash = user.getPayPasswordHash();
 
@@ -254,7 +254,10 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      * @return 用户持久化对象
      */
     private UserDO requireEnabledUser(Long userId) {
-        UserDO user = userMapper.selectBalanceById(userId);
+        return requireEnabledUser(userMapper.selectBalanceById(userId));
+    }
+
+    private UserDO requireEnabledUser(UserDO user) {
         if (user == null || !USER_STATUS_ENABLED.equals(user.getStatus())) {
             throw new BusinessException(
                     CommonErrorCode.NOT_FOUND,

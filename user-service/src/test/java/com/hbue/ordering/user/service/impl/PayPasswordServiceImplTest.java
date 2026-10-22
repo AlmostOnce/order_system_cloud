@@ -67,7 +67,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectFirstSetWithoutLoginPassword() {
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
 
         PayPasswordSetRequest request = setRequest(null, null, PAY_PASSWORD);
 
@@ -83,7 +83,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectFirstSetWhenLoginPasswordWrong() {
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(false);
 
@@ -100,7 +100,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectPayPasswordSameAsLoginPassword() {
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(true);
         when(passwordEncoder.matches(PAY_PASSWORD, LOGIN_HASH))
@@ -119,7 +119,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldSetPayPasswordOnFirstSet() {
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(true);
         when(passwordEncoder.matches(PAY_PASSWORD, LOGIN_HASH))
@@ -131,6 +131,8 @@ class PayPasswordServiceImplTest {
                 setRequest(LOGIN_PASSWORD, null, PAY_PASSWORD)
         );
 
+        verify(userMapper).selectPasswordsById(USER_ID);
+        verify(userMapper, never()).selectBalanceById(USER_ID);
         verify(userMapper).updatePayPassword(USER_ID, "encoded-pay");
         // 设置成功后应清空失败计数。
         verify(redisOperationsService).delete(FAIL_KEY);
@@ -138,7 +140,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectModifyWithoutOldPayPassword() {
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("old-hash"));
+        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user("old-hash"));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> payPasswordService.setPayPassword(
