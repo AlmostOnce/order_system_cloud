@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-21
+更新时间：2026-10-23
 
 ### 已完成
 
@@ -405,6 +405,13 @@
 - 全项目 `mvn -B test` 成功，18 个 Reactor 项目全部 SUCCESS；其中库存 10 项测试通过。此轮未开启购物车真实 Redis 集成开关，相关 16 项集成测试按条件跳过，不把它们计为本轮已运行。
 - 验证后仅停止本轮创建并核实 PID 的临时 Java 实例，释放 9091/9104 给 IDEA；Seata、MySQL、Redis、Nacos 容器继续运行，未操作其他项目进程。库存仍为空，本轮未进行真实下单/扣库存或分布式回滚验收。
 - 新增 `docs/ORDER_STOCK_STARTUP.md`，记录新设备基础环境、迁移、IDEA/Maven 启动及健康检查顺序；后续先启动完整 Compose 环境再启动应用。
+
+### 2026-10-23 本机数据库连接与商品表结构修复
+
+- 文件服务连接 MySQL 被拒的原因是本机数据库缺少 `file_db` 和 `file_service` 账号；已按 `file_db/V1` 迁移创建数据库、元数据表和服务账号授权，文件服务健康检查现返回 HTTP 200（`UP`）。
+- 商品服务错误是本机 `product_db` 停留在基础表结构，缺少 `restaurants` 表及 `dining_windows.restaurant_id`、`description`、`sort_order`、`image_url`、`is_open` 等当前代码所需字段；已先备份现有 `product_db`，再按顺序执行 V1、V2、V4、V5、V6、V7 迁移。现有窗口记录保留，并补齐默认餐厅关联。
+- 修复了 `product_db/V7__seed_window_messages.sql` 未选择数据库的问题，增加 `USE product_db`。
+- 商品服务健康检查现返回 HTTP 200（`UP`）。当前已经运行的商品服务进程曾在启动时因旧表结构跳过布隆过滤器存量数据加载；数据库修复后需在 IDEA 重启一次 `ProductServiceApplication`，使启动初始化器重新加载数据。
 
 ## 当前下一步
 
