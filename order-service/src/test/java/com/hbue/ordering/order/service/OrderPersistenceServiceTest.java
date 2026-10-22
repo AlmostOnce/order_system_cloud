@@ -7,6 +7,7 @@ import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.impl.OrderPersistenceServiceImpl;
+import com.hbue.ordering.order.ranking.SalesOutboxWriter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +36,9 @@ class OrderPersistenceServiceTest {
     @Mock
     private OrderItemMapper orderItemMapper;
 
+    @Mock
+    private SalesOutboxWriter salesOutbox;
+
     @Test
     void shouldSaveOrderBeforeAllItemsAndAssignOrderId() {
         when(orderMapper.insert(any(OrderDO.class))).thenAnswer(invocation -> {
@@ -45,7 +49,7 @@ class OrderPersistenceServiceTest {
         when(orderItemMapper.insert(any(OrderItemDO.class))).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper
+                orderItemMapper, salesOutbox
         );
         List<OrderItemDO> items = List.of(new OrderItemDO(), new OrderItemDO());
 
@@ -68,7 +72,7 @@ class OrderPersistenceServiceTest {
         when(orderMapper.insert(any(OrderDO.class))).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper
+                orderItemMapper, salesOutbox
         );
 
         BusinessException exception = assertThrows(
@@ -96,7 +100,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper
+                orderItemMapper, salesOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -128,7 +132,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper
+                orderItemMapper, salesOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -146,5 +150,25 @@ class OrderPersistenceServiceTest {
         assertTrue(OrderPersistenceServiceImpl.class
                 .getMethod("saveOrderWithItems", OrderDO.class, List.class)
                 .isAnnotationPresent(Transactional.class));
+        assertTrue(OrderPersistenceServiceImpl.class
+                .getMethod("updateStatusIfUnchanged", Long.class, String.class, Integer.class, String.class)
+                .isAnnotationPresent(Transactional.class));
+    }
+
+    @Test
+    void onlyWinningPaidTransitionWritesOutbox() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1, 0);
+        assertTrue(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
+        assertFalse(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
+        verify(salesOutbox, times(1)).recordPaid(81L);
+    }
+
+    @Test
+    void outboxFailurePropagatesSoPaymentStateTransactionRollsBack() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(salesOutbox).recordPaid(81L);
+        assertThrows(IllegalStateException.class, () -> persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
     }
 }

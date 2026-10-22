@@ -7,6 +7,8 @@ import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
+import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.enums.OrderStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +28,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
     /** 订单明细表 Mapper。 */
     private final OrderItemMapper orderItemMapper;
+    private final SalesOutboxWriter salesOutbox;
 
     /**
      * 创建订单原子持久化服务实现。
@@ -35,10 +38,12 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
      */
     public OrderPersistenceServiceImpl(
             OrderMapper orderMapper,
-            OrderItemMapper orderItemMapper
+            OrderItemMapper orderItemMapper,
+            SalesOutboxWriter salesOutbox
     ) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
+        this.salesOutbox = salesOutbox;
     }
 
     /** {@inheritDoc} */
@@ -72,6 +77,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
     /** {@inheritDoc} */
     @Override
+    @Transactional
     public boolean updateStatusIfUnchanged(
             Long orderId,
             String expectedStatus,
@@ -79,11 +85,13 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             String targetStatus
     ) {
         // 仅当旧状态与版本号同时匹配才执行迁移；受影响行数为 0 表示状态已被其他请求改变。
-        return orderMapper.updateStatusIfVersionMatches(
+        boolean changed = orderMapper.updateStatusIfVersionMatches(
                 orderId,
                 expectedStatus,
                 expectedVersion,
                 targetStatus
         ) == 1;
+        if (changed && OrderStatus.PAID.getLabel().equals(targetStatus)) salesOutbox.recordPaid(orderId);
+        return changed;
     }
 }
