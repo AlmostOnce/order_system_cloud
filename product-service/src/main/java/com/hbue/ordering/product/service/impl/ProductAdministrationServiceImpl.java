@@ -97,7 +97,8 @@ public class ProductAdministrationServiceImpl
     @Override
     public List<WindowAdminVO> listWindows(Long operatorId) {
         List<DiningWindowDO> windows = diningWindowMapper.selectList(
-                new QueryWrapper<DiningWindowDO>().orderByAsc("window_id")
+                new QueryWrapper<DiningWindowDO>()
+                        .orderByAsc("restaurant_id", "sort_order", "window_id")
         );
 
         // 只返回操作者范围内的档口；全平台范围返回全部。
@@ -130,6 +131,8 @@ public class ProductAdministrationServiceImpl
         window.setRestaurantId(request.getRestaurantId());
         window.setWindowCode(request.getWindowCode());
         window.setWindowName(request.getWindowName());
+        window.setDescription(request.getDescription());
+        window.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         window.setLocation(request.getLocation());
         window.setImageUrl(request.getImageUrl());
         window.setStatus(request.getStatus());
@@ -172,6 +175,8 @@ public class ProductAdministrationServiceImpl
                 .set("restaurant_id", request.getRestaurantId())
                 .set("window_code", request.getWindowCode())
                 .set("window_name", request.getWindowName())
+                .set(request.getDescription() != null, "description", request.getDescription())
+                .set(request.getSortOrder() != null, "sort_order", request.getSortOrder())
                 .set("location", request.getLocation())
                 .set("image_url", request.getImageUrl())
                 .set("status", request.getStatus())
@@ -680,6 +685,8 @@ public class ProductAdministrationServiceImpl
                 window.getRestaurantId(),
                 window.getWindowCode(),
                 window.getWindowName(),
+                window.getDescription(),
+                window.getSortOrder(),
                 window.getLocation(),
                 window.getImageUrl(),
                 window.getStatus(),

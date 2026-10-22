@@ -5,6 +5,7 @@
 ## 表
 
 - `dining_windows`：窗口基本信息。
+- `restaurants`：食堂信息；食堂与窗口为一对多关系。
 - `product_categories`：窗口下的菜品分类。
 - `products`：窗口下的菜品、售价和上架状态。
 - `order_db.order_items`：下单时保存菜品信息、单价和数量快照。
@@ -16,6 +17,7 @@
 迁移文件：
 
 - `migrations/product_db/V1__create_product_catalog_tables.sql`：创建 `product_db` 及窗口、分类、菜品表。
+- `migrations/product_db/V6__add_window_description_and_sort_order.sql`：在已执行 V1、V2、V4、V5 的商品库上增加窗口简介和排序。
 - `migrations/V3__create_order_items_table.sql`：在已有 `order_db` 中创建订单明细表。
 
 项目当前不自动执行 SQL 迁移。首次创建商品库时，需要用具有建库权限的 MySQL 账号执行商品库迁移；订单明细迁移针对已应用 V1、V2 的 `order_db` 执行。Docker 开发环境可从 MySQL 容器内运行：
@@ -28,7 +30,21 @@ docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWOR
   < docs/database/migrations/V3__create_order_items_table.sql
 ```
 
-迁移使用 `CREATE DATABASE/TABLE IF NOT EXISTS`，可重复执行；已有同名表不会被重建或修改。
+V1 的建库建表语句使用 `IF NOT EXISTS`；V6 等 `ALTER TABLE` 迁移只执行一次，执行前须确认列和约束未存在。V6 需要在部署新版商品服务前执行；项目不会自动执行该迁移。
+
+## 窗口简介和排序
+
+窗口新增 `description VARCHAR(500) NULL` 和 `sort_order INT NOT NULL DEFAULT 0`。排序不得为负数，默认 0；已有窗口在迁移后保留原有数据并获得默认排序。
+
+窗口管理的新增、编辑和查询接口均支持 `description`、`sortOrder`。新增时可省略，简介为空、排序为 0；编辑时省略或传 null 表示保留原值，简介传 `""` 可清空，排序传 0 可重置。简介最长 500 字符，超长简介和负数排序由请求校验拒绝。
+
+顾客窗口列表返回两个字段，并按「食堂 sort_order → 食堂 ID → 窗口 sort_order → 窗口 ID」升序排列；未配置食堂排序的窗口延续原有规则排到最后。管理列表按「食堂 ID → 窗口 sort_order → 窗口 ID」排列，保留原有数据权限。
+
+保留食堂 `sort_order`，用于食堂选择列表以及全部窗口列表中的食堂先后顺序；窗口 `sort_order` 控制食堂内部的窗口顺序。
+
+窗口菜单额外返回 `description`。用户端首页展示最多 48 字的简介摘要，点单页在菜品滚动区域显示完整简介，未填写时不显示。
+
+窗口新增或编辑继续在事务提交后失效原有缓存；启用窗口列表缓存升至 v3，窗口菜单缓存升至 v2，避免新版本命中缺少字段的旧缓存。
 
 ## 商品服务连接配置
 
@@ -57,6 +73,7 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
     "windowId": 1,
     "windowCode": "W-DEMO-01",
     "windowName": "一楼测试窗口",
+    "description": "主营家常小炒，现点现做",
     "location": "一楼东侧",
     "categories": [
       {
@@ -83,7 +100,7 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 
 ## 目录管理接口
 
-目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。全部接口要求有效 JWT 且角色为 `SYSTEM_ADMIN`；普通注册账号默认为 `CUSTOMER`。当前项目没有提供授予管理员角色的 HTTP 接口，部署前需要由可信的运维流程配置管理员身份。
+目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。接口要求有效 JWT 且角色为 `STALL_MANAGER` 或 `RESTAURANT_MANAGER`，业务层继续校验操作者的数据范围；普通注册账号默认为 `CUSTOMER`。
 
 | 方法 | Gateway 路径 | 说明 |
 |---|---|---|
@@ -107,10 +124,14 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 
 ```json
 {
+  "restaurantId": 1,
   "windowCode": "W-BUILDING-A",
   "windowName": "一号楼窗口",
+  "description": "主营家常小炒，现点现做",
+  "sortOrder": 10,
   "location": "一楼东侧",
-  "status": 1
+  "status": 1,
+  "isOpen": 1
 }
 ```
 

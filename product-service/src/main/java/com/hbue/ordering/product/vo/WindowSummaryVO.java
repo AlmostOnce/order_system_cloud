@@ -29,6 +29,12 @@ public class WindowSummaryVO {
     /** 窗口名称。 */
     private String windowName;
 
+    /** 窗口简介。 */
+    private String description;
+
+    /** 窗口展示排序，越小越靠前。 */
+    private Integer sortOrder;
+
     /** 窗口位置。 */
     private String location;
 }

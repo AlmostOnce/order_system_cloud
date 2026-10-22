@@ -29,6 +29,9 @@ public class WindowMenuVO {
     /** 窗口名称。 */
     private String windowName;
 
+    /** 窗口简介。 */
+    private String description;
+
     /** 窗口位置。 */
     private String location;
 
