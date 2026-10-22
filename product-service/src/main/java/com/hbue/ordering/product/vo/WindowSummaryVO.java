@@ -29,6 +29,20 @@ public class WindowSummaryVO {
     /** 窗口名称。 */
     private String windowName;
 
+    /** 窗口简介。 */
+    private String description;
+
+    /** 窗口展示排序，越小越靠前。 */
+    private Integer sortOrder;
+
     /** 窗口位置。 */
     private String location;
+
+    /** 文件服务图片地址。 */
+    private String imageUrl;
+
+    public WindowSummaryVO(Long windowId, Long restaurantId, String windowCode, String windowName,
+            String description, Integer sortOrder, String location) {
+        this(windowId, restaurantId, windowCode, windowName, description, sortOrder, location, null);
+    }
 }

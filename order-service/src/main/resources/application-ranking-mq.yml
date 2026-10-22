@@ -1,0 +1,42 @@
+# 只在已部署 RocketMQ 时激活 ranking-mq profile；普通启动仍持久化 outbox。
+ranking:
+  messaging:
+    enabled: true
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    function:
+      definition: salesRankingPaid
+    stream:
+      output-bindings: salesPaid-out-0
+      bindings:
+        salesPaid-out-0:
+          destination: order-paid-sales-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+        salesRankingPaid-in-0:
+          destination: order-paid-sales-v1
+          group: sales-ranking-v1
+          content-type: application/json
+          error-handler-definition: salesRankingRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          salesPaid-out-0:
+            producer:
+              group: order-sales-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000
+          salesRankingPaid-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 /**
  * 库存服务内部接口调用失败时创建统一降级客户端。
  *
@@ -40,6 +42,11 @@ public class StockServiceClientFallbackFactory
     public StockServiceClient create(Throwable cause) {
         log.error("调用 stock-service 库存内部接口失败", cause);
         return new StockServiceClient() {
+
+            @Override
+            public ApiResponse<List<StockVO>> getWindowStocks(Long windowId, String internalToken) {
+                return serviceUnavailable();
+            }
 
             /**
              * 扣减降级处理：返回失败码，迫使调用方回滚全局事务。

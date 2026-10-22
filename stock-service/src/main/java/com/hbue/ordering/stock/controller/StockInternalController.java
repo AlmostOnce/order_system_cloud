@@ -15,14 +15,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+
+import java.util.List;
 
 /**
  * 库存内部接口。
  *
  * <p>仅供 order-service 在下单与取消订单时调用：扣减库存、回补库存、查询库存。
- * 这三个接口不配置网关路由，外部无法访问；调用方仍需携带共享密钥
+ * 这些接口不配置网关路由，外部无法访问；调用方仍需携带共享密钥
  * {@code X-Internal-Token}，防止内网被横向调用。</p>
  *
  * <p>所有接口返回统一响应体。业务失败（如库存不足）在本控制器内被转换为
@@ -35,6 +39,7 @@ import jakarta.validation.Valid;
  * @date 2026-10-19
  */
 @RestController
+@Validated
 @Tag(name = "内部接口（服务间调用）")
 @RequestMapping("/internal/stocks")
 public class StockInternalController {
@@ -57,6 +62,16 @@ public class StockInternalController {
     ) {
         this.stockService = stockService;
         this.internalScopeTokenVerifier = internalScopeTokenVerifier;
+    }
+
+    /** 仅供商品服务聚合菜单库存，内部令牌验证与单品查询一致。 */
+    @GetMapping("/windows/{windowId}")
+    public ApiResponse<List<StockVO>> getWindowStocks(
+            @PathVariable("windowId") @Positive Long windowId,
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken
+    ) {
+        internalScopeTokenVerifier.verify(internalToken);
+        return ApiResponse.success(stockService.getWindowStocks(windowId));
     }
 
     /**

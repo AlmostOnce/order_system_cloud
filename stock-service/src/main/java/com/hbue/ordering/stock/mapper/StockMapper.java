@@ -20,6 +20,10 @@ import java.util.List;
  */
 public interface StockMapper extends BaseMapper<StockDO> {
 
+    /** 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。 */
+    @Select("SELECT * FROM stock WHERE window_id = #{windowId} AND is_deleted = 0 ORDER BY product_id")
+    List<StockDO> selectByWindow(@Param("windowId") Long windowId);
+
     /**
      * 查询指定档口菜品的库存记录。
      *

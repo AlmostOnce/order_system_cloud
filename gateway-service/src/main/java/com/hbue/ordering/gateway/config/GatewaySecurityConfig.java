@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -110,6 +111,9 @@ public class GatewaySecurityConfig {
 
                 // 配置接口访问权限。
                 .authorizeExchange(exchange -> exchange
+                        .pathMatchers(HttpMethod.POST, "/api/users", "/api/users/authenticate").denyAll()
+                        // 图片内容与文件服务保持一致：仅匿名 GET，写操作与元数据仍需登录。
+                        .pathMatchers(HttpMethod.GET, "/api/files/*/content").permitAll()
                         // 图片验证码接口允许匿名访问，登录前必须先拿到验证码。
                         .pathMatchers("/api/auth/captcha")
                         .permitAll()

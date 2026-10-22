@@ -241,8 +241,11 @@ class AuthServiceImplTest {
 
         when(refreshTokenService.getRefreshTokenInfo("old-refresh-token"))
                 .thenReturn(refreshTokenInfo);
+        when(userServiceClient.getUserById(5L)).thenReturn(ApiResponse.success(
+                com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(5L).userUuid("12345678-1234-4234-8234-123456789abc")
+                        .username("测试用户").roleCode("CUSTOMER").build()));
         when(jwtTokenService.createAccessToken(
-                5L,
+                "12345678-1234-4234-8234-123456789abc",
                 "测试用户",
                 "CUSTOMER"
         )).thenReturn("new-access-token");
@@ -322,8 +325,11 @@ class AuthServiceImplTest {
                         "测试用户",
                         "CUSTOMER"
                 ));
+        when(userServiceClient.getUserById(5L)).thenReturn(ApiResponse.success(
+                com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(5L).userUuid("12345678-1234-4234-8234-123456789abc")
+                        .username("测试用户").roleCode("CUSTOMER").build()));
         when(jwtTokenService.createAccessToken(
-                5L,
+                "12345678-1234-4234-8234-123456789abc",
                 "测试用户",
                 "CUSTOMER"
         )).thenReturn("new-access-token");

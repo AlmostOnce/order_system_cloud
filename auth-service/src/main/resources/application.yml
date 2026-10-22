@@ -107,3 +107,7 @@ springdoc:
   # 网关路由 StripPrefix=1 只剥离 /api 一段，故前缀固定为 /api，与各服务自身路径拼接。
   gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
   gateway-path: /api
+
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}

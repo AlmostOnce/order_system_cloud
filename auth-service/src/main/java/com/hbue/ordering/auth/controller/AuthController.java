@@ -144,7 +144,7 @@ public class AuthController {
      * @throws com.hbue.ordering.common.core.exception.BusinessException 注册冲突或用户服务不可用时由统一异常处理转换为响应
      */
     @PostMapping("/register")
-    public ApiResponse<UserBasicVO> register(
+    public ApiResponse<com.hbue.ordering.user.api.vo.UserPublicVO> register(
             @Valid @RequestBody RegisterRequest request
     ) {
         // 由 Service 调用用户服务完成注册。
@@ -152,7 +152,7 @@ public class AuthController {
                 authService.register(request);
 
         // 返回注册成功的用户信息。
-        return ApiResponse.success(userBasicVO);
+        return ApiResponse.success(com.hbue.ordering.user.api.vo.UserPublicVO.from(userBasicVO));
     }
 
     /**

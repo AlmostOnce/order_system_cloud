@@ -13,7 +13,9 @@ import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
+import com.hbue.ordering.product.vo.WindowSummaryVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,6 +75,7 @@ class ProductMenuServiceImplTest {
     @Test
     void shouldGroupOnSaleProductsAndKeepUncategorizedProducts() {
         DiningWindowDO window = window(3L, 1);
+        window.setDescription("每日现做");
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         when(productCategoryMapper.selectList(any())).thenReturn(List.of(
                 category(11L, "盖饭", 1),
@@ -87,6 +90,7 @@ class ProductMenuServiceImplTest {
         WindowMenuVO menu = service().getWindowMenu(3L);
 
         assertEquals(3L, menu.getWindowId());
+        assertEquals("每日现做", menu.getDescription());
         assertEquals(2, menu.getCategories().size());
         assertEquals("盖饭", menu.getCategories().getFirst().getCategoryName());
         assertEquals("鸡肉饭", menu.getCategories().getFirst()
@@ -107,6 +111,50 @@ class ProductMenuServiceImplTest {
                 ArgumentCaptor.forClass(QueryWrapper.class);
         verify(productMapper).selectList(productWrapperCaptor.capture());
         assertTrue(productWrapperCaptor.getValue().getSqlSegment().contains("sale_status"));
+    }
+
+    @Test
+    void shouldOrderWindowsByRestaurantThenWindowAndExposeDescription() {
+        // 显式模拟未命中；Mockito 对 List 默认返回空集合，空集合也是有效缓存。
+        when(menuCacheService.findActiveWindows()).thenReturn(null);
+        RestaurantDO first = new RestaurantDO();
+        first.setRestaurantId(1L);
+        first.setSortOrder(10);
+        RestaurantDO second = new RestaurantDO();
+        second.setRestaurantId(2L);
+        second.setSortOrder(10);
+        RestaurantDO priority = new RestaurantDO();
+        priority.setRestaurantId(3L);
+        priority.setSortOrder(0);
+        when(restaurantMapper.selectList(any())).thenReturn(List.of(second, first, priority));
+
+        DiningWindowDO lowId = window(1L, 1);
+        lowId.setRestaurantId(2L);
+        lowId.setSortOrder(0);
+        DiningWindowDO later = window(2L, 1);
+        later.setRestaurantId(1L);
+        later.setSortOrder(20);
+        DiningWindowDO earlier = window(3L, 1);
+        earlier.setRestaurantId(1L);
+        earlier.setSortOrder(10);
+        earlier.setDescription("现点现做的小炒");
+        DiningWindowDO tied = window(4L, 1);
+        tied.setRestaurantId(1L);
+        tied.setSortOrder(10);
+        DiningWindowDO featured = window(5L, 1);
+        featured.setRestaurantId(3L);
+        featured.setSortOrder(100);
+        when(diningWindowMapper.selectList(any())).thenReturn(
+                List.of(lowId, later, tied, earlier, featured)
+        );
+
+        List<WindowSummaryVO> result = service().listActiveWindows();
+
+        assertEquals(List.of(5L, 3L, 4L, 2L, 1L),
+                result.stream().map(WindowSummaryVO::getWindowId).toList());
+        assertEquals("现点现做的小炒", result.get(1).getDescription());
+        assertEquals(10, result.get(1).getSortOrder());
+        verify(menuCacheService).saveActiveWindows(result);
     }
 
     @Test
@@ -140,6 +188,7 @@ class ProductMenuServiceImplTest {
                 3L,
                 "W-3",
                 "一楼窗口",
+                "每日现做",
                 "一楼东侧",
                 List.of(),
                 List.of()

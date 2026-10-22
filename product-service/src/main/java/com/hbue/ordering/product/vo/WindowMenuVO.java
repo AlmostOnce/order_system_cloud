@@ -29,6 +29,9 @@ public class WindowMenuVO {
     /** 窗口名称。 */
     private String windowName;
 
+    /** 窗口简介。 */
+    private String description;
+
     /** 窗口位置。 */
     private String location;
 
@@ -37,4 +40,12 @@ public class WindowMenuVO {
 
     /** 未关联分类但当前在售的菜品。 */
     private List<MenuProductVO> uncategorizedProducts;
+
+    /** 窗口封面地址。 */
+    private String imageUrl;
+
+    public WindowMenuVO(Long windowId, String windowCode, String windowName, String description,
+            String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts) {
+        this(windowId, windowCode, windowName, description, location, categories, uncategorizedProducts, null);
+    }
 }

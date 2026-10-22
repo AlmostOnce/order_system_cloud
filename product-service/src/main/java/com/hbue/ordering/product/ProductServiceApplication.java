@@ -16,7 +16,10 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.hbue.ordering.user.api.client")
+@EnableFeignClients(basePackages = {
+        "com.hbue.ordering.user.api.client",
+        "com.hbue.ordering.stock.api.client"
+})
 @MapperScan("com.hbue.ordering.product.mapper")
 public class ProductServiceApplication {
 

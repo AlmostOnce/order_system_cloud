@@ -164,6 +164,22 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 if (leftOrder != rightOrder) {
                     return Integer.compare(leftOrder, rightOrder);
                 }
+                // 食堂排序相同时仍按食堂分组，避免不同食堂的窗口交错。
+                long leftRestaurantId = left.getRestaurantId() == null
+                        ? Long.MAX_VALUE : left.getRestaurantId();
+                long rightRestaurantId = right.getRestaurantId() == null
+                        ? Long.MAX_VALUE : right.getRestaurantId();
+                int restaurantComparison = Long.compare(leftRestaurantId, rightRestaurantId);
+                if (restaurantComparison != 0) {
+                    return restaurantComparison;
+                }
+                int windowOrder = Integer.compare(
+                        left.getSortOrder() == null ? 0 : left.getSortOrder(),
+                        right.getSortOrder() == null ? 0 : right.getSortOrder()
+                );
+                if (windowOrder != 0) {
+                    return windowOrder;
+                }
                 return Long.compare(left.getWindowId(), right.getWindowId());
             }
         });
@@ -175,7 +191,10 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getRestaurantId(),
                     window.getWindowCode(),
                     window.getWindowName(),
-                    window.getLocation()
+                    window.getDescription(),
+                    window.getSortOrder(),
+                    window.getLocation(),
+                    window.getImageUrl()
             ));
         }
         menuCacheService.saveActiveWindows(summaries);
@@ -336,9 +355,11 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 window.getWindowId(),
                 window.getWindowCode(),
                 window.getWindowName(),
+                window.getDescription(),
                 window.getLocation(),
                 categoryMenus,
-                uncategorizedProducts
+                uncategorizedProducts,
+                window.getImageUrl()
         );
     }
 

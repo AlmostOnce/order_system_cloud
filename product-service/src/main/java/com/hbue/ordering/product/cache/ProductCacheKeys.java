@@ -14,10 +14,9 @@ public final class ProductCacheKeys {
     /**
      * 启用窗口列表缓存键。
      *
-     * <p>v2：窗口摘要新增 restaurantId 字段，旧键缓存中缺少该字段会让顾客端
-     * 无法按餐厅筛选档口，故升版键名，让旧缓存自然过期而不必手工清理。</p>
+     * <p>v3：窗口摘要新增简介和排序，且排序规则变更，升版后让旧缓存自然过期。</p>
      */
-    public static final String ACTIVE_WINDOWS = "product:windows:active:v2";
+    public static final String ACTIVE_WINDOWS = "product:windows:active:v3";
 
     /** 窗口布隆过滤器名称。 */
     public static final String WINDOW_BLOOM_FILTER = "product:bloom:window";
@@ -25,8 +24,8 @@ public final class ProductCacheKeys {
     /** 菜品布隆过滤器名称。 */
     public static final String PRODUCT_BLOOM_FILTER = "product:bloom:product";
 
-    /** 窗口菜单缓存键前缀。 */
-    private static final String WINDOW_MENU_PREFIX = "product:menu:window:";
+    /** 窗口菜单缓存键前缀；v2 增加窗口简介，避免命中旧结构缓存。 */
+    private static final String WINDOW_MENU_PREFIX = "product:menu:window:v2:";
 
     /** 窗口菜单空值标记缓存键前缀。 */
     private static final String WINDOW_MENU_NULL_PREFIX = "product:null:menu:window:";

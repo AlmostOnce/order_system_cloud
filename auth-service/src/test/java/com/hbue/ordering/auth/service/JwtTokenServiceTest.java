@@ -44,7 +44,7 @@ class JwtTokenServiceTest {
         );
 
         jwtTokenService.createAccessToken(
-                5L,
+                "12345678-1234-4234-8234-123456789abc",
                 "测试用户",
                 "CUSTOMER"
         );
@@ -54,5 +54,7 @@ class JwtTokenServiceTest {
         verify(jwtEncoder).encode(parametersCaptor.capture());
 
         assertNotNull(parametersCaptor.getValue().getClaims().getId());
+        org.junit.jupiter.api.Assertions.assertEquals("12345678-1234-4234-8234-123456789abc", parametersCaptor.getValue().getClaims().getSubject());
+        org.junit.jupiter.api.Assertions.assertFalse(parametersCaptor.getValue().getClaims().getClaims().containsKey("userId"));
     }
 }

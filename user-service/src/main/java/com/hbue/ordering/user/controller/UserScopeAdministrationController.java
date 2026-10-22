@@ -41,6 +41,7 @@ public class UserScopeAdministrationController {
 
     /** 数据范围授予业务服务。 */
     private final UserScopeAdministrationService userScopeAdministrationService;
+    private final com.hbue.ordering.user.service.UserService userService;
 
     /**
      * 创建用户数据范围授予接口。
@@ -48,9 +49,11 @@ public class UserScopeAdministrationController {
      * @param userScopeAdministrationService 数据范围授予业务服务
      */
     public UserScopeAdministrationController(
-            UserScopeAdministrationService userScopeAdministrationService
+            UserScopeAdministrationService userScopeAdministrationService,
+            com.hbue.ordering.user.service.UserService userService
     ) {
         this.userScopeAdministrationService = userScopeAdministrationService;
+        this.userService = userService;
     }
 
     /**
@@ -61,11 +64,12 @@ public class UserScopeAdministrationController {
      * @return 目标用户的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效或目标用户不存在时由统一异常处理转换为响应
      */
-    @GetMapping("/{userId}/scopes")
+    @GetMapping("/{userUuid}/scopes")
     public ApiResponse<List<UserScopeAdminVO>> listScopes(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable("userId") @Positive Long userId
+            @PathVariable("userUuid") String userUuid
     ) {
+        Long userId = userService.resolvePublicUserId(userUuid);
         // 当前操作者身份来自验签后的 JWT，不能由调用方参数替换。
         return ApiResponse.success(
                 userScopeAdministrationService.listScopes(
@@ -84,12 +88,13 @@ public class UserScopeAdministrationController {
      * @return 写入后的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 范围超出操作者授权边界或引用对象不存在时由统一异常处理转换为响应
      */
-    @PutMapping("/{userId}/scopes")
+    @PutMapping("/{userUuid}/scopes")
     public ApiResponse<List<UserScopeAdminVO>> replaceScopes(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable("userId") @Positive Long userId,
+            @PathVariable("userUuid") String userUuid,
             @Valid @RequestBody UserScopeSaveRequest request
     ) {
+        Long userId = userService.resolvePublicUserId(userUuid);
         // Service 按操作者的数据范围验证每一项后才执行覆盖写入。
         return ApiResponse.success(
                 userScopeAdministrationService.replaceScopes(
@@ -109,12 +114,13 @@ public class UserScopeAdministrationController {
      * @return 空成功响应
      * @throws com.hbue.ordering.common.core.exception.BusinessException 范围不属于目标用户或超出操作者权限时由统一异常处理转换为响应
      */
-    @DeleteMapping("/{userId}/scopes/{scopeId}")
+    @DeleteMapping("/{userUuid}/scopes/{scopeId}")
     public ApiResponse<Void> revokeScope(
             @AuthenticationPrincipal Jwt jwt,
-            @PathVariable("userId") @Positive Long userId,
+            @PathVariable("userUuid") String userUuid,
             @PathVariable("scopeId") @Positive Long scopeId
     ) {
+        Long userId = userService.resolvePublicUserId(userUuid);
         // Service 会确认范围记录归属、操作者范围及禁止自我操作约束。
         userScopeAdministrationService.revokeScope(
                 operatorId(jwt),

@@ -1,5 +1,6 @@
 package com.hbue.ordering.user.config;
 
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.user.security.UserAccessDeniedHandler;
 import com.hbue.ordering.user.security.UserAuthenticationEntryPoint;
@@ -100,13 +101,11 @@ public class UserResourceServerConfig {
                         ).permitAll()
                         // 内部接口不在 Gateway 路由内，改由共享密钥在方法内校验。
                         .requestMatchers("/internal/**").permitAll()
-                        // 登录注册相关公开接口保持不变。
+                        // 服务间注册和认证允许进入控制器，再校验内部调用凭据。
                         .requestMatchers(HttpMethod.GET, "/users/ping").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users/authenticate")
                         .permitAll()
-                        // 按 ID 查询用户基础信息由其他服务透传 JWT 调用，保持公开。
-                        .requestMatchers(HttpMethod.GET, "/users/{userId}").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(jwtAuthenticationConverter())));
@@ -154,7 +153,8 @@ public class UserResourceServerConfig {
             @Value("${security.jwt.issuer}") String issuer,
             RedisOperationsService redisOperationsService,
             @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}")
-            String blacklistKeyPrefix
+            String blacklistKeyPrefix,
+            JwtUserIdentity userIdentity
     ) {
         Resource publicKeyResource = resourceLoader.getResource(publicKeyLocation);
         try (InputStream inputStream = publicKeyResource.getInputStream()) {
@@ -166,12 +166,12 @@ public class UserResourceServerConfig {
                     .withPublicKey(publicKey)
                     .build();
             decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
-            return token -> decodeAndCheckBlacklist(
+            return token -> userIdentity.toInternalPrincipal(decodeAndCheckBlacklist(
                     decoder,
                     token,
                     redisOperationsService,
                     blacklistKeyPrefix
-            );
+            ));
         } catch (IOException exception) {
             throw new IllegalStateException("读取 JWT RSA 公钥失败", exception);
         }

@@ -297,13 +297,19 @@ class StockServiceImplTest {
         assertTrue(stockVO.getWindowId().equals(WINDOW_ID));
     }
 
-    /**
-     * 构造测试用库存记录。
-     *
-     * @param availableQty 可售数量
-     * @param version 版本号
-     * @return 库存记录
-     */
+    /** 按窗口一次性读取有效库存，避免逐个菜品查询。 */
+    @Test
+    void shouldQueryWindowStockInOneDatabaseCall() {
+        when(stockMapper.selectByWindow(WINDOW_ID)).thenReturn(List.of(buildStock(7, 3)));
+        List<StockVO> result = stockService.getWindowStocks(WINDOW_ID);
+        assertEquals(1, result.size());
+        assertEquals(PRODUCT_ID, result.getFirst().getProductId());
+        assertEquals(7, result.getFirst().getAvailableQty());
+        verify(stockMapper).selectByWindow(WINDOW_ID);
+        verify(stockMapper, never()).selectByWindowProduct(anyLong(), anyLong());
+    }
+
+    /** 构造指定可售数量及版本号的库存记录。 */
     private StockDO buildStock(int availableQty, int version) {
         StockDO stock = new StockDO();
         stock.setStockId(STOCK_ID);

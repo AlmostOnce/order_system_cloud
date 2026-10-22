@@ -45,6 +45,14 @@ public class DiningWindowDO {
     @TableField("window_name")
     private String windowName;
 
+    /** 窗口简介。 */
+    @TableField("description")
+    private String description;
+
+    /** 窗口展示排序：越小越靠前，相同值按窗口 ID 升序。 */
+    @TableField("sort_order")
+    private Integer sortOrder;
+
     /**
      * 窗口位置。
      */

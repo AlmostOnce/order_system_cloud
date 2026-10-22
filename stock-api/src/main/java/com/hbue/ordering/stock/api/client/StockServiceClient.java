@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 
+import java.util.List;
+
 /**
  * 库存服务内部调用客户端。
  *
@@ -31,6 +33,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
         fallbackFactory = StockServiceClientFallbackFactory.class
 )
 public interface StockServiceClient {
+
+    /** 按窗口批量读取数据库库存，缺少的菜品记录不会出现在结果中。 */
+    @GetMapping("/internal/stocks/windows/{windowId}")
+    ApiResponse<List<StockVO>> getWindowStocks(
+            @PathVariable("windowId") Long windowId,
+            @RequestHeader("X-Internal-Token") String internalToken
+    );
 
     /**
      * 扣减库存，并按业务单据幂等记账。

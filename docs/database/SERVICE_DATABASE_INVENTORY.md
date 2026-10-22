@@ -44,7 +44,7 @@
 
 | 数据库 | 表 | 归属服务 | 迁移脚本（按执行顺序） |
 |---|---|---|---|
-| `order_db` | `orders`、`order_items`、`undo_log` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) |
+| `order_db` | `orders`、`order_items`、`undo_log`、`sales_event_outbox` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) → [销量事件 outbox](migrations/order_db/V1__add_sales_event_outbox.sql) |
 | `user_db` | `users`（含 `pay_password_hash`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) |
 | `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`） | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
@@ -71,6 +71,9 @@
 | `stock_service` | `stock_db` | **迁移脚本内置**：`stock_db/V1` 中 `CREATE USER` + `GRANT` | `STOCK_DB_PASSWORD` |
 
 > ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余五个账号必须重新创建（见第 4.2 节）。
+
+
+> 2026-10-22 增量：本机 order_db 已新增 sales_event_outbox（销量消息本地待发送表），当前 0 条；上面的 2026-10-19 统计为历史快照，不代表最新表数。RocketMQ Compose 配置已补，尚未启动或联调，见 [销量榜](../SALES_RANKING.md)。
 
 ## 4. 新建环境（新建数据库）清单
 
@@ -159,8 +162,9 @@ FLUSH PRIVILEGES;
 | `balance_records`（余额流水表，含记账幂等唯一键） | [user_db/V3](migrations/user_db/V3__add_pay_password_and_balance_records.sql) | ✅ 新增脚本并已执行 |
 | `restaurants` 补 `location`/`phone`/`image_url`/`notice`/`sort_order`（对照旧单体 canteen 的 floor/phone） | [product_db/V4](migrations/product_db/V4__enrich_restaurants.sql) | ✅ 新增脚本并已执行（不含 `business_hours`） |
 | `dining_windows` 补 `image_url`/`is_open`（对照旧单体 windows 的 image_url/is_open） | [product_db/V5](migrations/product_db/V5__enrich_dining_windows.sql) | ✅ 新增脚本并已执行 |
+| `dining_windows` 补窗口简介 `description` / 排序 `sort_order` | [product_db/V6](migrations/product_db/V6__add_window_description_and_sort_order.sql) | ✅ 2026-10-22 已在本机 MySQL 执行，字段及非负约束已核对，原报错窗口查询已验证成功 |
 
-> 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现（临时状态，无需持久化）。`V3` 目前只建结构，余额充值与余额支付的**业务代码尚未实现**。
+> 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现。余额支付已实现；2026-10-22 补充模拟充值和本人流水查询代码，复用 `users`、`balance_records`，无需额外迁移，接口与验证范围见 [账户中心与模拟充值](../WALLET_API.md)。
 
 ### 7.2 未建服务（阶段 B / C）的库 —— 部分已落地
 

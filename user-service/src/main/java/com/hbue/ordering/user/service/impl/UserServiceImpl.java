@@ -112,6 +112,25 @@ public class UserServiceImpl
         this.auditLogger = auditLogger;
     }
 
+    @Override
+    public Long resolvePublicUserId(String userUuid) {
+        if (userUuid == null || !com.hbue.ordering.common.web.security.JwtUserIdentity.PUBLIC_UUID.matcher(userUuid).matches()) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用户标识格式不正确");
+        }
+        Long id = baseMapper.selectExistingIdByUuid(userUuid);
+        if (id == null) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或已停用");
+        return id;
+    }
+
+    @Override
+    @Transactional
+    public void updateOwnAvatar(Long userId, String url) {
+        int updated = baseMapper.update(null, new UpdateWrapper<UserDO>()
+                .eq("user_id", userId).eq("status", USER_STATUS_ENABLED).isNull("deleted_at")
+                .set("avatar_url", url).set("updated_at", LocalDateTime.now()));
+        if (updated != 1) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+    }
+
     /**
      * 根据用户 ID 查询用户基础信息。
      *
@@ -164,6 +183,7 @@ public class UserServiceImpl
 
         // 组装用户持久化对象。
         UserDO userDO = new UserDO();
+        userDO.setUserUuid(java.util.UUID.randomUUID().toString());
         userDO.setUsername(command.getUsername());
         userDO.setPhone(command.getPhone());
         userDO.setRoleCode(DEFAULT_ROLE_CODE);
@@ -525,6 +545,7 @@ public class UserServiceImpl
 
         // 组装引导账号，除角色外与普通注册保持一致。
         UserDO userDO = new UserDO();
+        userDO.setUserUuid(java.util.UUID.randomUUID().toString());
         userDO.setUsername(username);
         userDO.setEmail(email);
         userDO.setRoleCode(roleCode);
@@ -558,6 +579,7 @@ public class UserServiceImpl
         // 只返回用户 ID、用户名和角色编码。
         return UserBasicVO.builder()
                 .userId(userDO.getUserId())
+                .userUuid(userDO.getUserUuid())
                 .username(userDO.getUsername())
                 .roleCode(userDO.getRoleCode())
                 .build();

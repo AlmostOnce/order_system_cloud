@@ -35,6 +35,14 @@ public class WindowSaveRequest {
     @Size(max = 64)
     private String windowName;
 
+    /** 窗口简介；新建可不填，编辑不传时保留原值，传空字符串清空。 */
+    @Size(max = 500)
+    private String description;
+
+    /** 展示排序：越小越靠前；新建不传默认 0，编辑不传保留原值。 */
+    @Min(0)
+    private Integer sortOrder;
+
     /** 窗口位置；允许为空。 */
     @Size(max = 255)
     private String location;

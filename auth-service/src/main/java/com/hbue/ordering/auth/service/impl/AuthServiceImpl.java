@@ -188,7 +188,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(
-                userBasicVO.getUserId(),
+                userBasicVO.getUserUuid(),
                 userBasicVO.getUsername(),
                 userBasicVO.getRoleCode()
         );
@@ -260,18 +260,25 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
+        // 从用户服务取得当前公开身份和账号状态，不能从旧令牌派生内部 ID 公开出去。
+        ApiResponse<UserBasicVO> identityResponse = userServiceClient.getUserById(refreshTokenInfo.getUserId());
+        if (identityResponse == null || !"COMMON_000".equals(identityResponse.getCode()) || identityResponse.getData() == null
+                || !refreshTokenInfo.getUserId().equals(identityResponse.getData().getUserId())) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "用户身份不可用，请重新登录");
+        }
+        UserBasicVO currentIdentity = identityResponse.getData();
         // 使用用户信息签发新的访问 Token。
         String accessToken = jwtTokenService.createAccessToken(
-                refreshTokenInfo.getUserId(),
-                refreshTokenInfo.getUsername(),
-                refreshTokenInfo.getRoleCode()
+                currentIdentity.getUserUuid(),
+                currentIdentity.getUsername(),
+                currentIdentity.getRoleCode()
         );
 
         // 创建新的 Refresh Token，实行刷新令牌轮换。
         String newRefreshToken = refreshTokenService.createRefreshToken(
                 refreshTokenInfo.getUserId(),
-                refreshTokenInfo.getUsername(),
-                refreshTokenInfo.getRoleCode()
+                currentIdentity.getUsername(),
+                currentIdentity.getRoleCode()
         );
 
         try {

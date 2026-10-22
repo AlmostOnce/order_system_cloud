@@ -3,6 +3,7 @@ package com.hbue.ordering.stock.service;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
+import java.util.List;
 
 /**
  * 库存业务服务。
@@ -14,6 +15,9 @@ import com.hbue.ordering.stock.api.vo.StockVO;
  * @date 2026-10-19
  */
 public interface StockService {
+
+    /** 批量读取窗口当前库存；无库存记录时返回空列表。 */
+    List<StockVO> getWindowStocks(Long windowId);
 
     /**
      * 扣减库存。

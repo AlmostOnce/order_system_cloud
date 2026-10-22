@@ -31,12 +31,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +65,74 @@ class ProductAdministrationServiceImplTest {
 
     @Mock
     private ProductBloomFilterManager bloomFilterManager;
+
+    @Test
+    void shouldCreateWindowWithDescriptionAndDefaultSortOrder() {
+        WindowSaveRequest request = windowRequest();
+        request.setDescription("现点现做的小炒");
+        when(diningWindowMapper.insert(any(DiningWindowDO.class))).thenAnswer(invocation -> {
+            DiningWindowDO created = invocation.getArgument(0);
+            created.setWindowId(7L);
+            return 1;
+        });
+
+        WindowAdminVO result = service().createWindow(OPERATOR_ID, request);
+
+        assertEquals("现点现做的小炒", result.getDescription());
+        assertEquals(0, result.getSortOrder());
+        verify(menuCacheService).evictActiveWindows();
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldUpdateDescriptionAndSortAndEvictBothCaches() {
+        when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
+        WindowSaveRequest request = windowRequest();
+        request.setDescription("");
+        request.setSortOrder(25);
+
+        service().updateWindow(OPERATOR_ID, 7L, request);
+
+        ArgumentCaptor<UpdateWrapper<DiningWindowDO>> captor =
+                ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(diningWindowMapper).update(isNull(), captor.capture());
+        String sql = captor.getValue().getSqlSet();
+        assertTrue(sql.contains("description="));
+        assertTrue(sql.contains("sort_order="));
+        assertTrue(captor.getValue().getParamNameValuePairs().containsValue(""));
+        assertTrue(captor.getValue().getParamNameValuePairs().containsValue(25));
+        verify(menuCacheService).evictActiveWindows();
+        verify(menuCacheService).evictWindowMenu(7L);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldPreserveNewFieldsWhenOldClientOmitsThem() {
+        when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
+
+        service().updateWindow(OPERATOR_ID, 7L, windowRequest());
+
+        ArgumentCaptor<UpdateWrapper<DiningWindowDO>> captor =
+                ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(diningWindowMapper).update(isNull(), captor.capture());
+        assertFalse(captor.getValue().getSqlSet().contains("description="));
+        assertFalse(captor.getValue().getSqlSet().contains("sort_order="));
+    }
+
+    @Test
+    void shouldCreateWindowWithExplicitSortOrder() {
+        WindowSaveRequest request = windowRequest();
+        request.setSortOrder(15);
+        when(diningWindowMapper.insert(any(DiningWindowDO.class))).thenAnswer(invocation -> {
+            DiningWindowDO created = invocation.getArgument(0);
+            created.setWindowId(7L);
+            return 1;
+        });
+
+        WindowAdminVO result = service().createWindow(OPERATOR_ID, request);
+
+        assertEquals(15, result.getSortOrder());
+    }
 
     @Test
     void shouldSoftDisableWindowInsteadOfDeletingIt() {
@@ -218,6 +288,31 @@ class ProductAdministrationServiceImplTest {
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldUpdateOnlyWindowImageAndEvictBothCaches() {
+        when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
+        when(diningWindowMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+        service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content");
+        ArgumentCaptor<UpdateWrapper<DiningWindowDO>> update = ArgumentCaptor.forClass(UpdateWrapper.class);
+        verify(diningWindowMapper).update(isNull(), update.capture());
+        assertTrue(update.getValue().getSqlSet().contains("image_url="));
+        assertTrue(!update.getValue().getSqlSet().contains("window_name="));
+        verify(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
+        verify(menuCacheService).evictActiveWindows();
+        verify(menuCacheService).evictWindowMenu(7L);
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void shouldRejectImageChangeOutsideManagedWindow() {
+        doThrow(new BusinessException(CommonErrorCode.FORBIDDEN, "无管理权限"))
+                .when(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
+        assertThrows(BusinessException.class, () -> service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content"));
+        verify(diningWindowMapper, never()).update(isNull(), any(UpdateWrapper.class));
+        verify(menuCacheService, never()).evictWindowMenu(7L);
     }
 
     private ProductAdministrationService service() {

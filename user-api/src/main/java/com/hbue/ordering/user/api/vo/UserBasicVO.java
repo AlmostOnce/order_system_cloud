@@ -25,6 +25,9 @@ public class UserBasicVO {
      */
     private Long userId;
 
+    /** 用户对外 UUID，仅服务间基础视图同时保留内部主键。 */
+    private String userUuid;
+
     /**
      * 用户名。
      */
@@ -34,4 +37,7 @@ public class UserBasicVO {
      * 角色编码。
      */
     private String roleCode;
+    public UserBasicVO(Long userId, String username, String roleCode) {
+        this(userId, null, username, roleCode);
+    }
 }
