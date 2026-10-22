@@ -45,6 +45,16 @@ import java.util.List;
 @Service
 public class StockServiceImpl implements StockService {
 
+    @Override
+    public List<StockVO> getWindowStocks(Long windowId) {
+        return stockMapper.selectByWindow(windowId).stream()
+                .map(stock -> StockVO.builder()
+                        .stockId(stock.getStockId()).windowId(stock.getWindowId())
+                        .productId(stock.getProductId()).totalQty(stock.getTotalQty())
+                        .availableQty(stock.getAvailableQty()).build())
+                .toList();
+    }
+
     /** 日志记录器。 */
     private static final Logger log = LoggerFactory.getLogger(StockServiceImpl.class);
 
