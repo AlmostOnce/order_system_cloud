@@ -159,8 +159,9 @@ FLUSH PRIVILEGES;
 | `balance_records`（余额流水表，含记账幂等唯一键） | [user_db/V3](migrations/user_db/V3__add_pay_password_and_balance_records.sql) | ✅ 新增脚本并已执行 |
 | `restaurants` 补 `location`/`phone`/`image_url`/`notice`/`sort_order`（对照旧单体 canteen 的 floor/phone） | [product_db/V4](migrations/product_db/V4__enrich_restaurants.sql) | ✅ 新增脚本并已执行（不含 `business_hours`） |
 | `dining_windows` 补 `image_url`/`is_open`（对照旧单体 windows 的 image_url/is_open） | [product_db/V5](migrations/product_db/V5__enrich_dining_windows.sql) | ✅ 新增脚本并已执行 |
+| `dining_windows` 补窗口简介 `description` / 排序 `sort_order` | [product_db/V6](migrations/product_db/V6__add_window_description_and_sort_order.sql) | ✅ 2026-10-22 已在本机 MySQL 执行，字段及非负约束已核对，原报错窗口查询已验证成功 |
 
-> 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现（临时状态，无需持久化）。`V3` 目前只建结构，余额充值与余额支付的**业务代码尚未实现**。
+> 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现。余额支付已实现；2026-10-22 补充模拟充值和本人流水查询代码，复用 `users`、`balance_records`，无需额外迁移，接口与验证范围见 [账户中心与模拟充值](../WALLET_API.md)。
 
 ### 7.2 未建服务（阶段 B / C）的库 —— 部分已落地
 
