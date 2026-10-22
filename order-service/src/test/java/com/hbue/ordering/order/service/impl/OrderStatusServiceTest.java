@@ -4,24 +4,34 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
+import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
+import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
+import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.apache.seata.spring.annotation.GlobalTransactional;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,6 +108,12 @@ class OrderStatusServiceTest {
                 4,
                 "已取消"
         )).thenReturn(true);
+        OrderItemDO item = new OrderItemDO();
+        item.setProductId(101L);
+        item.setQuantity(2);
+        when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of(item));
+        when(stockServiceClient.restore(eq("test-internal-token"), any()))
+                .thenReturn(ApiResponse.success(null));
 
         OrderStatusVO result = orderService.cancelOrder(
                 CUSTOMER_ID,
@@ -106,6 +122,13 @@ class OrderStatusServiceTest {
 
         assertEquals(ORDER_ID, result.getOrderId());
         assertEquals("已取消", result.getStatus());
+        ArgumentCaptor<StockRestoreRequest> captor = ArgumentCaptor.forClass(StockRestoreRequest.class);
+        verify(stockServiceClient).restore(eq("test-internal-token"), captor.capture());
+        assertEquals("TEST-701", captor.getValue().getBizRef());
+        assertEquals(WINDOW_ID, captor.getValue().getWindowId());
+        assertEquals(CUSTOMER_ID, captor.getValue().getOperatorId());
+        assertEquals(101L, captor.getValue().getItems().getFirst().getProductId());
+        assertEquals(2, captor.getValue().getItems().getFirst().getQuantity());
         verify(orderPersistenceService).updateStatusIfUnchanged(
                 ORDER_ID,
                 "待支付",
@@ -115,8 +138,51 @@ class OrderStatusServiceTest {
     }
 
     /**
-     * 取消不存在的订单必须返回资源不存在。
+     * 库存不可用时抛出异常，交给全局事务回滚取消状态。
      */
+    @Test
+    void shouldFailCancellationWhenStockRestoreUnavailable() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
+        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID, "待支付", 4, "已取消"))
+                .thenReturn(true);
+        OrderItemDO item = new OrderItemDO();
+        item.setProductId(101L);
+        item.setQuantity(2);
+        when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of(item));
+        when(stockServiceClient.restore(eq("test-internal-token"), any()))
+                .thenReturn(ApiResponse.failure(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用"));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> orderService.cancelOrder(CUSTOMER_ID, ORDER_ID));
+
+        assertEquals(CommonErrorCode.SERVICE_UNAVAILABLE.code(), exception.getErrorCode().code());
+    }
+
+    @Test
+    void shouldNotRestoreStockAgainWhenAlreadyCancelled() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "已取消", 5));
+        assertEquals("已取消", orderService.cancelOrder(CUSTOMER_ID, ORDER_ID).getStatus());
+        verify(stockServiceClient, never()).restore(any(), any());
+    }
+
+    @Test
+    void shouldFailWhenCancellationHasNoOrderItems() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
+        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID, "待支付", 4, "已取消"))
+                .thenReturn(true);
+        when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of());
+        assertThrows(BusinessException.class, () -> orderService.cancelOrder(CUSTOMER_ID, ORDER_ID));
+        verify(stockServiceClient, never()).restore(any(), any());
+    }
+
+    @Test
+    void shouldRunCancellationInGlobalTransaction() throws NoSuchMethodException {
+        GlobalTransactional transaction = OrderServiceImpl.class
+                .getMethod("cancelOrder", Long.class, Long.class).getAnnotation(GlobalTransactional.class);
+        assertNotNull(transaction);
+        assertEquals(Exception.class, transaction.rollbackFor()[0]);
+    }
+
     @Test
     void shouldReturnNotFoundWhenCancellingMissingOrder() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(null);
@@ -327,6 +393,7 @@ class OrderStatusServiceTest {
 
         assertEquals(CommonErrorCode.CONFLICT.code(),
                 exception.getErrorCode().code());
+        verify(stockServiceClient, never()).restore(any(), any());
     }
 
     /**
@@ -340,6 +407,7 @@ class OrderStatusServiceTest {
     private OrderDO order(Long userId, String status, Integer version) {
         OrderDO orderDO = new OrderDO();
         orderDO.setOrderId(ORDER_ID);
+        orderDO.setOrderNo("TEST-701");
         orderDO.setUserId(userId);
         orderDO.setWindowId(WINDOW_ID);
         orderDO.setStatus(status);

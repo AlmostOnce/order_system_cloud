@@ -24,12 +24,15 @@ import com.hbue.ordering.product.api.vo.ProductQuoteVO;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockItemRequest;
+import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.apache.seata.spring.annotation.GlobalTransactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -58,6 +61,8 @@ import java.util.UUID;
 public class OrderServiceImpl
         extends ServiceImpl<OrderMapper, OrderDO>
         implements OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
 
     /** 单个订单允许的最大菜品行数。 */
     private static final int MAX_ORDER_ITEMS = OrderCreateRequest.MAX_ITEM_COUNT;
@@ -345,6 +350,7 @@ public class OrderServiceImpl
      * @return 订单状态变更结果
      */
     @Override
+    @GlobalTransactional(name = "cancel-order-restore-stock", rollbackFor = Exception.class)
     public OrderStatusVO cancelOrder(Long userId, Long orderId) {
         // 先确认订单归属；随后状态机校验确保已支付或履约中的订单不能由顾客取消。
         OrderDO orderDO = getOrderForStatusChange(orderId);
@@ -358,12 +364,46 @@ public class OrderServiceImpl
 
         // 仅允许待支付订单取消，实际更新仍由状态与版本号条件保护并发写入。
         OrderStatus currentStatus = getCurrentStatus(orderDO);
+        if (currentStatus == OrderStatus.CANCELLED) {
+            // 成功后的网络重试不重复执行回补。
+            return OrderStatusVO.builder().orderId(orderId).status(currentStatus.getLabel()).build();
+        }
         if (currentStatus != OrderStatus.PENDING_PAYMENT
                 || !currentStatus.canTransitionTo(OrderStatus.CANCELLED)) {
             throw invalidStatusTransition();
         }
 
-        return persistStatusTransition(orderDO, OrderStatus.CANCELLED);
+        // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
+        // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
+        OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
+        List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
+        }
+        List<StockItemRequest> stockItems = new ArrayList<>();
+        for (OrderItemDO item : orderItems) {
+            stockItems.add(StockItemRequest.builder()
+                    .productId(item.getProductId()).quantity(item.getQuantity()).build());
+        }
+        ApiResponse<Void> response;
+        try {
+            response = stockServiceClient.restore(internalScopeToken,
+                    StockRestoreRequest.builder()
+                            .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
+                            .items(stockItems).operatorId(userId).remark("顾客取消待支付订单").build());
+        } catch (RuntimeException exception) {
+            log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+        }
+        if (response == null || CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+        }
+        if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    response.getMessage() == null || response.getMessage().isBlank()
+                            ? "库存回补失败，请稍后重试取消" : response.getMessage());
+        }
+        return result;
     }
 
     /**
