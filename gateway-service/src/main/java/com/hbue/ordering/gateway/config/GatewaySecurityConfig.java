@@ -20,6 +20,9 @@ import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -76,15 +79,19 @@ public class GatewaySecurityConfig {
      * 配置 Gateway 响应式安全过滤链。
      *
      * @param http 响应式 HTTP 安全配置
+     * @param corsConfigurationSource 浏览器跨域访问配置
      * @return 响应式安全过滤链
      */
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(
-            ServerHttpSecurity http
+            ServerHttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource
     ) {
         http
                 // Gateway 使用 Token 认证，关闭 CSRF。
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                // 在鉴权前处理预检，并为实际请求及认证失败响应添加跨域响应头。
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
                 // 关闭默认表单登录。
                 .formLogin(
@@ -160,6 +167,28 @@ public class GatewaySecurityConfig {
 
         // 返回响应式安全过滤链。
         return http.build();
+    }
+
+    /**
+     * 配置 API 的浏览器来源白名单；使用 Bearer Token，不启用跨域 Cookie。
+     *
+     * @param allowedOrigins 允许访问 API 的完整前端来源（协议、主机和端口）
+     * @return 响应式跨域配置源
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${gateway.cors.allowed-origins}") List<String> allowedOrigins
+    ) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
     }
 
     /**
