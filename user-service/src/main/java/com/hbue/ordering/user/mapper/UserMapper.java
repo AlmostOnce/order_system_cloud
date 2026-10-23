@@ -28,7 +28,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /** 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。 */
     @Select("""
-        SELECT user_id, user_uuid, balance, pay_password_hash, status, deleted_at
+        SELECT user_id, user_uuid, user_no, balance, pay_password_hash, status, deleted_at
         FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
         """)
     UserDO selectBalanceForUpdate(@Param("userId") Long userId);
@@ -41,9 +41,12 @@ public interface UserMapper extends BaseMapper<UserDO> {
         """)
     int creditBalance(@Param("userId") Long userId, @Param("amount") BigDecimal amount);
 
+    @Select("SELECT user_id FROM users WHERE user_no = #{userNo}")
+    Long selectIdByUserNo(@Param("userNo") String userNo);
+
     /** 本人资料的字段白名单，不查询密码和支付凭据。 */
     @Select("""
-        SELECT user_id, user_uuid, username, role_code, email, phone, avatar_url, created_at, status
+        SELECT user_id, user_uuid, user_no, username, role_code, email, avatar_url, created_at, status
         FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
         """)
     UserDO selectOwnProfile(@Param("userId") Long userId);
@@ -58,10 +61,10 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             username,
             role_code,
-            phone,
+            email,
             balance,
             password_hash,
             avatar_url,
@@ -81,40 +84,40 @@ public interface UserMapper extends BaseMapper<UserDO> {
     );
 
     /**
-     * 根据用户名或手机号查询用户。
+     * 根据用户名或邮箱查询用户。
      *
-     * <p>用于注册查重：只要用户名或手机号任一命中即视为已注册。
+     * <p>用于注册查重：只要用户名或邮箱任一命中即视为已注册。
      * 需要区分是哪个字段命中时，改用 {@link #selectByUsername(String)}
-     * 与 {@link #selectByPhone(String)} 分别精确查询。</p>
+     * 与 {@link #selectByEmail(String)} 分别精确查询。</p>
      *
      * @param username 用户名
-     * @param phone 手机号
+     * @param email 邮箱
      * @return 已存在的用户
      */
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             username,
             role_code,
-            phone,
+            email,
             status,
             deleted_at
         FROM users
         WHERE username = #{username}
-           OR phone = #{phone}
+           OR email = #{email}
         LIMIT 1
         """)
-    UserDO selectByUsernameOrPhone(
+    UserDO selectByUsernameOrEmail(
             @Param("username") String username,
-            @Param("phone") String phone
+            @Param("email") String email
     );
 
     /**
      * 按用户名精确查询用户。
      *
-     * <p>引导流程先用它判断"目标用户名是否就是待引导账号"，与手机号分开查询，
-     * 避免 {@code username OR phone} 的合并查询无法区分是用户名命中还是手机号命中。</p>
+     * <p>引导流程先用它判断"目标用户名是否就是待引导账号"，与邮箱分开查询，
+     * 避免 {@code username OR email} 的合并查询无法区分是用户名命中还是邮箱命中。</p>
      *
      * @param username 用户名
      * @return 用户持久化对象，不存在时返回 null
@@ -122,10 +125,10 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             username,
             role_code,
-            phone,
+            email,
             status,
             deleted_at
         FROM users
@@ -133,30 +136,6 @@ public interface UserMapper extends BaseMapper<UserDO> {
         LIMIT 1
         """)
     UserDO selectByUsername(@Param("username") String username);
-
-    /**
-     * 按手机号精确查询用户。
-     *
-     * <p>引导流程用它判断手机号是否已被其他账号占用：被占用时必须显式报错，
-     * 不能让引导账号静默缺失（否则数据范围授予链的信任根建不出来却无人察觉）。</p>
-     *
-     * @param phone 手机号
-     * @return 用户持久化对象，不存在时返回 null
-     */
-    @Select("""
-        SELECT
-            user_id,
-            user_uuid,
-            username,
-            role_code,
-            phone,
-            status,
-            deleted_at
-        FROM users
-        WHERE phone = #{phone}
-        LIMIT 1
-        """)
-    UserDO selectByPhone(@Param("phone") String phone);
 
     /**
      * 按邮箱精确查询用户。
@@ -170,7 +149,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             username,
             role_code,
             email,
@@ -194,10 +173,10 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             username,
             role_code,
-            phone,
+            email,
             status,
             deleted_at
         FROM users
@@ -207,26 +186,26 @@ public interface UserMapper extends BaseMapper<UserDO> {
     UserDO selectNotDeletedById(@Param("userId") Long userId);
 
     /**
-     * 根据用户名查询登录用户。
+     * 按永久用户号或邮箱查询登录用户。
      *
-     * @param username 用户名
+     * @param account 用户号或邮箱
      * @return 用户持久化对象
      */
     @Select("""
     SELECT
         user_id,
-        user_uuid,
+        user_uuid, user_no,
         username,
         role_code,
         password_hash,
         status,
         deleted_at
     FROM users
-    WHERE username = #{username}
+    WHERE (user_no = #{account} OR email = #{account})
     LIMIT 1
     """)
-    UserDO selectByUsernameForLogin(
-            @Param("username") String username
+    UserDO selectByAccountForLogin(
+            @Param("account") String account
     );
 
     /**
@@ -241,7 +220,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             balance,
             pay_password_hash,
             status,
@@ -263,7 +242,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid,
+            user_uuid, user_no,
             password_hash,
             pay_password_hash,
             status,

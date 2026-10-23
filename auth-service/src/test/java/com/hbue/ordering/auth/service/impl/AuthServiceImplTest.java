@@ -55,7 +55,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = createAuthService(userServiceClient);
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("wrong-password");
 
         BusinessException exception = assertThrows(
@@ -93,7 +93,7 @@ class AuthServiceImplTest {
                 loginAttemptService
         );
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("wrong-password");
 
         // 连续提交五次错误凭据，前四次仍按普通认证失败处理。
@@ -139,7 +139,7 @@ class AuthServiceImplTest {
                 loginAttemptService
         );
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("any-password");
 
         BusinessException exception = assertThrows(
@@ -179,7 +179,7 @@ class AuthServiceImplTest {
                 loginAttemptService
         );
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("correct-password");
 
         authService.login(request);
@@ -203,7 +203,7 @@ class AuthServiceImplTest {
 
         AuthServiceImpl authService = createAuthService(userServiceClient);
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("test-password");
 
         BusinessException exception = assertThrows(
@@ -552,7 +552,7 @@ class AuthServiceImplTest {
                 mock(RefreshTokenLockService.class)
         );
         LoginRequest request = new LoginRequest();
-        request.setUsername("test-user");
+        request.setAccount("test-user");
         request.setPassword("any-password");
         request.setCaptchaId("captcha-id");
         request.setCaptchaCode("wrong");

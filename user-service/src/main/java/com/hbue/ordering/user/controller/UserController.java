@@ -59,7 +59,7 @@ public class UserController {
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
-     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号已被使用时由统一异常处理转换为响应
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或邮箱已被使用时由统一异常处理转换为响应
      */
     @PostMapping
     public ApiResponse<UserBasicVO> register(

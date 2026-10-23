@@ -20,9 +20,9 @@ public class UserRegisterCommand {
     private String username;
 
     /**
-     * 手机号。
+     * 邮箱。
      */
-    private String phone;
+    private String email;
 
     /**
      * 原始密码。

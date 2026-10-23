@@ -105,8 +105,8 @@ public class UserWalletServiceImpl implements UserWalletService {
     public UserProfileVO getMyProfile(Long userId) {
         UserDO user = userMapper.selectOwnProfile(userId);
         requireAvailable(user);
-        return new UserProfileVO(user.getUserUuid(), user.getUsername(), user.getRoleCode(), user.getEmail(),
-                user.getPhone(), user.getAvatarUrl(), user.getCreatedAt());
+        return new UserProfileVO(user.getUserUuid(), user.getUserNo(), user.getUsername(), user.getRoleCode(), user.getEmail(),
+                user.getAvatarUrl(), user.getCreatedAt());
     }
 
     private void requireAvailable(UserDO user) {

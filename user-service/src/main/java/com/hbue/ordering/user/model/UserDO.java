@@ -29,6 +29,10 @@ public class UserDO {
     @TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
 
+    /** 永久登录用户号，由系统生成。 */
+    @TableField("user_no")
+    private String userNo;
+
     /** 对外稳定随机 UUID，内部关联仍使用 user_id。 */
     @TableField("user_uuid")
     private String userUuid;
@@ -53,14 +57,6 @@ public class UserDO {
      */
     @TableField("email")
     private String email;
-
-    /**
-     * 手机号。
-     *
-     * <p>注册流程已改用邮箱，该字段仅为兼容既有数据保留，新注册不再写入。</p>
-     */
-    @TableField("phone")
-    private String phone;
 
     /**
      * 账户余额。

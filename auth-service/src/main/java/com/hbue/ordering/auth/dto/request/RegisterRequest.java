@@ -1,7 +1,7 @@
 package com.hbue.ordering.auth.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -26,14 +26,12 @@ public class RegisterRequest {
     private String username;
 
     /**
-     * 手机号。
+     * 邮箱。
      */
-    @NotBlank(message = "手机号不能为空")
-    @Pattern(
-            regexp = "^1[3-9]\\d{9}$",
-            message = "手机号格式不正确"
-    )
-    private String phone;
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 254, message = "邮箱长度不能超过 254 个字符")
+    private String email;
 
     /**
      * 登录密码。

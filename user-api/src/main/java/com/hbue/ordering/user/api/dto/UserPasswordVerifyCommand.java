@@ -18,9 +18,9 @@ import lombok.Data;
 public class UserPasswordVerifyCommand {
 
     /**
-     * 用户名。
+     * 用户号或邮箱。
      */
-    private String username;
+    private String account;
 
     /**
      * 用户明文密码。

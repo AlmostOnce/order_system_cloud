@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
 /**
@@ -37,6 +38,8 @@ import java.time.LocalDateTime;
 public class UserServiceImpl
         extends ServiceImpl<UserMapper, UserDO>
         implements UserService {
+
+    private static final SecureRandom USER_NUMBER_RANDOM = new SecureRandom();
 
     /**
      * 用户正常状态。
@@ -163,29 +166,33 @@ public class UserServiceImpl
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
-     * @throws BusinessException 用户名或手机号重复时抛出；并发重复由数据库唯一约束兜底
+     * @throws BusinessException 昵称或邮箱重复时抛出；并发重复由数据库唯一约束兜底
      */
     @Override
     public UserBasicVO register(UserRegisterCommand command) {
-        // 校验用户名或手机号是否已经注册。
-        UserDO existingUser = baseMapper.selectByUsernameOrPhone(
+        if (command.getEmail() == null || command.getEmail().isBlank() || command.getEmail().length() > 254) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "邮箱不能为空或超出长度限制");
+        }
+        // 校验昵称或邮箱是否已经注册。
+        UserDO existingUser = baseMapper.selectByUsernameOrEmail(
                 command.getUsername(),
-                command.getPhone()
+                command.getEmail().trim().toLowerCase(java.util.Locale.ROOT)
         );
 
-        // 用户名或手机号重复时拒绝注册。
+        // 昵称或邮箱重复时拒绝注册。
         if (existingUser != null) {
             throw new BusinessException(
                     CommonErrorCode.BAD_REQUEST,
-                    "用户名或手机号已存在"
+                    "昵称或邮箱已存在"
             );
         }
 
         // 组装用户持久化对象。
         UserDO userDO = new UserDO();
         userDO.setUserUuid(java.util.UUID.randomUUID().toString());
+        userDO.setUserNo(generateUserNo());
         userDO.setUsername(command.getUsername());
-        userDO.setPhone(command.getPhone());
+        userDO.setEmail(command.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
         userDO.setRoleCode(DEFAULT_ROLE_CODE);
         userDO.setBalance(DEFAULT_BALANCE);
 
@@ -205,12 +212,12 @@ public class UserServiceImpl
 
         try {
             // 保存用户数据。
-            save(userDO);
+            saveWithUserNo(userDO);
         } catch (DuplicateKeyException exception) {
             // 防止并发注册绕过前置重复校验。
             throw new BusinessException(
                     CommonErrorCode.BAD_REQUEST,
-                    "用户名或手机号已存在"
+                    "昵称或邮箱已存在"
             );
         }
 
@@ -230,9 +237,12 @@ public class UserServiceImpl
     public UserBasicVO authenticate(
             UserPasswordVerifyCommand command
     ) {
-        // 根据用户名查询用户。
-        UserDO userDO = baseMapper.selectByUsernameForLogin(
-                command.getUsername()
+        if (command.getAccount() == null || command.getAccount().isBlank() || command.getPassword() == null) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "账号或密码错误");
+        }
+        // 仅按永久用户号或规范化后的邮箱登录，昵称不再充当登录账号。
+        UserDO userDO = baseMapper.selectByAccountForLogin(
+                command.getAccount().trim().toLowerCase(java.util.Locale.ROOT)
         );
 
         // 用户不存在、已禁用或已删除时统一返回认证失败。
@@ -241,7 +251,7 @@ public class UserServiceImpl
                 || userDO.getDeletedAt() != null) {
             throw new BusinessException(
                     CommonErrorCode.UNAUTHORIZED,
-                    "用户名或密码错误"
+                    "账号或密码错误"
             );
         }
 
@@ -255,7 +265,7 @@ public class UserServiceImpl
         if (!passwordMatched) {
             throw new BusinessException(
                     CommonErrorCode.UNAUTHORIZED,
-                    "用户名或密码错误"
+                    "账号或密码错误"
             );
         }
 
@@ -546,6 +556,7 @@ public class UserServiceImpl
         // 组装引导账号，除角色外与普通注册保持一致。
         UserDO userDO = new UserDO();
         userDO.setUserUuid(java.util.UUID.randomUUID().toString());
+        userDO.setUserNo(generateUserNo());
         userDO.setUsername(username);
         userDO.setEmail(email);
         userDO.setRoleCode(roleCode);
@@ -560,7 +571,7 @@ public class UserServiceImpl
 
         try {
             // 保存引导账号。
-            save(userDO);
+            saveWithUserNo(userDO);
         } catch (DuplicateKeyException exception) {
             // 并发引导时由唯一索引兜底，视为账号已存在。
             return null;
@@ -580,8 +591,33 @@ public class UserServiceImpl
         return UserBasicVO.builder()
                 .userId(userDO.getUserId())
                 .userUuid(userDO.getUserUuid())
+                .userNo(userDO.getUserNo())
                 .username(userDO.getUsername())
                 .roleCode(userDO.getRoleCode())
                 .build();
+    }
+    /** 唯一索引处理极低概率的并发随机号碰撞；昵称、邮箱冲突仍由调用方处理。 */
+    private void saveWithUserNo(UserDO user) {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            try {
+                if (!save(user)) {
+                    throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "账户保存失败，请稍后重试");
+                }
+                return;
+            } catch (DuplicateKeyException exception) {
+                if (baseMapper.selectIdByUserNo(user.getUserNo()) == null) throw exception;
+                user.setUserNo(generateUserNo());
+            }
+        }
+        throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法分配用户号，请稍后重试");
+    }
+
+    /** 使用独立随机号，不从内部主键或 UUID 截取；唯一索引作为最终约束。 */
+    private String generateUserNo() {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String candidate = Long.toString(USER_NUMBER_RANDOM.nextLong(1_000_000_000L, 10_000_000_000L));
+            if (baseMapper.selectIdByUserNo(candidate) == null) return candidate;
+        }
+        throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法分配用户号，请稍后重试");
     }
 }

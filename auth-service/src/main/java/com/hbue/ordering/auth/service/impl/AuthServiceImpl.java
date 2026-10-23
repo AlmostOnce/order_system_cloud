@@ -129,7 +129,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 在调用用户服务前检查账号锁定状态，锁定期间不再执行密码校验。
-        if (loginAttemptService.isLocked(request.getUsername())) {
+        if (loginAttemptService.isLocked(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT))) {
             throw new BusinessException(
                     CommonErrorCode.TOO_MANY_REQUESTS,
                     "登录失败次数过多，请稍后重试"
@@ -141,7 +141,7 @@ public class AuthServiceImpl implements AuthService {
                 new UserPasswordVerifyCommand();
 
         // 设置登录用户名。
-        command.setUsername(request.getUsername());
+        command.setAccount(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
 
         // 设置登录密码。
         command.setPassword(request.getPassword());
@@ -166,7 +166,7 @@ public class AuthServiceImpl implements AuthService {
         if (CommonErrorCode.UNAUTHORIZED.code().equals(response.getCode())
                 || response.getData() == null) {
             // 达到配置阈值后返回 HTTP 429，后续请求会在调用用户服务前被锁定检查拦截。
-            if (loginAttemptService.recordFailure(request.getUsername())) {
+            if (loginAttemptService.recordFailure(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT))) {
                 throw new BusinessException(
                         CommonErrorCode.TOO_MANY_REQUESTS,
                         "登录失败次数过多，请稍后重试"
@@ -176,7 +176,7 @@ public class AuthServiceImpl implements AuthService {
             // 未达到锁定阈值时仍使用普通认证失败响应，不泄露账号是否存在。
             throw new BusinessException(
                     CommonErrorCode.UNAUTHORIZED,
-                    "用户名或密码错误"
+                    "账号或密码错误"
             );
         }
 
@@ -184,7 +184,7 @@ public class AuthServiceImpl implements AuthService {
         UserBasicVO userBasicVO = response.getData();
 
         // 凭据校验成功后清除历史失败和锁定状态，新的失败窗口从零开始。
-        loginAttemptService.recordSuccess(request.getUsername());
+        loginAttemptService.recordSuccess(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
 
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(
@@ -395,8 +395,8 @@ public class AuthServiceImpl implements AuthService {
         // 设置注册用户名。
         command.setUsername(request.getUsername());
 
-        // 设置注册手机号。
-        command.setPhone(request.getPhone());
+        // 设置注册邮箱。
+        command.setEmail(request.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
 
         // 设置注册密码。
         command.setPassword(request.getPassword());
@@ -422,7 +422,7 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
-        // 用户名或手机号重复时，返回参数错误。
+        // 用户名或邮箱重复时，返回参数错误。
         if (CommonErrorCode.BAD_REQUEST.code()
                 .equals(response.getCode())) {
             throw new BusinessException(

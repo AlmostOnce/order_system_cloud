@@ -37,7 +37,7 @@ public interface UserService extends IService<UserDO> {
      *
      * @param command 用户注册命令
      * @return 注册成功的用户基础信息
-     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或手机号冲突时抛出
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或邮箱冲突时抛出
      */
     UserBasicVO register(UserRegisterCommand command);
 

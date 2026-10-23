@@ -51,8 +51,8 @@ class PublicUserIdentityTest {
     @Test
     void publicResponsesMustNotSerializeInternalUserId() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        String profile = mapper.writeValueAsString(new UserProfileVO(UUID, "用户", "CUSTOMER", null, null, null, null));
-        String user = mapper.writeValueAsString(new UserPublicVO(UUID, "用户", "CUSTOMER"));
+        String profile = mapper.writeValueAsString(new UserProfileVO(UUID, "1234567890", "用户", "CUSTOMER", null, null, null));
+        String user = mapper.writeValueAsString(new UserPublicVO(UUID, "1234567890", "用户", "CUSTOMER"));
         assertFalse(profile.contains("userId"));
         assertFalse(user.contains("userId"));
         assertTrue(profile.contains(UUID));
