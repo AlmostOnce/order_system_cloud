@@ -86,11 +86,26 @@ services:
       - "9109:9109"
       - "9108:7091"
 
+  rocketmq-permissions:
+    profiles: [mq]
+    image: apache/rocketmq:5.3.2
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - chown -R 3000:3000 /mq-namesrv-logs /mq-broker-logs /mq-store
+    volumes:
+      - order-system-cloud-rocketmq-namesrv-logs:/mq-namesrv-logs
+      - order-system-cloud-rocketmq-broker-logs:/mq-broker-logs
+      - order-system-cloud-rocketmq-store:/mq-store
+
   rocketmq-namesrv:
     profiles: [mq]
     image: apache/rocketmq:5.3.2
     restart: unless-stopped
     command: sh mqnamesrv
+    depends_on:
+      rocketmq-permissions:
+        condition: service_completed_successfully
     environment:
       JAVA_OPT_EXT: "-Xms128m -Xmx128m -Xmn64m"
     ports:
@@ -106,6 +121,8 @@ services:
     environment:
       JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m -XX:MaxDirectMemorySize=128m"
     depends_on:
+      rocketmq-permissions:
+        condition: service_completed_successfully
       rocketmq-namesrv:
         condition: service_started
     ports:
@@ -127,7 +144,12 @@ services:
     command:
       - |
         attempts=0
-        until sh /home/rocketmq/rocketmq-5.3.2/bin/mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:10911 -t order-paid-sales-v1 -r 4 -w 4; do
+        while true; do
+          result=$$(sh /home/rocketmq/rocketmq-5.3.2/bin/mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:10911 -t order-paid-sales-v1 -r 4 -w 4 2>&1)
+          printf '%s\n' "$$result"
+          case "$$result" in
+            *"create topic to "*" success."*) exit 0 ;;
+          esac
           attempts=$$((attempts + 1))
           if [ "$$attempts" -ge 30 ]; then exit 1; fi
           sleep 3

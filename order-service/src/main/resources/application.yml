@@ -7,6 +7,9 @@ server:
   port: 9091
 
 spring:
+  profiles:
+    # 本机已部署 RocketMQ；未显式指定 profile 时启用销量事件收发。
+    default: ranking-mq
   data:
     redis:
       # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。
