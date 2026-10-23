@@ -2,9 +2,15 @@
 
 ## 当前状态
 
+2026-10-23 运行验收更新：本机 RocketMQ 已启动；订单服务默认 profile 设为 ranking-mq，使用已有 IDEA 编译产物及依赖直接运行 Java，未运行 Maven。消费组 sales-ranking-v1 已在线，3 条既有 outbox 事件全部发布，4 个队列的消费积压为 0；Redis 中三个菜品销量为 4、7、10，与数据库有效订单汇总完全一致。已有订单去重集合包含这三笔订单，结果未重复累计。本次未创建订单或扣款。启动日志存在函数发现探测告警（包括 salesRankingRetryError）；正常消费已通过，消费故障、Broker 重投及死信路径未做故障注入验收，不能视为本次已经验证。
+
 2026-10-22 已完成消息化源码和配置，order_db 的 sales_event_outbox 已创建。按用户本次授权，未运行 Maven、后端 JUnit、构建或服务启停，未进行 Java Producer/Broker/Consumer 端到端联调。不能将 Lua/SQL 测试通过等同于 MQ 已在运行。
 
 ## 启动故障修复
+
+Nacos 日志隔离：九个服务的 main 方法在 Spring 启动前设置 JM.LOG.PATH，默认 ${user.home}/logs/order-system/{服务名}，客户端继续在其下的 nacos 目录写日志；已有 JVM -DJM.LOG.PATH 参数优先。避免 Windows 多服务共用 remote.log 导致滚动改名失败。订单服务已用对应 JVM 参数直接运行验证，独立 remote.log/config.log 成功写入，未出现原改名失败告警，MQ 消费者保持在线；其他服务未重启，入口源码待其后续编译启动生效。
+
+2026-10-23 已修复 Docker MQ 卷权限问题：镜像以 UID/GID 3000 运行，而新建命名卷目录属于 root，导致日志不可写、Broker 存储初始化失败。Compose 增加一次性的 rocketmq-permissions 服务，仅调整 MQ 三个专用卷的归属，NameServer/Broker 等待其完成后启动，业务进程仍使用镜像默认用户。主题初始化改为检查 mqadmin 的成功输出，避免该工具打印异常但退出码仍为 0 时误报成功。已实际启动 Broker 并创建 order-paid-sales-v1（4 个读写队列）；这不等于订单 Java 生产消费链路已经完成验收。
 
 订单服务注入 SalesRankingService 后，需要 DistributedLockService，但 common-redis 的 Redisson 为 optional，订单模块没有显式依赖，因此 Spring 找不到 Bean。订单 pom 已按现有商品模块的装配方式补充 redisson-spring-boot-starter，排除 spring-data-41，并显式加入与 Boot 3.5 匹配的 redisson-spring-data-35。新增订单模块上下文回归测试源码；尚未运行。
 
@@ -40,7 +46,7 @@ Redis keys 使用同一 `{sales:v2}` hash tag：data 为 ZSet，meta 为 Hash，
 
 1. 数据库：迁移 `docs/database/migrations/order_db/V1__add_sales_event_outbox.sql` 已在本机执行，当前新表为空。其他设备须在部署新代码前执行，确保 order_id 为 BIGINT UNSIGNED 与订单表一致。
 2. 基础设施：docker-compose 中 `mq` profile 包含 RocketMQ 5.3.2 NameServer、Broker 与 topic 初始化任务；本机端口 9876、10911、10909、10912，数据和日志使用独立卷。主题 order-paid-sales-v1，4 个读/写队列。未在本次启动这些容器。
-3. 服务：在 IDEA 的 Active profiles 激活 `ranking-mq`，Nameserver 可通过 ROCKETMQ_NAMESERVER 覆盖（默认 127.0.0.1:9876）；已提供 application-ranking-mq.yml。未激活该 profile 时不连接 Broker，仍可靠保存待发送 outbox，榜单保留初始化和 5 分钟对账；不能宣称此时已启用消息更新。
+3. 服务：当前 application.yml 的默认 profile 为 `ranking-mq`；如果 IDEA 或环境变量显式指定其他 profile，需同时包含 `ranking-mq` 才能启用事件收发。Nameserver 可通过 ROCKETMQ_NAMESERVER 覆盖（默认 127.0.0.1:9876）；已提供 application-ranking-mq.yml。未激活该 profile 时不连接 Broker，仍可靠保存待发送 outbox，榜单保留初始化和 5 分钟对账。
 4. Broker 的 brokerIP1=127.0.0.1 面向当前 Windows 宿主机服务。容器化服务需改成容器可达地址，不能照搬回环地址。
 5. 已核对现有 SCA BOM 2025.0.0.0 管理的 spring-cloud-starter-stream-rocketmq；Producer 的 send-type=Sync，Producer error-channel-enabled=false 使发送错误传播；Consumer 的 push.max-reconsume-times=16，使用固定消费组与自定义抛异常错误处理器。
 

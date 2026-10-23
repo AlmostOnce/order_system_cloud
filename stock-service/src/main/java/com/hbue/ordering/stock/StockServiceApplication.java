@@ -30,6 +30,10 @@ public class StockServiceApplication {
      * @param args 启动参数
      */
     public static void main(String[] args) {
+        // 各服务隔离 Nacos 客户端日志，避免 Windows 下共享文件滚动冲突；保留 JVM 外部配置。
+        System.getProperties().putIfAbsent("JM.LOG.PATH", java.nio.file.Path.of(
+                System.getProperty("user.home"), "logs", "order-system", "stock-service"
+        ).toString());
         SpringApplication.run(StockServiceApplication.class, args);
     }
 }

@@ -39,6 +39,10 @@ public class CartServiceApplication {
      * @param args Spring Boot 启动参数，可覆盖当前设备的端口和中间件地址
      */
     public static void main(String[] args) {
+        // 各服务隔离 Nacos 客户端日志，避免 Windows 下共享文件滚动冲突；保留 JVM 外部配置。
+        System.getProperties().putIfAbsent("JM.LOG.PATH", java.nio.file.Path.of(
+                System.getProperty("user.home"), "logs", "order-system", "cart-service"
+        ).toString());
         // 公共组件与安全配置随 Spring 上下文一起装配。
         SpringApplication.run(CartServiceApplication.class, args);
     }
