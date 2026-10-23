@@ -8,11 +8,10 @@ import java.util.List;
  * 不把订单服务的 DO 或实现模块暴露给调用者；额外展示字段允许向后兼容扩展。
  *
  * @param orderId 实际订单 ID
- * @param userId 订单归属用户
  * @param windowId 订单所属窗口
  * @param items 已持久化的购买明细，不是当前商品目录
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record OrderCartSnapshotVO(Long orderId, Long userId, Long windowId,
+public record OrderCartSnapshotVO(Long orderId, Long windowId,
                                   List<OrderPurchasedItemVO> items) {
 }

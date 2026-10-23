@@ -54,12 +54,13 @@ public class CartCleanupServiceImpl implements CartCleanupService {
     public CartCleanupVO cleanup(Long userId, Long orderId, CartCleanupRequest request) {
         validateRequest(userId, orderId, request);
         OrderCartSnapshotVO order = queryOrder(orderId);
-        // 除了远程归属校验，再检查响应身份，防止误路由或上游契约错误导致跨用户操作。
-        if (order.userId() == null || order.orderId() == null || order.windowId() == null
+        // 订单归属由透传当前用户 Token 的详情接口校验，不依赖公开响应中的内部用户 ID。
+        // 继续校验返回的订单号及完整购买事实，防止误路由或损坏响应触发清理。
+        if (order.orderId() == null || order.windowId() == null
                 || order.items() == null || order.items().isEmpty()) {
             throw unavailable();
         }
-        if (!userId.equals(order.userId()) || !orderId.equals(order.orderId())) {
+        if (!orderId.equals(order.orderId())) {
             throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单不存在");
         }
         if (!request.windowId().equals(order.windowId())) {

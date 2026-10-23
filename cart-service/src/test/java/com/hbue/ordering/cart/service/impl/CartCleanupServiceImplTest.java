@@ -42,10 +42,14 @@ class CartCleanupServiceImplTest {
         service = new CartCleanupServiceImpl(orders, repository);
     }
 
-    /** 只对订单中真实购买的数量清理，结果区分实际删除和跳过。 */
+    /** 公开订单响应不含内部 userId；解码后仍能按已验证的购买事实安全清理。 */
     @Test
-    void shouldCleanOnlyAfterVerifiedOrder() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(5L, 1L, 2)));
+    void shouldCleanOnlyAfterVerifiedOrder() throws Exception {
+        OrderCartSnapshotVO snapshot = new com.fasterxml.jackson.databind.ObjectMapper().readValue("""
+                {"orderId":123,"windowId":1,"status":"待支付",
+                 "items":[{"productId":11,"quantity":2}]}
+                """, OrderCartSnapshotVO.class);
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(snapshot));
         CartCleanupRequest request = request(2);
         when(repository.removeSubmitted(5L, 1L, request.items())).thenReturn(1L);
         CartCleanupVO result = service.cleanup(5L, 123L, request);
@@ -57,14 +61,14 @@ class CartCleanupServiceImplTest {
     /** 已删除条目可以再次提交，不能把重复清理误认为订单失败。 */
     @Test
     void shouldAllowIdempotentCleanupRetry() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(5L, 1L, 2)));
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 1L, 2)));
         assertEquals(1, service.cleanup(5L, 123L, request(2)).skippedCount());
     }
 
-    /** 即使远程接口错误返回别人订单，本地仍必须检查归属。 */
+    /** 远程归属由用户凭据校验，本地仍拒绝返回了错误订单号的响应。 */
     @Test
-    void shouldRejectOtherUsersOrder() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(99L, 1L, 2)));
+    void shouldRejectMismatchedOrderId() {
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(999L, 1L, 2)));
         assertError(CommonErrorCode.NOT_FOUND, request(2));
         verifyNoInteractions(repository);
     }
@@ -72,7 +76,7 @@ class CartCleanupServiceImplTest {
     /** 不允许用窗口一的订单清理另一个窗口。 */
     @Test
     void shouldRejectDifferentWindow() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(5L, 10L, 2)));
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 10L, 2)));
         assertError(CommonErrorCode.CONFLICT, request(2));
         verifyNoInteractions(repository);
     }
@@ -80,7 +84,7 @@ class CartCleanupServiceImplTest {
     /** 请求数量必须与已保存的订单明细一致，不能把未购买的数量整项清除。 */
     @Test
     void shouldRejectDifferentPurchasedQuantity() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(5L, 1L, 1)));
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 1L, 1)));
         assertError(CommonErrorCode.CONFLICT, request(2));
         verifyNoInteractions(repository);
     }
@@ -89,7 +93,7 @@ class CartCleanupServiceImplTest {
     @Test
     void shouldRejectMalformedOrderResponse() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(
-                new OrderCartSnapshotVO(123L, 5L, 1L, null)));
+                new OrderCartSnapshotVO(123L, 1L, null)));
         assertError(CommonErrorCode.SERVICE_UNAVAILABLE, request(2));
         verifyNoInteractions(repository);
     }
@@ -144,10 +148,10 @@ class CartCleanupServiceImplTest {
     /** 商品集合必须完整相同，数量相同但商品不同也不能被误判为一次合法清理。 */
     @Test
     void shouldRejectDifferentOrIncompletePurchasedItems() {
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(new OrderCartSnapshotVO(123L, 5L, 1L,
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(new OrderCartSnapshotVO(123L, 1L,
                 List.of(new OrderPurchasedItemVO(12L, 2)))));
         assertError(CommonErrorCode.CONFLICT, request(2));
-        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(new OrderCartSnapshotVO(123L, 5L, 1L,
+        when(orders.getOrder(123L)).thenReturn(ApiResponse.success(new OrderCartSnapshotVO(123L, 1L,
                 List.of(new OrderPurchasedItemVO(11L, 2), new OrderPurchasedItemVO(12L, 1)))));
         assertError(CommonErrorCode.CONFLICT, request(2));
         verifyNoInteractions(repository);
@@ -165,13 +169,13 @@ class CartCleanupServiceImplTest {
 
     /**
      * 构造订单服务保存的购买事实。
-     * @param userId 订单归属
+     * @param orderId 订单编号
      * @param windowId 订单窗口
      * @param quantity 实际购买数量
      * @return 订单详情所需字段投影
      */
-    private OrderCartSnapshotVO order(Long userId, Long windowId, int quantity) {
-        return new OrderCartSnapshotVO(123L, userId, windowId,
+    private OrderCartSnapshotVO order(Long orderId, Long windowId, int quantity) {
+        return new OrderCartSnapshotVO(orderId, windowId,
                 List.of(new OrderPurchasedItemVO(11L, quantity)));
     }
 

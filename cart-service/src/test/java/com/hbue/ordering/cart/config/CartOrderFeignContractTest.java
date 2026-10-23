@@ -59,7 +59,7 @@ class CartOrderFeignContractTest {
                 assertEquals("http://orders.test/orders/123", capture.request.get().url());
                 assertEquals(List.of("Bearer customer-contract-test"),
                         List.copyOf(capture.request.get().headers().get("Authorization")));
-                assertEquals(5L, response.getData().userId());
+                assertEquals(123L, response.getData().orderId());
                 assertEquals(11L, response.getData().items().getFirst().productId());
                 assertEquals(2, response.getData().items().getFirst().quantity());
             });
@@ -95,7 +95,7 @@ class CartOrderFeignContractTest {
                         .headers(Map.of("Content-Type", List.of("application/json")))
                         .body("""
                                 {"code":"COMMON_000","message":"操作成功","data":{
-                                  "orderId":123,"userId":5,"windowId":1,"status":"待支付",
+                                  "orderId":123,"windowId":1,"status":"待支付",
                                   "items":[{"productId":11,"quantity":2,"productName":"鸡肉饭"}]}}
                                 """, StandardCharsets.UTF_8).build();
             };
