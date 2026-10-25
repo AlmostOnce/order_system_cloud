@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-更新时间：2026-10-23
+更新时间：2026-10-26
 
 ### 已完成
 
@@ -415,10 +415,51 @@
 
 ## 当前下一步
 
+### 2026-10-26 前后端分步提交准备
+
+- 管理端已对照后端最新登录契约改为提交 `account`（十位用户号或邮箱），资料类型补充 `userNo`、保留 UUID 并移除用户手机号；继续复用已有验证码、管理角色限制与双令牌会话逻辑，没有新增后端接口。
+- 管理端类型检查及生产构建通过，改动文件的格式、ESLint 与 Oxlint 检查通过；新登录链路尚未进行真实浏览器验收。后端本轮仅整理已有数据库维护工具、数据字典、种子说明、开发配置及进度记录，两份 Python 工具语法和两份 IDEA XML 解析检查通过，没有执行数据库写入、Maven 或服务重启。
+- 按用户要求在前后端 `main` 使用中文信息分步提交并推送；本机私有 `.env`、账号密码和数据库备份保持在 Git 之外，不进行强制推送或推送后关机。
+
+### 2026-10-24 本机测试账号写入私有环境文件
+
+- 按用户要求，将 19 个账号的昵称、用户号、邮箱及可用明文密码整理进被 Git 忽略的本机 `.env`，变量以 `TEST_<角色>_<序号>_USERNAME/ACCOUNT/EMAIL/PASSWORD` 命名。管理端登录使用 ACCOUNT（用户号）或 EMAIL。
+- 13 个新管理账号密码来自本轮私有凭据文件，并逐个与数据库 BCrypt 哈希比对通过；原 6 个顾客账号没有找到明文密码，已明确标注未知并将对应 PASSWORD 配置留空，该空值不代表数据库密码为空，本次没有重置任何密码。
+- `.env` 未被 Git 跟踪，权限收紧为 600；现有数据库、Redis、Nacos 等配置保持原样。修改前环境文件备份位于 `/home/user/.codex/backups/order_system_cloud/local_demo_20261024_003743/environment-before-test-accounts.env`（权限 600）。本文不记录密码明文。
+- `bash -n .env` 及账号变量数量、唯一性、密码已知/未知数量检查均通过。
+
+### 2026-10-24 本机 Linux：按数量重建测试目录、库存和管理账号
+
+- 用户确认按原测试数据的数量与角色规模重建，不要求与另一设备的记录、用户号或密码相同。保留本机原有 6 个顾客，新增 13 个管理账号，共 **19 个用户**：`SYSTEM_ADMIN` 1、`GENERAL_MANAGER` 1、`RESTAURANT_MANAGER` 1、`STALL_MANAGER` 10、`CUSTOMER` 6。
+- 已复用 `campus_three_canteens.sql` 和 `stock_initialization_20261022.sql`：当前为 **3 个食堂、9 个窗口、21 个分类、77 道菜、77 条库存**。家常小炒保留原 5 道示例并新增 8 道，共 13 道；其余 8 个窗口各 8 道。食堂和窗口展示文字恢复正常中文；旧菜品内容与主键未被改写，已有库存不重置。
+- 账号按既有权限规则创建：系统管理员无业务范围；总经理 `PLATFORM:0`；餐厅经理仅桂园食堂；两个早期店主仅家常小炒，其余 8 个店主各一个窗口，共 12 条范围授权。所有新账号启用，独立随机密码保存为 BCrypt，余额为 0，未设置支付密码。
+- 完整六库备份及私有登录信息分别为 `/home/user/.codex/backups/order_system_cloud/local_demo_20261024_003743/business-databases-before.sql.gz`、同目录的 `管理端测试账号.md`。目录权限 700、文件权限 600；密码没有写入 Git 文档。登录使用用户号或邮箱，不能用昵称代替账号。管理员邮箱 `admin@example.test`，总经理邮箱 `general_manager@example.test`，仅为开发测试账号。
+- 新增可重复执行工具 `tools/seed-local-development-data.py`：默认只读预览，`--apply` 先备份后补数据；`--verify-auth` 使用现有用户服务进行新账号密码验证。Linux 直接调用 Docker，Windows 沿用 WSL Docker；Python 需安装 `bcrypt` 包。工具复用同名、同角色、同范围的既有账号，遇到身份或范围冲突中止，不覆盖密码。
+- 通过真实 `user-service` 的 `/users/authenticate` 对 13 个新账号分别验证用户号和邮箱，共 **26 次成功**，角色与预期一致。原有用户、菜品、库存及范围快照保持不变，订单/支付/余额流水仍为空；第二次执行新增账号数为 0，数据数量和已有密码、库存未变化。
+- 已定向失效商品窗口/菜单/空值缓存、旧商品布隆位图及配置、相关库存快照和新用户范围缓存；未操作令牌、购物车、分布式锁或执行 `FLUSHDB`。布隆不存在时按现有策略放行，下次商品服务正常启动从数据库重建；本轮未重启 IDEA 中的 Java 服务。
+
+### 2026-10-24 本机 Linux：补齐遗漏的历史数据库迁移
+
+- 逐表检查发现此前“本机 6 库 16 表”的记录不准确：补迁移前实际为 6 库 14 表，用户库仅有 `users`，缺少 V2/V3/V4；不能把其它设备的执行状态当作本机已执行。本段为此次实际核验后的更正记录。
+- 先完整备份六个业务库（包含数据、结构、触发器、存储过程和事件）至 `/home/user/.codex/backups/order_system_cloud/schema-completion-20261024-CZs2mF/business-databases-before.sql.gz`，gzip 完整性校验通过；备份目录权限 700，备份文件权限 600。
+- 按仓库现有脚本补执行 `user_db/V2__create_user_data_scopes_table.sql`、`V3__add_pay_password_and_balance_records.sql`、`V4__add_public_user_uuid.sql`；为现有 6 个用户补发唯一合法 UUID v4，支付密码默认为未设置，新增两张业务表为空。未更改原用户 ID、用户号、登录凭据、余额或角色，未自动授予新的数据范围。
+- 依据订单 V1 的索引定义补执行 `ALTER TABLE order_db.orders ADD KEY idx_orders_user_created_at (user_id, created_at)`；已存在的 V5/V6 用户字段、商品字段及 outbox 不重复执行。
+- 中文注释维护工具增加 Linux 直接调用 Docker 的支持，Windows 保留原有 WSL 路径；按本机实际完整列定义重新生成中文 SQL 与数据字典并应用。注释前后字段元数据、全部索引和约束、16 张表的行校验和一致；结构及注释回退备份见 `/home/user/.codex/backups/order_system_cloud/chinese_comments_20261024_001341`。跨设备需要重新生成注释 SQL，不能直接套用本机字段定义快照。
+- 完成后通过独立核对确认 **6 库 16 表、169 个必需字段全部存在**；6 个旧账号原有字段查询摘要与迁移前一致（SHA-256：`cc45ca4ee66d82608ad5bdc6dc8c4b2ecf9b4042b208bee50825eebd1a2b97d1`）。使用应用配置解析出的 `user_service` 凭据验证三张用户表均可读取。本轮未启动/重启 Java 服务，未导入种子数据、伪造余额流水或设置库存数量。
+
+### 2026-10-23 本机 Linux：数据库迁移与 RocketMQ 启动
+
+- 已在迁移前备份 `user_db` 与 `order_db`：`/home/user/.codex/backups/order_system_cloud/db-migrations-20261023-DroIPN/user-order-before-migrations.sql.gz`；gzip 完整性校验通过，文件权限为仅当前用户可读写。
+- `user_db` 的 V5 用户号/邮箱迁移已完成，核对 6 个用户均有唯一 10 位 `user_no`。V6 执行时提示 `uk_users_phone` 不存在；随后核对发现 `phone` 列和该索引均已不存在，说明数据库已处于 V6 目标结构，因此未重试非幂等脚本。此过程没有丢失备份；后续其它设备执行 V6 前必须先检查列和索引。
+- 已在 `order_db` 建立 `sales_event_outbox`；本次核对时该表 0 条，`orders` 也为 0 条。当前本机数据库因此没有可用于销量消息端到端验证的历史订单。
+- 已拉取 RocketMQ 5.3.2 并运行 `mq` profile：NameServer `9876`、Broker `10909/10911/10912` 正常；权限初始化容器和 topic 初始化容器均以退出码 0 结束；`order-paid-sales-v1` 已创建，读写队列各 4 个。消费组 `sales-ranking-v1` 已在线并订阅该主题。
+- 订单服务生产代码构建成功；启动时绕过现有过期测试源码编译问题，验证实例曾在 `9091` 注册到 Nacos，`/actuator/health` 为 `UP`。23:57 已正常停止本轮验证实例，释放 `9091` 供 IDEA 启动，避免重复实例导致端口冲突。`OrderCartContractTest` 仍引用已移除的 `OrderCartSnapshotVO.userId()`；本次没有修改该测试，也没有运行测试。
+- 当前服务启动日志出现 Spring Cloud Function 找不到 `salesRankingPaid` / `salesRankingRetryError` 的告警。虽然 RocketMQ 管理命令确认消费组连接并订阅，函数注册和真实事件处理尚未确认；没有人为创建订单/支付来制造消息。后续先定位函数注册告警，再用真实业务订单验证 outbox 发布、消费者更新与失败重试；未验证前不宣称销量消息链路端到端完成。
+
 ### 本次优先级调整（2026-10-22）
 
-1. **当前进行：销量榜消息化**。订单确认支付与本地 outbox 同事务写入，通过 RocketMQ + Spring Cloud Stream 发布，消费端使用 Redis ZSet + 原子去重更新累计销量；历史初始化、Redis 丢失重建和定时对账保留。MQ 故障不能阻断支付；失败发布持续重试、失败消费交由 Broker 重试和死信处理。详见 [销量榜](SALES_RANKING.md)。
-2. **下一步：库存事件与缓存一致性改造**。保留 order × stock 的 Seata AT 同步扣减/取消回补边界，不把核心扣库存直接改成不确定结果的异步消息。库存流水与库存变更事件在 stock_db 同库事务持久化，通过 RocketMQ 传播已提交变更，用于缓存失效/重建、库存预警和后续统计；消费按流水业务唯一键去重，失败重试、死信告警和库存对账兜底。必须验证 Seata 全局回滚时不发布已回滚事件、消息乱序不覆盖较新库存、Redis 不可用/恢复和重复回补场景。具体文档见 [库存接入下一步](STOCK_INTEGRATION.md#下一步库存事件与缓存一致性改造)。本次只登记计划，不更改库存核心流程。
+1. **当前进行：完成销量榜消息链路核验**。代码与本机 RocketMQ、outbox 表已就绪，订单服务也已启动；先排查 `salesRankingPaid` / `salesRankingRetryError` 函数发现告警，再用真实或明确授权的订单确认 Producer、Consumer、Redis 投影及重试/死信。详见 [销量榜](SALES_RANKING.md)。
+2. **之后：库存事件与缓存一致性改造**。保留 order × stock 的 Seata AT 同步扣减/取消回补边界，不把核心扣库存直接改成不确定结果的异步消息。库存流水与库存变更事件在 stock_db 同库事务持久化，通过 RocketMQ 传播已提交变更，用于缓存失效/重建、库存预警和后续统计；消费按流水业务唯一键去重，失败重试、死信告警和库存对账兜底。必须验证 Seata 全局回滚时不发布已回滚事件、消息乱序不覆盖较新库存、Redis 不可用/恢复和重复回补场景。具体文档见 [库存接入下一步](STOCK_INTEGRATION.md#下一步库存事件与缓存一致性改造)。本次只登记计划，不更改库存核心流程。
 
 
 0. ~~购物车服务（cart-service）~~ **已完成（2026-10-17）**：Redis 增删改查、商品实时核价与订单成功后的按提交快照清理接口已实现，详见"2026-10-17 本次完成"；**取消** MySQL 备份与游客合并。前端接入时需显式串联下单与清理。
