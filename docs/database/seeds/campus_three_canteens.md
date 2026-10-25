@@ -1,6 +1,6 @@
 # 三食堂测试目录
 
-2026-10-23 已在本机 product_db / stock_db 执行 campus_three_canteens.sql。
+2026-10-23 已在 Windows 设备的 product_db / stock_db 执行 campus_three_canteens.sql。下述原始备份路径属于该设备。
 
 | 食堂 | 窗口 |
 |---|---|
@@ -18,3 +18,11 @@
 SQL 批量导入绕过商品管理服务的缓存更新流程，因此已失效对应窗口菜单、空值缓存与旧布隆索引，未执行 FLUSHDB。过滤器缺失时由现有 mightContain 策略放行读库，下次商品服务正常启动由 ProductBloomFilterInitializer 从数据库重建。未运行 Maven 或重启服务。
 
 新菜品未绑定独立图片，前端沿用现有默认图片。此脚本只用于开发数据初始化，不应用到生产目录。
+
+## 2026-10-24 Linux 本机补导入
+
+已按用户确认的数量复用此脚本及 `stock_initialization_20261022.sql`，得到 3 食堂、9 窗口、21 分类、77 菜品与 77 条库存。原 5 道菜及主键保留；原餐厅/窗口仅更新展示信息，不创建订单或支付记录。
+
+使用 `python3 tools/seed-local-development-data.py --apply --verify-auth` 可重复准备本机目录、库存和管理账号。已实际重复执行，第二次没有新增账号或重置已有库存。菜单/空值缓存和旧布隆索引已定向失效；商品服务下次正常启动时重建过滤器，当前过滤器缺失时放行回源。
+
+本次 Linux 全库备份：`/home/user/.codex/backups/order_system_cloud/local_demo_20261024_003743/business-databases-before.sql.gz`。

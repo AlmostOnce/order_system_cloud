@@ -1,6 +1,6 @@
 # 新增窗口店主账号
 
-2026-10-23 已执行 tools/seed-stall-owners.py，为 8 个新增窗口创建启用的 STALL_MANAGER 账号。
+2026-10-23 已在 Windows 设备执行 tools/seed-stall-owners.py，为 8 个新增窗口创建启用的 STALL_MANAGER 账号。下表用户号为该设备的历史记录，不代表 Linux 本机账号。
 
 | 食堂 | 窗口 | 用户号 |
 |---|---|---|
@@ -24,3 +24,11 @@
 已核对数据库中的 8 个单窗口授权，并失效这些新用户的数据范围缓存。实际 user-service 内部密码校验接口验证用户号及邮箱两种方式，共 16 次均成功；未调用登录签发接口，也未执行管理修改操作。未运行 Maven 或重启服务。
 
 脚本检测到窗口已分配或账号已存在时会停止，不覆盖原账号、重置密码或重复授权。仅用于开发数据准备。
+
+## 2026-10-24 Linux 本机管理账号
+
+用户确认只需数量和角色规模一致，不要求与 Windows 相同的用户号及密码。本机已新增 13 个启用的管理账号：1 个 SYSTEM_ADMIN、1 个 GENERAL_MANAGER、1 个 RESTAURANT_MANAGER、10 个 STALL_MANAGER。其中家常小炒由 `stall01` 和 `stalltest01` 两个店主测试账号管理，其余 8 个窗口各一个店主；共 12 条范围授权，系统管理员不持有业务范围。
+
+保留本机 6 个顾客后，用户总数为 19。新账号用户号和邮箱两种密码校验共 26 次成功；重复执行创建数为 0，没有重置密码。准备工具：`tools/seed-local-development-data.py`（默认预览，`--apply --verify-auth` 执行并校验）。
+
+管理员邮箱 `admin@example.test`，总经理邮箱 `general_manager@example.test`。其余账号邮箱、全部用户号和初始密码仅存本机私有文件 `/home/user/.codex/backups/order_system_cloud/local_demo_20261024_003743/管理端测试账号.md`；完整执行前数据库备份位于同目录，未向 Git 写入密码。管理端登录填写用户号或邮箱，不能填写昵称。
