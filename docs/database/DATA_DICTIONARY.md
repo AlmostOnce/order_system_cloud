@@ -6,20 +6,20 @@
 
 | 字段 | 类型 | 中文说明 |
 |---|---|---|
-| user_id | bigint unsigned | 用户内部自增主键，仅用于数据库及服务间关联 |
+| user_id | bigint | 用户内部自增主键，仅用于数据库及服务间关联 |
 | user_uuid | char(36) | 对外稳定随机用户标识，UUID第四版，不作为登录密码 |
 | username | varchar(64) | 用户展示昵称，不再作为登录账号 |
-| email | varchar(254) | 登录邮箱，去除首尾空白并转小写，历史账号可为空 |
-| role_code | varchar(20) | 角色编码：CUSTOMER顾客、STALL_MANAGER店主、RESTAURANT_MANAGER食堂经理、GENERAL_MANAGER总经理、SYSTEM_ADMIN系统管理员 |
-| balance | decimal(10,2) | 账户可用余额，单位元 |
-| password_hash | varchar(100) | 登录密码的BCrypt哈希，禁止保存明文 |
+| role_code | varchar(32) | 角色编码：CUSTOMER顾客、STALL_MANAGER店主、RESTAURANT_MANAGER食堂经理、GENERAL_MANAGER总经理、SYSTEM_ADMIN系统管理员 |
+| balance | decimal(12,2) | 账户可用余额，单位元 |
+| password_hash | varchar(255) | 登录密码的BCrypt哈希，禁止保存明文 |
 | pay_password_hash | varchar(100) | 独立支付密码的BCrypt哈希，空值表示尚未设置 |
-| avatar_url | varchar(255) | 用户头像访问地址，空值使用默认头像 |
+| avatar_url | varchar(512) | 用户头像访问地址，空值使用默认头像 |
 | status | tinyint | 账号状态：1启用，0停用 |
 | version | int | 乐观锁版本号，用于并发更新校验 |
-| created_at | datetime | 记录创建时间 |
-| updated_at | datetime | 记录最后更新时间 |
-| deleted_at | datetime | 逻辑删除时间，空值表示未删除 |
+| created_at | datetime(3) | 记录创建时间 |
+| updated_at | datetime(3) | 记录最后更新时间 |
+| deleted_at | datetime(3) | 逻辑删除时间，空值表示未删除 |
+| email | varchar(254) | 登录邮箱，去除首尾空白并转小写，历史账号可为空 |
 | user_no | char(10) | 系统生成的十位永久用户号，可用于登录 |
 
 ## user_db.user_data_scopes：用户数据范围授权表，限定管理人员可操作的窗口、食堂或全平台范围
@@ -115,15 +115,15 @@
 |---|---|---|
 | order_id | bigint unsigned | 订单内部自增主键 |
 | order_no | varchar(32) | 对外唯一订单号 |
-| user_id | bigint | 关联用户内部主键，引用用户服务的用户记录 |
-| window_id | bigint | 所属窗口内部主键，关联商品服务窗口记录 |
-| total_amount | decimal(10,2) | 服务端核算的订单总金额，单位元 |
+| user_id | bigint unsigned | 关联用户内部主键，引用用户服务的用户记录 |
+| window_id | bigint unsigned | 所属窗口内部主键，关联商品服务窗口记录 |
+| total_amount | decimal(12,2) | 服务端核算的订单总金额，单位元 |
 | status | varchar(32) | 订单状态：待支付、已支付、制作中、待取货、已完成、已取消 |
 | remark | varchar(255) | 顾客下单备注 |
-| pickup_code | varchar(32) | 订单取餐码 |
-| version | int | 乐观锁版本号，用于并发更新校验 |
-| created_at | datetime | 记录创建时间 |
-| updated_at | datetime | 记录最后更新时间 |
+| pickup_code | varchar(16) | 订单取餐码 |
+| version | int unsigned | 乐观锁版本号，用于并发更新校验 |
+| created_at | datetime(3) | 记录创建时间 |
+| updated_at | datetime(3) | 记录最后更新时间 |
 | idempotency_key | varchar(128) | 顾客提交的下单幂等键，在用户维度唯一 |
 | request_hash | char(64) | 规范化下单请求的摘要，用于拒绝同一幂等键提交不同内容 |
 

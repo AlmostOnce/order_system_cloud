@@ -3,7 +3,7 @@
 > 文档性质：**现状清单**。回答两个问题：①我们现在一共有哪些服务；②每个服务对应哪个库、哪些表、哪个账号。
 > 事实来源：根 `docker-compose.yml`、各服务 `application.yml`、`docs/database/migrations/**`、`backup/db-accounts-fix.sh`。
 > 分工：**规划中**（阶段 B/C 未落地的服务与库）见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8 节；本文只记"已经建好"的部分。
-> 最后核对：2026-10-19（以 `wsl -- docker ps` 与本机工作区文件为准）。
+> 最后核对：2026-10-24（本机 Linux，逐表读取 MySQL 的字段、索引和约束；历史记录不能替代本机实际结构核对）。
 
 ## 1. 服务总表
 
@@ -45,15 +45,21 @@
 | 数据库 | 表 | 归属服务 | 迁移脚本（按执行顺序） |
 |---|---|---|---|
 | `order_db` | `orders`、`order_items`、`undo_log`、`sales_event_outbox` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) → [销量事件 outbox](migrations/order_db/V1__add_sales_event_outbox.sql) |
-| `user_db` | `users`（含 `pay_password_hash`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) |
+| `user_db` | `users`（含 `pay_password_hash`、`user_uuid`、`user_no`、`email`；V6 后不含 `phone`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) → [user_db/V4__add_public_user_uuid.sql](migrations/user_db/V4__add_public_user_uuid.sql) → [user_db/V5__add_user_number_and_email_login.sql](migrations/user_db/V5__add_user_number_and_email_login.sql) → [user_db/V6__remove_user_phone.sql](migrations/user_db/V6__remove_user_phone.sql) |
 | `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`） | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
 | `file_db` | `file_objects` | file-service | [file_db/V1__create_file_objects_table.sql](migrations/file_db/V1__create_file_objects_table.sql) |
 | `stock_db` | `stock`、`stock_flow`、`undo_log` | stock-service | [stock_db/V1__create_stock_tables.sql](migrations/stock_db/V1__create_stock_tables.sql) |
 
-**演示/种子数据（仅开发环境）**：[seeds/product_catalog_dev.sql](seeds/product_catalog_dev.sql) —— 1 个档口、3 个分类（含 1 个停用）、5 个菜品（含未分类与下架示例）。
+**演示/种子数据（仅开发环境）**：早期 [product_catalog_dev.sql](seeds/product_catalog_dev.sql) 为 1 个窗口、3 个分类、5 道菜；扩展后的 [三食堂脚本](seeds/campus_three_canteens.sql) 共 3 个食堂、9 个窗口、77 道菜，配套 [已填写的早期库存](seeds/stock_initialization_20261022.sql)。本机可用 `python3 tools/seed-local-development-data.py --apply --verify-auth` 先备份再补齐目录、库存及 13 个管理账号；重复执行保留已有账号密码与库存。
 
-> ✅ **本机执行状态（2026-10-19）**：上表脚本**已全部在本机 MySQL 执行完毕**，实有 **6 库 15 表**：`order_db`(orders, order_items, undo_log)、`user_db`(users, user_data_scopes, balance_records)、`product_db`(dining_windows, product_categories, products, restaurants)、`payment_db`(payments)、`file_db`(file_objects)、`stock_db`(stock, stock_flow, undo_log)；`dining_windows.restaurant_id` 与 `users.pay_password_hash` 两列已存在，默认餐厅 `R0001 默认餐厅` 已插入。`stock_db.stock` 当前为空表（尚无库存记录，需按档口菜品初始化）。剩余待建项（阶段 B/C）见第 7 节。
+> **本机 Linux 最新业务数据快照（2026-10-24）**：3 个食堂、9 个窗口、21 个分类、77 道菜、77 条库存；19 个用户（保留 6 个顾客，新增 1 个管理员、1 个总经理、1 个餐厅经理、10 个店主），12 条数据范围。13 个新账号的用户号/邮箱密码校验共 26 次成功。账号明文密码仅存 `/home/user/.codex/backups/order_system_cloud/local_demo_20261024_003743/管理端测试账号.md`，未入 Git；完整备份位于同目录。原有 6 个用户及旧菜品数据均保留，未创建订单、支付或账务流水。
+
+> 历史快照（2026-10-19）：当时本机 MySQL 为 6 库 15 表；`order_db` 尚无 `sales_event_outbox`，`user_db.users` 尚未完成 V5/V6。不要将此段当作当前 Schema。
+
+> **2026-10-23 历史记录修正**：当次实际核对并完成的是订单 outbox、用户号/邮箱及移除手机号后的结构；原文“6 库 16 表”没有经过完整逐表核验，该表数结论不准确。2026-10-24 补迁移前实际只有 14 张业务表，用户库的 V2/V3/V4 被遗漏。此前 `user_db` / `order_db` 备份仍保留在 `/home/user/.codex/backups/order_system_cloud/db-migrations-20261023-DroIPN/user-order-before-migrations.sql.gz`。V6 非幂等，手机号列及索引已不存在时不得重复执行。
+
+> ✅ **本机 Linux 最新执行状态（2026-10-24）**：已补执行 `user_db/V2`、`V3`、`V4`，新增数据范围表、余额流水表、支付密码字段及用户 UUID；补齐订单表的 `idx_orders_user_created_at(user_id, created_at)`。现逐表确认 **6 库 16 表、169 个字段**，与仓库数据字典所列必需表/字段一致。6 个存量用户已分配唯一合法 UUID v4；原有用户号、密码哈希、余额及原有时间字段的查询摘要保持不变。中文表/字段注释已按本机实际定义生成并应用，列定义、索引、约束及各表行校验和通过保留性核验；使用应用实际凭据验证 `user_service` 可查询三张用户表。完整六库备份位于 `/home/user/.codex/backups/order_system_cloud/schema-completion-20261024-CZs2mF/business-databases-before.sql.gz`，gzip 校验通过。
 
 **表设计说明**：商品库见 [PRODUCT_CATALOG.md](PRODUCT_CATALOG.md)；订单幂等键约定见 [ORDER_IDEMPOTENCY.md](ORDER_IDEMPOTENCY.md)；`user_data_scopes` 的设计见 [2026-10-13-role-authority-design.md](../superpowers/specs/2026-10-13-role-authority-design.md)。
 
@@ -84,7 +90,7 @@
 3. **准备 `.env`**：复制 `.env.example`，填 MySQL、Redis、四个库账号密码、Nacos 账号与鉴权密钥、引导账号、`PAYMENT_CHANNEL_SECRET`、`INTERNAL_ORDER_TOKEN`。
 4. **启动基础设施**：`docker compose up -d`（mysql / nacos / redis）。**禁止 `docker compose down -v`**，会删数据卷。
 5. **建库与建账号**：执行 4.2 的 SQL（`order_db` 由容器自动创建，无需手工）。
-6. **执行迁移**：按第 2 节顺序逐个执行迁移脚本（均为 `IF NOT EXISTS` 幂等写法，除 `product_db/V2` 的 `ALTER` 外可重复执行）。
+6. **执行迁移**：按第 2 节顺序先检查实际表、字段及索引，再逐个执行缺失迁移。`CREATE TABLE IF NOT EXISTS` 不会给已有表补字段；订单 V2、用户 V3/V4/V6 及商品多个 `ALTER` 迁移均不可盲目重复执行。不能仅凭另一设备的执行记录判断本机已完成。
 7. **灌种子数据**（开发环境）：执行 `docs/database/seeds/product_catalog_dev.sql`。
 8. **发布 Nacos 配置**：`gateway-service.yaml`（网关路由，内容同步保存于 [docs/nacos/gateway-service.yaml](../nacos/gateway-service.yaml)）与 `order-service-degrade-rules`（`SENTINEL_GROUP`，内容 `[]`）；发布脚本参考 [backup/nacos-init.sh](../../backup/nacos-init.sh)。
 9. **启动服务**：`gateway-service` 必须在环境变量中提供 `NACOS_PASSWORD`（默认值为占位串）；其余服务使用 yml 默认值即可。首次启动 `user-service` 时用 `USER_ADMIN_BOOTSTRAP_ENABLED=true` 配合 `USER_ADMIN_BOOTSTRAP_USERNAME` / `USER_ADMIN_BOOTSTRAP_PASSWORD` 引导 `SYSTEM_ADMIN` 账号，配合 `USER_MANAGER_BOOTSTRAP_*` 引导初始总经理（含全平台范围），共七个变量。
@@ -131,8 +137,11 @@ FLUSH PRIVILEGES;
 | Nacos 控制台 | 9098 → 8080 | 账号 `nacos` / `.env` 中的 `NACOS_PASSWORD` |
 | Sentinel Dashboard | 9099 | `order-service` 通信端口 `9100`，`product-service` 通信端口 `9110`（原 9102 已让位给 `file-service`） |
 | Seata Server（TC） | 9109 → 9109 | 控制台 `9108 → 7091`；`apache/seata-server:2.5.0`，存储模式 `file`，以 `seata-server` 之名注册到 Nacos（`SEATA_GROUP` 组，cluster `default`）；下单扣库存的全局事务由它协调 |
+| RocketMQ NameServer / Broker | 9876 / 10911 / 10909 / 10912 | `apache/rocketmq:5.3.2`；本机 NameServer、Broker 已运行，topic 初始化任务已完成；数据卷独立。Dashboard 未部署 |
 
 核对命令：`wsl -- docker ps --format "table {{.Names}}\t{{.Ports}}"`
+
+中文注释维护：Windows 和 Linux 均可运行 `python tools/apply-database-comments.py --apply`（Linux 通常使用 `python3`）。工具会根据当前数据库的完整列定义生成注释 SQL、备份结构并验证元数据及行校验和；`all_chinese_comments.sql` 与数据字典是最近一次生成时的结构快照，跨设备应用前应在目标设备重新生成，避免把字段类型差异带到另一台设备。
 
 ## 6. 服务间内部接口与共享密钥
 
@@ -186,7 +195,7 @@ FLUSH PRIVILEGES;
 | 中间件 | 端口 | 阶段 | 用途 |
 |---|---|---|---|
 | ~~Seata Server（TC）~~ | 9109（旧端口段 8094） | B | ✅ **2026-10-19 已落地**：下单扣库存的分布式事务协调者，注册到现有 Nacos（见第 5 节） |
-| RocketMQ NameServer / Broker / Dashboard | 9876 / 10911 / 8180 | B | 最终一致、ES 索引同步、站内消息 |
+| RocketMQ NameServer / Broker / Dashboard | 9876 / 10911 / 8180 | B | ✅ 2026-10-23 本机 NameServer/Broker 已启动并创建销量主题；Dashboard 未部署，业务消息端到端仍待验收 |
 | MongoDB | 27017 | B | 评论内容 |
 | Elasticsearch | 9200 | C | 菜单全文检索 |
 

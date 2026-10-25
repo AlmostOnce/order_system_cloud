@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -17,7 +18,11 @@ for line in (ROOT / '.env').read_text(encoding='utf-8-sig').splitlines():
     if '=' in line and not line.lstrip().startswith('#'):
         key, value = line.split('=', 1)
         values[key.strip()] = value.strip().strip('\"\'')
-prefix = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker', 'exec', '-i', '-e',
+# Windows 沿用 WSL 中的 Docker；Linux 直接调用本机 Docker。
+# 两种环境使用相同的数据库查询、备份和结构校验流程。
+docker_command = (['wsl', '-d', 'Ubuntu-24.04', '--', 'docker']
+                  if sys.platform == 'win32' else ['docker'])
+prefix = docker_command + ['exec', '-i', '-e',
           'MYSQL_PWD=' + values['MYSQL_ROOT_PASSWORD'], 'order-system-cloud-mysql-1']
 
 
