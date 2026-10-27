@@ -20,6 +20,18 @@ import java.math.BigDecimal;
 @Mapper
 public interface UserMapper extends BaseMapper<UserDO> {
 
+    /** 串行化本人资料修改，避免并发换绑绕过对当前邮箱的核对。 */
+    @Select("SELECT user_id, username, email, password_hash, status, deleted_at FROM users WHERE user_id = #{userId} FOR UPDATE")
+    UserDO selectProfileForUpdate(@Param("userId") Long userId);
+
+    @Update("""
+        UPDATE users SET username = #{username}, email = #{email},
+            version = version + 1, updated_at = NOW()
+        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+        """)
+    int updateOwnProfile(@Param("userId") Long userId, @Param("username") String username,
+                         @Param("email") String email);
+
     @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND status = 1 AND deleted_at IS NULL")
     Long selectIdByUuid(@Param("userUuid") String userUuid);
 

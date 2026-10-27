@@ -5,6 +5,8 @@ import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.model.UserDO;
+import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
+import com.hbue.ordering.user.vo.UserProfileVO;
 
 /**
  * 用户业务服务契约。
@@ -17,6 +19,8 @@ import com.hbue.ordering.user.model.UserDO;
  * @date 2026-09-20
  */
 public interface UserService extends IService<UserDO> {
+
+    UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request);
 
     /** 更新当前用户头像，不接收调用方指定的其他账号。 */
     Long resolvePublicUserId(String userUuid);

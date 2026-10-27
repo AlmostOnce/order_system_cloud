@@ -12,6 +12,8 @@ import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
+import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
+import com.hbue.ordering.user.vo.UserProfileVO;
 import com.hbue.ordering.user.service.UserDataScopeService;
 import com.hbue.ordering.user.service.UserService;
 import org.springframework.dao.DuplicateKeyException;
@@ -132,6 +134,46 @@ public class UserServiceImpl
                 .eq("user_id", userId).eq("status", USER_STATUS_ENABLED).isNull("deleted_at")
                 .set("avatar_url", url).set("updated_at", LocalDateTime.now()));
         if (updated != 1) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+    }
+
+    @Override
+    @Transactional
+    public UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request) {
+        String name = request.username() == null ? "" : request.username().trim();
+        String email = request.email() == null ? "" : request.email().trim().toLowerCase(java.util.Locale.ROOT);
+        if (name.length() < 2 || name.length() > 64 || email.length() > 254
+                || (!email.isEmpty() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "昵称或邮箱格式不正确");
+        }
+        UserDO current = baseMapper.selectProfileForUpdate(userId);
+        if (current == null || !Integer.valueOf(1).equals(current.getStatus()) || current.getDeletedAt() != null) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+        }
+        String oldEmail = current.getEmail() == null ? "" : current.getEmail();
+        if (!oldEmail.equals(email)) {
+            if (email.isEmpty()) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "绑定邮箱不能为空");
+            String password = request.loginPassword();
+            if (password == null || password.isEmpty() || password.length() > 64
+                    || current.getPasswordHash() == null || !passwordEncoder.matches(password, current.getPasswordHash())) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "登录密码不正确");
+            }
+        }
+        UserDO nameOwner = baseMapper.selectByUsername(name);
+        UserDO emailOwner = email.isEmpty() ? null : baseMapper.selectByEmail(email);
+        if ((nameOwner != null && !userId.equals(nameOwner.getUserId()))
+                || (emailOwner != null && !userId.equals(emailOwner.getUserId()))) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称或邮箱已被使用");
+        }
+        try {
+            if (baseMapper.updateOwnProfile(userId, name, email.isEmpty() ? null : email) != 1) {
+                throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称或邮箱已被使用");
+        }
+        UserDO saved = baseMapper.selectOwnProfile(userId);
+        return new UserProfileVO(saved.getUserUuid(), saved.getUserNo(),
+                saved.getUsername(), saved.getRoleCode(), saved.getEmail(), saved.getAvatarUrl(), saved.getCreatedAt());
     }
 
     /**
