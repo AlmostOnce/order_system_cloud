@@ -94,6 +94,12 @@
             <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
         </dependency>
 
+        <!-- 通过 Spring Cloud Stream 现有 RocketMQ Binder 异步传播库存变更事件。 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rocketmq</artifactId>
+        </dependency>
+
         <!-- 库存与库存流水持久化。 -->
         <dependency>
             <groupId>com.baomidou</groupId>

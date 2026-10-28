@@ -1,0 +1,43 @@
+stock:
+  messaging:
+    enabled: true
+    publish-delay-ms: 1000
+
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    function:
+      definition: stockChanged
+    stream:
+      output-bindings: stockChanged-out-0
+      bindings:
+        stockChanged-out-0:
+          destination: stock-changed-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+        stockChanged-in-0:
+          destination: stock-changed-v1
+          group: stock-cache-invalidator-v1
+          content-type: application/json
+          error-handler-definition: stockChangedRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          stockChanged-out-0:
+            producer:
+              group: stock-change-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000
+          stockChanged-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

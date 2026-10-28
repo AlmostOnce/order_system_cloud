@@ -118,6 +118,11 @@ public class StockRedisScript {
         );
     }
 
+    /** 删除库存快照；后续读取将从库存数据库重建。 */
+    public void invalidateSnapshot(Long windowId, Long productId) {
+        stringRedisTemplate.delete(buildKey(windowId, productId));
+    }
+
     /**
      * 读取当前快照数量，供定时对账比对使用。
      *

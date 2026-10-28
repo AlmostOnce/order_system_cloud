@@ -3,6 +3,9 @@ server:
   port: 9104
 
 spring:
+  profiles:
+    # 本机 RocketMQ 已部署；默认启用库存事件发布与快照失效消费。
+    default: stock-mq
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:

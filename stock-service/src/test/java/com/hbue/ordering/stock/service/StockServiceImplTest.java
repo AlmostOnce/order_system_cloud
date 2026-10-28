@@ -9,6 +9,7 @@ import com.hbue.ordering.stock.mapper.StockFlowMapper;
 import com.hbue.ordering.stock.mapper.StockMapper;
 import com.hbue.ordering.stock.model.StockDO;
 import com.hbue.ordering.stock.model.StockFlowDO;
+import com.hbue.ordering.stock.messaging.StockEventOutboxWriter;
 import com.hbue.ordering.stock.service.impl.StockServiceImpl;
 import com.hbue.ordering.stock.support.StockFlowTypes;
 import com.hbue.ordering.stock.support.StockRedisScript;
@@ -72,6 +73,10 @@ class StockServiceImplTest {
     @Mock
     private StockRedisScript stockRedisScript;
 
+    /** 库存事件 outbox 写入器。 */
+    @Mock
+    private StockEventOutboxWriter stockEventOutboxWriter;
+
     /** 被测业务实现。 */
     private StockServiceImpl stockService;
 
@@ -80,7 +85,9 @@ class StockServiceImplTest {
      */
     @BeforeEach
     void setUp() {
-        stockService = new StockServiceImpl(stockMapper, stockFlowMapper, stockRedisScript);
+        stockService = new StockServiceImpl(
+                stockMapper, stockFlowMapper, stockRedisScript, stockEventOutboxWriter
+        );
     }
 
     /**
@@ -113,6 +120,7 @@ class StockServiceImplTest {
         assertEquals(-2, flow.getChangeQty());
         assertEquals(10, flow.getBeforeQty());
         assertEquals(8, flow.getAfterQty());
+        verify(stockEventOutboxWriter).write(flow, 1, 8);
     }
 
     /**
@@ -132,6 +140,7 @@ class StockServiceImplTest {
         verify(stockRedisScript, never()).preDeduct(anyLong(), anyLong(), anyInt());
         verify(stockMapper, never()).deductAvailable(anyLong(), anyInt(), anyInt());
         verify(stockFlowMapper, never()).insert(any(StockFlowDO.class));
+        verify(stockEventOutboxWriter, never()).write(any(StockFlowDO.class), anyInt(), anyInt());
     }
 
     /**
@@ -231,6 +240,7 @@ class StockServiceImplTest {
 
         verify(stockMapper, never()).restoreQuantity(anyLong(), anyInt());
         verify(stockFlowMapper, never()).insert(any(StockFlowDO.class));
+        verify(stockEventOutboxWriter, never()).write(any(StockFlowDO.class), anyInt(), anyInt());
     }
 
     /**
@@ -249,6 +259,7 @@ class StockServiceImplTest {
 
         verify(stockMapper, never()).restoreQuantity(anyLong(), anyInt());
         verify(stockFlowMapper, never()).insert(any(StockFlowDO.class));
+        verify(stockEventOutboxWriter, never()).write(any(StockFlowDO.class), anyInt(), anyInt());
     }
 
     /**
@@ -276,6 +287,7 @@ class StockServiceImplTest {
         assertEquals(2, flow.getChangeQty());
         assertEquals(8, flow.getBeforeQty());
         assertEquals(10, flow.getAfterQty());
+        verify(stockEventOutboxWriter).write(flow, 2, 10);
         // 回补后把快照对齐到数据库值。
         verify(stockRedisScript).resetSnapshot(WINDOW_ID, PRODUCT_ID, 10);
     }

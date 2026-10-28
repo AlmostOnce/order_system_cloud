@@ -44,9 +44,11 @@
 4. 只新增没有库存记录的菜品，已有记录（包括逻辑删除记录）保持原样，重复执行不覆盖已发生销售的数量。
 5. 同时设置初始基线 `total_qty` 和 `available_qty`，不另外写入初始变动流水，保持现有「初始基线 + 流水累计 = 可售数量」的对账规则。
 
-## 下一步：库存事件与缓存一致性改造
+## 库存事件与缓存一致性方案
 
 用户于 2026-10-22 指定：先完成销量榜 MQ 改造，再实施本节。
+
+2026-10-28 已实现库存 outbox、Seata undo-log 门控、RocketMQ 发布与快照失效消费，具体见下方“库存事件 MQ 接入”。V2 数据库迁移已执行；库存服务运行期验收仍待完成。
 
 - 保留 Seata AT 同步下单扣库存和待支付取消回补，不将库存预占的成功判定迁移为无确认的异步调用。
 - stock_db 本地事务同步保存库存流水和 outbox；发布器仅投递已提交且 Seata 全局事务确认提交的库存事件。分支已提交不等于全局已提交，必须实现全局提交确认或补偿协议后才能发送，不能直接套用普通本地 afterCommit。
@@ -54,6 +56,18 @@
 - 消费按库存业务流水唯一键幂等；同库存版本比较，消费者失败重试、死信人工处理，定时对账/补发和缓存重建。
 - 验收：重复扣减/回补不重记账；支付与取消并发；库存不足触发全局回滚且无有效事件外泄；消息乱序/重复/断网/重启；Redis 故障与恢复；数据库、流水和缓存最终一致。
 - 仍以库存 MySQL 和流水为事实源，Redis 为快照，MQ 为事件传递渠道。
+
+## 库存事件 MQ 接入
+
+实现采用 `stock_db.stock_event_outbox` 本地消息表。扣减/回补事务在写入 `stock_flow` 后，将事件及 Seata XID 一并写入 outbox；outbox 插入失败会使库存事务失败，避免出现库存已提交但事件永久缺失。
+
+发布器每秒扫描待发布记录，使用 RocketMQ 同步发送确认；Broker 不可用时按指数退避重试，最长间隔 256 秒。对于带 XID 的事件，查询条件会等待 `stock_db.undo_log` 中对应全局事务记录消失后才允许发布：全局回滚会一起撤销库存流水和 outbox；全局提交则保留 outbox 并清理 undo log。无 XID 的本地库存事务在本地提交后即可发送。
+
+主题为 `stock-changed-v1`，消费组为 `stock-cache-invalidator-v1`。事件消费者校验稳定事件键，按键幂等处理并删除 `stock:available:{windowId}:{productId}` 快照。消费失败会传播给 RocketMQ，最多重试 16 次，随后进入消费组死信队列。消费者不把事件携带的数量写回 Redis，后续下单仍以数据库条件更新为准。
+
+库存服务默认使用 `stock-mq` profile；Nameserver 默认 `127.0.0.1:9876`，可用 `ROCKETMQ_NAMESERVER` 覆盖。数据库迁移 [V2__stock_event_outbox.sql](database/migrations/stock_db/V2__stock_event_outbox.sql) 已于 2026-10-28 执行。执行前逻辑备份位于 `C:\Users\DELL\.codex\backups\order_system_cloud\stock_mq_20261028_111528\stock_db-before.sql`，SHA-256 为 `6166d646e55f24ae7a660c17fb0020b7c07617d39bc436a7403f8cf8a5bbaba0`。验证得到 outbox 14 列、消费幂等表 2 列，库存服务账号拥有 `stock_db.*` 全部权限；原有 stock 77 行、stock_flow 13 行保持不变，新表均为空。发布成功的 outbox 记录与消费幂等记录当前不自动清理，后续可按保留期制定归档策略。
+
+本次已完成源码、迁移和部署配置；未运行 Maven、Java 测试、构建或启动服务。静态契约检查和数据库结构核对不代表 Seata/RocketMQ 端到端消息已通过；库存服务更新启动后，仍需用下单和取消验证发布、缓存失效、重复消费、回滚隔离及 DLQ。
 
 ## 原接入验证记录
 

@@ -21,7 +21,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
 @EnableScheduling
-@MapperScan("com.hbue.ordering.stock.mapper")
+@MapperScan({
+        "com.hbue.ordering.stock.mapper",
+        "com.hbue.ordering.stock.messaging"
+})
 public class StockServiceApplication {
 
     /**

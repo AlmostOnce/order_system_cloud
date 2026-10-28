@@ -8,6 +8,7 @@ import com.hbue.ordering.stock.api.error.StockErrorCode;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import com.hbue.ordering.stock.mapper.StockFlowMapper;
 import com.hbue.ordering.stock.mapper.StockMapper;
+import com.hbue.ordering.stock.messaging.StockEventOutboxWriter;
 import com.hbue.ordering.stock.model.StockDO;
 import com.hbue.ordering.stock.model.StockFlowDO;
 import com.hbue.ordering.stock.service.StockService;
@@ -73,6 +74,9 @@ public class StockServiceImpl implements StockService {
     /** 库存快照 Redis 原子操作组件。 */
     private final StockRedisScript stockRedisScript;
 
+    /** 与库存流水同事务写入，等待 Seata 全局事务结束后再异步发布。 */
+    private final StockEventOutboxWriter stockEventOutboxWriter;
+
     /**
      * 创建库存业务实现。
      *
@@ -83,11 +87,13 @@ public class StockServiceImpl implements StockService {
     public StockServiceImpl(
             StockMapper stockMapper,
             StockFlowMapper stockFlowMapper,
-            StockRedisScript stockRedisScript
+            StockRedisScript stockRedisScript,
+            StockEventOutboxWriter stockEventOutboxWriter
     ) {
         this.stockMapper = stockMapper;
         this.stockFlowMapper = stockFlowMapper;
         this.stockRedisScript = stockRedisScript;
+        this.stockEventOutboxWriter = stockEventOutboxWriter;
     }
 
     /**
@@ -219,7 +225,7 @@ public class StockServiceImpl implements StockService {
 
         // 记账：唯一键 (biz_type, biz_ref, stock_id) 保证同一单据只记一次。
         int afterQty = stock.getAvailableQty() - quantity;
-        stockFlowMapper.insert(buildFlow(
+        StockFlowDO flow = buildFlow(
                 StockFlowTypes.ORDER_DEDUCT,
                 request.getBizRef(),
                 stock,
@@ -228,7 +234,9 @@ public class StockServiceImpl implements StockService {
                 afterQty,
                 request.getOperatorId(),
                 request.getRemark()
-        ));
+        );
+        stockFlowMapper.insert(flow);
+        stockEventOutboxWriter.write(flow, stock.getVersion() + 1, afterQty);
         log.info(
                 "订单 {} 扣减档口 {} 菜品 {} 库存 {} 件，剩余 {}",
                 request.getBizRef(),
@@ -300,7 +308,7 @@ public class StockServiceImpl implements StockService {
         }
 
         int afterQty = stock.getAvailableQty() + quantity;
-        stockFlowMapper.insert(buildFlow(
+        StockFlowDO flow = buildFlow(
                 StockFlowTypes.ORDER_RESTORE,
                 request.getBizRef(),
                 stock,
@@ -309,7 +317,9 @@ public class StockServiceImpl implements StockService {
                 afterQty,
                 request.getOperatorId(),
                 request.getRemark()
-        ));
+        );
+        stockFlowMapper.insert(flow);
+        stockEventOutboxWriter.write(flow, stock.getVersion() + 1, afterQty);
 
         // 回补已完成，把 Redis 快照对齐到数据库值。快照只影响 Redis 侧的快速过滤，
         // 每次扣减仍会由数据库条件更新兜底，因此对齐不会造成超卖。
