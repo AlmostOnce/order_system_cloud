@@ -8,7 +8,11 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.notification.OrderNotificationEvent;
+import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.enums.OrderStatus;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +33,11 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
     /** 订单明细表 Mapper。 */
     private final OrderItemMapper orderItemMapper;
     private final SalesOutboxWriter salesOutbox;
+    private OrderNotificationOutboxWriter notificationOutbox;
+    @Value("${notification.order-events.enabled:false}")
+    private boolean notificationsEnabled;
+    @Autowired
+    void setNotificationOutbox(OrderNotificationOutboxWriter writer) { this.notificationOutbox = writer; }
 
     /**
      * 创建订单原子持久化服务实现。
@@ -92,6 +101,14 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
                 targetStatus
         ) == 1;
         if (changed && OrderStatus.PAID.getLabel().equals(targetStatus)) salesOutbox.recordPaid(orderId);
+        // 取消订单在 Seata 全局事务中，由单独的 TCC 确认阶段生成通知。
+        if (changed && notificationsEnabled && !OrderStatus.CANCELLED.getLabel().equals(targetStatus)) {
+            OrderDO current = orderMapper.selectById(orderId);
+            if (current == null || current.getUserId() == null || current.getVersion() == null
+                    || current.getVersion() != expectedVersion + 1 || !targetStatus.equals(current.getStatus()))
+                throw new IllegalStateException("订单通知事件缺少有效订单快照");
+            notificationOutbox.record(OrderNotificationEvent.of(orderId, current.getVersion(), current.getUserId(), targetStatus));
+        }
         return changed;
     }
 }

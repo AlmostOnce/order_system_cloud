@@ -13,6 +13,7 @@ import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
+import com.hbue.ordering.order.notification.CancellationNotificationTcc;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
@@ -29,6 +30,8 @@ import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.apache.seata.spring.annotation.GlobalTransactional;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -103,6 +106,15 @@ public class OrderServiceImpl
 
     /** 服务间内部接口共享密钥，调用库存服务时通过请求头传递。 */
     private final String internalScopeToken;
+
+    @Value("${notification.cancel-tcc.enabled:false}")
+    private boolean cancellationNotificationEnabled;
+    private ObjectProvider<CancellationNotificationTcc> cancellationNotification;
+
+    @Autowired
+    void setCancellationNotification(ObjectProvider<CancellationNotificationTcc> provider) {
+        this.cancellationNotification = provider;
+    }
 
     /**
      * 创建订单业务服务。
@@ -402,6 +414,11 @@ public class OrderServiceImpl
             throw new BusinessException(CommonErrorCode.CONFLICT,
                     response.getMessage() == null || response.getMessage().isBlank()
                             ? "库存回补失败，请稍后重试取消" : response.getMessage());
+        }
+        if (cancellationNotificationEnabled) {
+            CancellationNotificationTcc participant = cancellationNotification.getIfAvailable();
+            if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
+                throw new IllegalStateException("取消通知事务准备失败");
         }
         return result;
     }

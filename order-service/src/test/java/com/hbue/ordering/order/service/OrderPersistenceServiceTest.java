@@ -8,6 +8,9 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.impl.OrderPersistenceServiceImpl;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
+import com.hbue.ordering.order.notification.OrderNotificationEvent;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,6 +41,8 @@ class OrderPersistenceServiceTest {
 
     @Mock
     private SalesOutboxWriter salesOutbox;
+    @Mock
+    private OrderNotificationOutboxWriter notificationOutbox;
 
     @Test
     void shouldSaveOrderBeforeAllItemsAndAssignOrderId() {
@@ -170,5 +175,18 @@ class OrderPersistenceServiceTest {
         when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1);
         org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(salesOutbox).recordPaid(81L);
         assertThrows(IllegalStateException.class, () -> persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
+    }
+
+    @Test
+    void writesNotificationOnlyForWinningNonCancelTransition() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
+        var current = new OrderDO(); current.setOrderId(81L); current.setUserId(7L); current.setVersion(4); current.setStatus("制作中");
+        when(orderMapper.updateStatusIfVersionMatches(81L, "已支付", 3, "制作中")).thenReturn(1, 0);
+        when(orderMapper.selectById(81L)).thenReturn(current);
+        assertTrue(persistence.updateStatusIfUnchanged(81L, "已支付", 3, "制作中"));
+        assertFalse(persistence.updateStatusIfUnchanged(81L, "已支付", 3, "制作中"));
+        verify(notificationOutbox, times(1)).record(OrderNotificationEvent.of(81L, 4, 7L, "制作中"));
     }
 }
