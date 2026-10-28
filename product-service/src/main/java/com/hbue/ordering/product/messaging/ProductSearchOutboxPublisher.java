@@ -26,7 +26,7 @@ public class ProductSearchOutboxPublisher {
     public void publishPending() {
         for (ProductSearchOutboxRow row : mapper.pending()) {
             try {
-                ProductSearchRefreshEvent event = new ProductSearchRefreshEvent(1, row.getEventId(), row.getWindowId());
+                ProductSearchRefreshEvent event = new ProductSearchRefreshEvent(1, row.getEventId(), row.getWindowId(), row.getProductId());
                 if (!stream.send("productSearchRefresh-out-0", MessageBuilder.withPayload(event)
                         .setHeader("KEYS", event.eventId()).build())) throw new IllegalStateException("Broker 未确认接收搜索刷新事件");
                 mapper.markPublished(row.getEventId());

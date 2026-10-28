@@ -18,4 +18,8 @@ public interface ProductSearchSourceClient {
     @GetMapping("/internal/products/search/windows/{windowId}/documents")
     ApiResponse<List<ProductSearchDocument>> loadWindowDocuments(@RequestHeader("X-Internal-Token") String token,
                                                                   @PathVariable("windowId") Long windowId);
+
+    @GetMapping("/internal/products/search/windows/{windowId}/products/{productId}")
+    ApiResponse<List<ProductSearchDocument>> loadProductDocument(@RequestHeader("X-Internal-Token") String token,
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId);
 }

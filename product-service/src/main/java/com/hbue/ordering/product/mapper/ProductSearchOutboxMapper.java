@@ -12,10 +12,10 @@ import java.util.List;
 /** 商品目录搜索索引刷新事件 outbox。 */
 @Mapper
 public interface ProductSearchOutboxMapper {
-    @Insert("INSERT INTO product_search_outbox(event_id, window_id) VALUES(#{eventId}, #{windowId})")
-    int insert(@Param("eventId") String eventId, @Param("windowId") Long windowId);
+    @Insert("INSERT INTO product_search_outbox(event_id, window_id, product_id) VALUES(#{eventId}, #{windowId}, #{productId,jdbcType=BIGINT})")
+    int insert(@Param("eventId") String eventId, @Param("windowId") Long windowId, @Param("productId") Long productId);
 
-    @Select("SELECT event_id AS eventId, window_id AS windowId FROM product_search_outbox WHERE published_at IS NULL AND next_attempt_at <= CURRENT_TIMESTAMP ORDER BY next_attempt_at, created_at LIMIT 100")
+    @Select("SELECT event_id AS eventId, window_id AS windowId, product_id AS productId FROM product_search_outbox WHERE published_at IS NULL AND next_attempt_at <= CURRENT_TIMESTAMP ORDER BY next_attempt_at, created_at LIMIT 100")
     List<ProductSearchOutboxRow> pending();
 
     @Update("UPDATE product_search_outbox SET published_at=CURRENT_TIMESTAMP, last_error=NULL WHERE event_id=#{eventId} AND published_at IS NULL")

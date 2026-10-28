@@ -3,6 +3,8 @@ server:
   port: 9093
 
 spring:
+  profiles:
+    include: search-mq
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:

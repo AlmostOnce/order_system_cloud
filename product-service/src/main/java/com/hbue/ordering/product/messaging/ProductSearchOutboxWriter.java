@@ -14,6 +14,13 @@ public class ProductSearchOutboxWriter {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordWindow(Long windowId) {
-        if (windowId != null) mapper.insert(UUID.randomUUID().toString(), windowId);
+        if (windowId != null) mapper.insert(UUID.randomUUID().toString(), windowId, null);
+    }
+
+    /** 登记单个菜品的变更，并与商品写入处于同一事务。 */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordProduct(Long windowId, Long productId) {
+        if (windowId == null || productId == null) throw new IllegalArgumentException("窗口和菜品 ID 不能为空");
+        mapper.insert(UUID.randomUUID().toString(), windowId, productId);
     }
 }

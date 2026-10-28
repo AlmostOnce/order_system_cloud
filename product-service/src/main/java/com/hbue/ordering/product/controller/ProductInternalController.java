@@ -75,4 +75,12 @@ public class ProductInternalController {
         internalTokenVerifier.verify(token);
         return ApiResponse.success(searchSource.documents(windowId));
     }
+
+    @GetMapping("/search/windows/{windowId}/products/{productId}")
+    public ApiResponse<List<ProductSearchDocument>> searchProduct(
+            @RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId) {
+        internalTokenVerifier.verify(token);
+        return ApiResponse.success(searchSource.document(windowId, productId));
+    }
 }
