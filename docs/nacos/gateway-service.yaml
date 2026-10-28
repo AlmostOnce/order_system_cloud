@@ -84,6 +84,20 @@ spring:
               filters:
                 - StripPrefix=1
 
+            - id: notification-service-websocket
+              uri: lb:ws://notification-service
+              predicates:
+                - Path=/api/notifications/ws
+              filters:
+                - StripPrefix=1
+
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notifications,/api/notifications/**
+              filters:
+                - StripPrefix=1
+
             - id: cart-service
               uri: lb://cart-service
               predicates:

@@ -137,6 +137,10 @@ public class GatewaySecurityConfig {
                         .pathMatchers("/api/auth/refresh")
                         .permitAll()
 
+                        // WebSocket 在通知服务握手阶段验证短时一次性票据。
+                        .pathMatchers(HttpMethod.GET, "/api/notifications/ws")
+                        .permitAll()
+
                         // 健康检查允许匿名访问。
                         .pathMatchers("/actuator/health")
                         .permitAll()
