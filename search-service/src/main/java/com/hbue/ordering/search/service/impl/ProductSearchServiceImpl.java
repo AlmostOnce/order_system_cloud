@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.query.DeleteQuery;
 import org.springframework.data.elasticsearch.core.query.Query;
 import org.springframework.data.elasticsearch.core.query.StringQuery;
 import org.springframework.stereotype.Service;
@@ -70,7 +71,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
             ApiResponse<List<ProductSearchDocument>> response = productSource.loadWindowDocuments(internalToken, windowId);
             List<ProductSearchDocument> snapshot = requireData(response, "商品服务未返回窗口数据");
             Query deleteWindow = new StringQuery("{\"term\":{\"windowId\":" + windowId + "}}");
-            elasticsearch.delete(deleteWindow, MenuProductDocument.class);
+            elasticsearch.delete(DeleteQuery.builder(deleteWindow).build(), MenuProductDocument.class);
             List<MenuProductDocument> documents = snapshot.stream().map(this::toDocument).toList();
             documents.forEach(elasticsearch::save);
         }
@@ -80,7 +81,8 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     public int rebuildAll() {
         ApiResponse<List<Long>> response = productSource.listSearchableWindowIds(internalToken);
         List<Long> windowIds = requireData(response, "商品服务未返回窗口列表");
-        elasticsearch.delete(new StringQuery("{\"match_all\":{}}"), MenuProductDocument.class);
+        Query deleteAll = new StringQuery("{\"match_all\":{}}");
+        elasticsearch.delete(DeleteQuery.builder(deleteAll).build(), MenuProductDocument.class);
         for (Long windowId : windowIds) refreshWindow(windowId);
         return windowIds.size();
     }
