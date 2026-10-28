@@ -55,7 +55,7 @@
 | 6 | `payment-service` | 9101 / 9101 | `payment_db` | A ✅ | 渠道隔离、HMAC 验签、回调幂等 |
 | 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ✅ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
 | 8 | `cart-service` | 9103 / 8088 | 仅 Redis（AOF + 数据卷） | B ✅ | Redis Hash、Lua 并发修改与 TTL；仅登录顾客使用 |
-| 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B ⬜ | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
+| 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B 源码初版，待部署验收 | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
 | 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
 | 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
 | 12 | `search-service` | 9106 / 8091 | ES 索引 | C ⬜ | **ES 全文检索**、索引同步（RocketMQ）、重建 |
@@ -377,3 +377,6 @@
 | 2026-10-17 | 用户确认简化购物车：**Redis 为唯一业务存储**，保留 AOF 和数据卷；取消 MySQL 备份与游客合并，仅登录顾客使用。覆盖此前双存储规划（第 11 节待决策 #3 同步修订） |
 | 2026-10-17 | 新增 `order-api` 只读购买事实契约（`OrderCartSnapshotVO` / `OrderPurchasedItemVO` / `OrderServiceClient`），供购物车核实下单结果；`cart-service` 提供订单成功后的按提交快照清理接口，保留并发修改项；调用方显式串联，无跨服务事务与自动补偿 |
 | 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |
+
+
+2026-10-28 评论服务首期源码已补：发布与查询、评分汇总、MongoDB内容先写及孤儿对账、MySQL outbox、商品侧版本幂等评分投影。未执行迁移或启动服务，部署和验证边界见 [评论服务](COMMENT_SERVICE.md)。

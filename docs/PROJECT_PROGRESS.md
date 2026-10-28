@@ -540,3 +540,28 @@ order-service ── OpenFeign ──> user-service ──> user_db
 - Sentinel 使用 Nacos 持久化规则时，`order-service` 必须同时引入 `spring-cloud-alibaba-sentinel-datasource` 和 `sentinel-datasource-nacos`；前者的 Nacos 适配器依赖为可选依赖，不能只添加前者。
 - 本项目开发环境统一由根目录的 `docker-compose.yml` 管理；后续新增基础设施或业务容器时优先扩展这一份 Compose 文件。
 - 用户明确约定：收到“完成了”“成功了”“可以了”等完成信号后，直接开始计划中的下一步。
+
+
+### 2026-10-28 评论服务首期
+
+新增comment-service/comment-api源码与必要依赖声明，按已完成本人订单评价菜品，提供文字图片评分、幂等发布、分页及评分查询。MongoDB内容先写，MySQL元数据/评分/outbox同事务，MQ同步商品评分投影并定期重投最新快照。已提供MongoDB配置、中文SQL迁移及网关路由样例。未启动基础设施、未执行迁移、未重启服务、未运行Maven；Java测试源码不代表运行通过。待部署联调及完整缓存防护，商家回复、点赞和前端页面不在本期。详见 [评论服务](COMMENT_SERVICE.md)。
+
+
+2026-10-28 后续部署：用户授权创建MongoDB容器，已启动order-system-cloud-mongo-1（127.0.0.1:27017），完成评论库应用账号、集合、索引及认证读写验证。MySQL迁移、MQ新主题、路由发布和Java服务联调仍未执行；未运行Maven。
+
+### 2026-10-28 评论库初始化及图片引用改造
+
+- 已创建评论 MySQL 库、三张业务表、商品评分投影表及评论服务最小权限账号，真实账号查询验证通过。Mongo 容器保持运行。
+- 头像、食堂、窗口、菜品、评论源码统一保存 fileKey；响应保持 URL。普通编辑入口校验新引用归属、业务类型及目标，省略保留、空串清除。
+- 图片迁移工具默认只读，带备份、逐行核对、未知地址拒绝及旧服务端口检查。已预检18用户/3食堂/9窗口/77菜品，1个现有头像引用有效；Mongo 0条。
+- 用户要求暂不停止服务或迁移图片字段；迁移未执行，不能直接用新源码连接旧图片列。未运行 Maven、构建、Java单测或重启；后续部署说明见 docs/database/migrations/IMAGE_FILE_KEYS.md。
+
+### 2026-10-28 图片数据库迁移已执行
+
+用户进一步授权执行第二步后，确认9092/9093/9105均停止监听，已完成 MySQL 四表图片 fileKey 迁移及 Mongo 评论图片迁移。MySQL逐行核对及迁移后只读预检通过，旧URL列已移除，已有头像引用保留。Mongo当前无评论文档。备份及详细结果见 docs/database/migrations/IMAGE_FILE_KEYS.md。此记录替代上文“图片迁移暂未执行”的旧状态；三个业务服务保持停止，未构建或启动。
+
+### 2026-10-28 MySQL 连接池统一使用 Druid
+
+按用户要求，为用户、商品、订单、支付、库存、文件、评论七个服务声明官方 druid-spring-boot-3-starter 1.2.27，根项目管理版本；排除现有 JDBC/MyBatis 依赖路径的 HikariCP，显式指定 DruidDataSource。默认初始/最小空闲1个、最大10个（评论5个）、获取连接等待3秒，配置空闲连接检测；监控 Servlet/Web Filter 关闭。MongoDB 驱动连接池不变。
+
+已通过 tools/check-druid-contracts.py 的 XML/配置静态契约审计，以及 SnakeYAML 对七份配置结构和关键值的解析检查。未运行 Maven、依赖解析、编译、测试或重启；尚不能据此断言实际启动与连接池运行已验证。后续由新配置启动后可检查 Druid 初始化日志及连接池类型。官方依赖与自动配置来源：https://github.com/alibaba/druid/tree/1.2.27/druid-spring-boot-3-starter 。

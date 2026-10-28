@@ -13,7 +13,7 @@
 | balance | decimal(12,2) | 账户可用余额，单位元 |
 | password_hash | varchar(255) | 登录密码的BCrypt哈希，禁止保存明文 |
 | pay_password_hash | varchar(100) | 独立支付密码的BCrypt哈希，空值表示尚未设置 |
-| avatar_url | varchar(512) | 用户头像访问地址，空值使用默认头像 |
+| avatar_file_key | char(32) | 用户头像文件键，空值使用默认头像 |
 | status | tinyint | 账号状态：1启用，0停用 |
 | version | int | 乐观锁版本号，用于并发更新校验 |
 | created_at | datetime(3) | 记录创建时间 |
@@ -56,7 +56,7 @@
 | restaurant_name | varchar(64) | 食堂名称 |
 | location | varchar(64) | 食堂所在区域或位置 |
 | phone | varchar(20) | 食堂对外联系电话，不用于用户注册或登录 |
-| image_url | varchar(255) | 展示图片访问地址，空值使用默认图片 |
+| image_file_key | char(32) | 展示图片文件键，空值使用默认图片 |
 | notice | varchar(255) | 食堂公告内容 |
 | sort_order | int | 展示排序，数值越小越靠前 |
 | status | tinyint unsigned | 食堂状态：1启用，0停用 |
@@ -73,7 +73,7 @@
 | window_name | varchar(64) | 窗口名称 |
 | description | varchar(500) | 窗口简介，在点单页图片下方横向滚动展示 |
 | location | varchar(255) | 窗口所在楼层及具体方位 |
-| image_url | varchar(255) | 展示图片访问地址，空值使用默认图片 |
+| image_file_key | char(32) | 展示图片文件键，空值使用默认图片 |
 | status | tinyint unsigned | 窗口状态：1启用，0停用 |
 | is_open | tinyint | 营业标记：1营业中，0暂停营业 |
 | sort_order | int | 展示排序，数值越小越靠前 |
@@ -102,7 +102,7 @@
 | product_code | varchar(64) | 窗口内唯一的菜品业务编码 |
 | product_name | varchar(128) | 菜品名称 |
 | description | varchar(500) | 内容简介或说明 |
-| image_url | varchar(512) | 展示图片访问地址，空值使用默认图片 |
+| image_file_key | char(32) | 展示图片文件键，空值使用默认图片 |
 | price | decimal(10,2) | 当前菜品单价，单位元 |
 | sale_status | tinyint unsigned | 菜品售卖状态：1上架，0下架 |
 | sort_order | int | 展示排序，数值越小越靠前 |
@@ -250,3 +250,11 @@
 | is_deleted | tinyint | 逻辑删除标记：0正常，1已删除 |
 | created_at | datetime | 记录创建时间 |
 | updated_at | datetime | 记录最后更新时间 |
+
+## 待部署的图片引用变更（2026-10-28）
+
+上方图片 URL 列仍对应现有运行数据库。源码已改为 users.avatar_file_key 及 restaurants/dining_windows/products.image_file_key，列定义为 CHAR(32) ASCII、可为空；评论 Mongo 文档改为 imageFileKeys。用户要求暂不停止服务或执行图片迁移，故不能把新源码直接连接旧图片列。迁移工具及执行顺序见 [图片文件键迁移](migrations/IMAGE_FILE_KEYS.md)。
+
+同日已创建 comment_db.comments、comment_rating_stats、comment_rating_outbox 及 product_db.product_rating_stats，中文字段说明以 comment_db/V1 和 product_db/V8 建表脚本为准。
+
+2026-10-28 后续执行更新：图片字段迁移已获授权并执行完成，上方字段已更新为当前实际结构；先前“待部署”段落仅为历史状态，迁移结果以 migrations/IMAGE_FILE_KEYS.md 为准。
