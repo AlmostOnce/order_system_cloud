@@ -40,6 +40,21 @@ services:
       - order-system-cloud-nacos-data:/home/nacos/data
       - order-system-cloud-nacos-logs:/home/nacos/logs
 
+  mongo:
+    profiles: [comment]
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-comment_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-}
+      COMMENT_MONGO_USERNAME: ${COMMENT_MONGO_USERNAME:-comment_service}
+      COMMENT_MONGO_PASSWORD: ${COMMENT_MONGO_PASSWORD:-}
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - order-system-cloud-mongo-data:/data/db
+      - ./docker/mongo/01-comment-init.js:/docker-entrypoint-initdb.d/01-comment-init.js:ro
+
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
@@ -143,16 +158,18 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        attempts=0
-        while true; do
-          result=$$(sh /home/rocketmq/rocketmq-5.3.2/bin/mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:10911 -t order-paid-sales-v1 -r 4 -w 4 2>&1)
-          printf '%s\n' "$$result"
-          case "$$result" in
-            *"create topic to "*" success."*) exit 0 ;;
-          esac
-          attempts=$$((attempts + 1))
-          if [ "$$attempts" -ge 30 ]; then exit 1; fi
-          sleep 3
+        for topic in order-paid-sales-v1 product-rating-changed-v1; do
+          attempts=0
+          while true; do
+            result=$$(sh /home/rocketmq/rocketmq-5.3.2/bin/mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:10911 -t "$$topic" -r 4 -w 4 2>&1)
+            printf '%s\n' "$$result"
+            case "$$result" in
+              *"create topic to "*" success."*) break ;;
+            esac
+            attempts=$$((attempts + 1))
+            if [ "$$attempts" -ge 30 ]; then exit 1; fi
+            sleep 3
+          done
         done
 
   gateway:
@@ -178,6 +195,7 @@ services:
 
 volumes:
   order-system-cloud-mysql-data:
+  order-system-cloud-mongo-data:
   order-system-cloud-nacos-data:
   order-system-cloud-nacos-logs:
   order-system-cloud-redis-data:

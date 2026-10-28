@@ -1,0 +1,26 @@
+comment:
+  messaging:
+    enabled: true
+spring:
+  cloud:
+    function:
+      definition: productRatingChanged
+    stream:
+      bindings:
+        productRatingChanged-in-0:
+          destination: product-rating-changed-v1
+          group: product-rating-v1
+          content-type: application/json
+          error-handler-definition: productRatingRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          productRatingChanged-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

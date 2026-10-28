@@ -1,0 +1,71 @@
+server:
+  port: 9105
+spring:
+  application:
+    name: comment-service
+  profiles:
+    default: comment-mq
+  # 默认值用于本机开发；已设置的环境变量仍可覆盖。
+  datasource:
+    url: ${COMMENT_DB_URL:jdbc:mysql://127.0.0.1:9095/comment_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${COMMENT_DB_USERNAME:comment_service}
+    password: ${COMMENT_DB_PASSWORD:comment_password_dev_2026}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 3000
+  jdbc:
+    template:
+      query-timeout: 5s
+  data:
+    mongodb:
+      host: ${MONGO_HOST:127.0.0.1}
+      port: ${MONGO_PORT:27017}
+      database: comment_db
+      authentication-database: comment_db
+      username: ${COMMENT_MONGO_USERNAME:comment_service}
+      password: ${COMMENT_MONGO_PASSWORD:comment_password_dev_2026}
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+    openfeign:
+      client:
+        config:
+          commentOrderClient:
+            connectTimeout: 3000
+            readTimeout: 5000
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+identity:
+  user-service-base-url: ${USER_SERVICE_BASE_URL:http://localhost:9092}
+file:
+  service-base-url: ${FILE_SERVICE_BASE_URL:http://localhost:9102}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+springdoc:
+  service-title: 评论服务接口文档
+  service-description: 已完成订单菜品评价、本人评价与评分查询。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api

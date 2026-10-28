@@ -56,6 +56,20 @@ spring:
               filters:
                 - RewritePath=/api/cart/v3/api-docs, /v3/api-docs
 
+            - id: comment-service-docs
+              uri: lb://comment-service
+              predicates:
+                - Path=/api/comments/v3/api-docs
+              filters:
+                - RewritePath=/api/comments/v3/api-docs, /v3/api-docs
+
+            - id: comment-service
+              uri: lb://comment-service
+              predicates:
+                - Path=/api/comments,/api/comments/**
+              filters:
+                - StripPrefix=1
+
             - id: cart-service
               uri: lb://cart-service
               predicates:

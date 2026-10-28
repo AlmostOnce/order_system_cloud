@@ -1,0 +1,22 @@
+comment:
+  messaging:
+    enabled: true
+spring:
+  cloud:
+    stream:
+      output-bindings: commentRating-out-0
+      bindings:
+        commentRating-out-0:
+          destination: product-rating-changed-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          commentRating-out-0:
+            producer:
+              group: comment-rating-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000

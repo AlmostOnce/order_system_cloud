@@ -76,3 +76,5 @@ springdoc:
         url: /api/cart/v3/api-docs
       - name: stock-service
         url: /api/stocks/v3/api-docs
+      - name: comment-service
+        url: /api/comments/v3/api-docs
