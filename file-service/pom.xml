@@ -17,6 +17,11 @@
     <name>file-service</name>
 
     <dependencies>
+        <!-- JDBC 连接池实现，版本由根项目管理。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid-spring-boot-3-starter</artifactId>
+        </dependency>
         <!-- 统一异常和 HTTP 响应处理。 -->
         <dependency>
             <groupId>com.hbue.ordering</groupId>
@@ -77,6 +82,12 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
             <version>3.5.8</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- MySQL 数据库驱动。 -->

@@ -17,6 +17,11 @@
     <name>order-service</name>
 
     <dependencies>
+        <!-- JDBC 连接池实现，版本由根项目管理。 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid-spring-boot-3-starter</artifactId>
+        </dependency>
         <!-- 排行榜投影重建与 MQ 消费共用分布式锁；common-redis 的 Redisson 为 optional。 -->
         <dependency>
             <groupId>org.redisson</groupId>
@@ -134,6 +139,12 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
             <version>3.5.8</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

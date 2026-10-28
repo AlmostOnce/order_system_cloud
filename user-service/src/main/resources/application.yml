@@ -4,6 +4,24 @@ server:
 
 spring:
   datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
+      initial-size: 1
+      min-idle: 1
+      max-active: 10
+      max-wait: 3000
+      validation-query: SELECT 1
+      validation-query-timeout: 2
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      stat-view-servlet:
+        enabled: false
+      web-stat-filter:
+        enabled: false
     # 用户服务只连接自己的数据库。
     url: ${USER_DB_URL:jdbc:mysql://127.0.0.1:9095/user_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
     username: ${USER_DB_USERNAME:user_service}

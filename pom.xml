@@ -39,6 +39,8 @@
         <spring-boot.version>3.5.6</spring-boot.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
         <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
+        <!-- MySQL 连接池，统一使用适配 Spring Boot 3 的 Druid Starter。 -->
+        <druid.version>1.2.27</druid.version>
         <redisson.version>4.7.0</redisson.version>
         <!-- 接口文档（OpenAPI / Swagger UI）版本，统一由 BOM 管理 -->
         <springdoc.version>2.9.1</springdoc.version>
@@ -49,6 +51,12 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>druid-spring-boot-3-starter</artifactId>
+                <version>${druid.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
