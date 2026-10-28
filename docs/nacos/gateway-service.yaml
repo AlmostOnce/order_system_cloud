@@ -63,6 +63,20 @@ spring:
               filters:
                 - RewritePath=/api/comments/v3/api-docs, /v3/api-docs
 
+            - id: search-service-docs
+              uri: lb://search-service
+              predicates:
+                - Path=/api/search/v3/api-docs
+              filters:
+                - RewritePath=/api/search/v3/api-docs, /v3/api-docs
+
+            - id: search-service
+              uri: lb://search-service
+              predicates:
+                - Path=/api/search,/api/search/**
+              filters:
+                - StripPrefix=1
+
             - id: comment-service
               uri: lb://comment-service
               predicates:

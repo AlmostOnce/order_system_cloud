@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 商品服务启动类。
@@ -16,9 +17,11 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  */
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
+@EnableScheduling
 @EnableFeignClients(basePackages = {
         "com.hbue.ordering.user.api.client",
-        "com.hbue.ordering.stock.api.client"
+        "com.hbue.ordering.stock.api.client",
+        "com.hbue.ordering.product.api.searchclient"
 })
 @MapperScan("com.hbue.ordering.product.mapper")
 public class ProductServiceApplication {

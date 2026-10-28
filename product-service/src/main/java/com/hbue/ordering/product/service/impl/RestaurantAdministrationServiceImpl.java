@@ -13,6 +13,7 @@ import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.RestaurantDO;
+import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.service.RestaurantAdministrationService;
 import com.hbue.ordering.product.vo.RestaurantAdminVO;
 import org.springframework.dao.DuplicateKeyException;
@@ -51,6 +52,7 @@ public class RestaurantAdministrationServiceImpl
     /** 数据范围判定服务。 */
     private final DataScopeService dataScopeService;
     private final ManagedImageClient images;
+    private final ProductSearchOutboxWriter searchOutbox;
 
     /**
      * 创建餐厅管理服务。
@@ -63,12 +65,14 @@ public class RestaurantAdministrationServiceImpl
             RestaurantMapper restaurantMapper,
             DiningWindowMapper diningWindowMapper,
             DataScopeService dataScopeService,
-            ManagedImageClient images
+            ManagedImageClient images,
+            ProductSearchOutboxWriter searchOutbox
     ) {
         this.restaurantMapper = restaurantMapper;
         this.diningWindowMapper = diningWindowMapper;
         this.dataScopeService = dataScopeService;
         this.images = images;
+        this.searchOutbox = searchOutbox;
     }
 
     /** {@inheritDoc} */
@@ -133,6 +137,7 @@ public class RestaurantAdministrationServiceImpl
         requireRequest(request);
         RestaurantDO existing = requireRestaurant(restaurantId);
         dataScopeService.checkRestaurantAccess(operatorId, restaurantId);
+        List<DiningWindowDO> attachedWindows = diningWindowMapper.selectList(new QueryWrapper<DiningWindowDO>().eq("restaurant_id", restaurantId));
 
         UserScopeSnapshot scopes = dataScopeService.loadScopes(operatorId);
         if (!scopes.isPlatformScope()) {
@@ -166,6 +171,7 @@ public class RestaurantAdministrationServiceImpl
         } catch (DuplicateKeyException exception) {
             throw conflict("餐厅编码已存在");
         }
+        attachedWindows.forEach(window -> searchOutbox.recordWindow(window.getWindowId()));
         return toRestaurantVO(requireRestaurant(restaurantId));
     }
 
@@ -176,6 +182,7 @@ public class RestaurantAdministrationServiceImpl
         validateId(restaurantId);
         requirePlatformScope(operatorId, "停用餐厅");
         RestaurantDO existing = requireRestaurant(restaurantId);
+        List<DiningWindowDO> attachedWindows = diningWindowMapper.selectList(new QueryWrapper<DiningWindowDO>().eq("restaurant_id", restaurantId));
         if (Integer.valueOf(INACTIVE_STATUS).equals(existing.getStatus())) {
             return;
         }
@@ -193,6 +200,7 @@ public class RestaurantAdministrationServiceImpl
         UpdateWrapper<RestaurantDO> update = new UpdateWrapper<>();
         update.eq("restaurant_id", restaurantId).set("status", INACTIVE_STATUS);
         restaurantMapper.update(null, update);
+        attachedWindows.forEach(window -> searchOutbox.recordWindow(window.getWindowId()));
     }
 
     /**

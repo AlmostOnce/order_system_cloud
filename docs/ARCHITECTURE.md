@@ -58,7 +58,7 @@
 | 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B 源码初版，待部署验收 | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
 | 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
 | 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
-| 12 | `search-service` | 9106 / 8091 | ES 索引 | C ⬜ | **ES 全文检索**、索引同步（RocketMQ）、重建 |
+| 12 | `search-service` | 9106 / 8091 | ES 索引 | C 🟡 | **ES 菜品全文检索**、outbox + RocketMQ 索引同步、全量重建（首期源码已补，待运行验收） |
 | 13 | `statistics-service` | 9108 / 8093 | 无（只读聚合） | C ⬜ | 读模型 / CQRS 雏形、Feign 扇出聚合、报表 |
 
 > `auth-service` 的分拆**有代价**：登录链路多一跳 Feign，跨服务错误映射需额外处理
@@ -111,7 +111,7 @@
 | 服务 | 定位 | 说明 |
 |---|---|---|
 | `cart-service` | 阶段 B | 购物车是学习 Redis 数据结构的标准场景（Hash 存明细、登录/未登录合并、TTL、与下单衔接） |
-| `search-service`（ES） | 阶段 C | 按你的意见放稍后。技术点：索引与 MySQL 的同步（**RocketMQ 消息驱动**）、分词、重建索引 |
+| `search-service`（ES） | 阶段 C | 首期源码已补、待部署验收。技术点：索引与 MySQL 的同步（**RocketMQ 消息驱动**）、中文检索与全量重建 |
 | `notification-service`（Web） | 阶段 C | 用 WebSocket/SSE 做站内消息，不接短信。技术点：长连接、网关 WS 路由、离线消息与可靠投递 |
 
 ## 5. 非服务模块
@@ -146,7 +146,7 @@
 
 ### 6.2 为什么是 RocketMQ + Spring Cloud Stream
 
-2026-10-22 首个落地场景为销量榜：订单确认支付时同库事务写 outbox，RocketMQ 至少一次投递，消费者 Lua 原子去重 + ZSet 增量更新；历史重建同时恢复销量与已计入订单集合，定时对账兜底。此场景使用本地 outbox，不是余额支付半消息事务。配置、部署状态和验证边界见 [销量榜](SALES_RANKING.md)。下一步库存事件与缓存一致性改造已登记到 [当前下一步](PROJECT_PROGRESS.md#当前下一步)，保留核心扣减与回补的 Seata AT 边界。
+2026-10-22 首个落地场景为销量榜：订单确认支付时同库事务写 outbox，RocketMQ 至少一次投递，消费者 Lua 原子去重 + ZSet 增量更新；历史重建同时恢复销量与已计入订单集合，定时对账兜底。此场景使用本地 outbox，不是余额支付半消息事务。配置、部署状态和验证边界见 [销量榜](SALES_RANKING.md)。2026-10-28 已补库存变更 outbox 与 RocketMQ 快照失效消费者，仍保留核心扣减与回补的 Seata AT 边界；数据库迁移和运行验收状态见 [库存接入](STOCK_INTEGRATION.md)。
 
 | 决策 | 理由 |
 |---|---|
@@ -236,7 +236,7 @@
 | 3 | 购物车 | **`cart-service`（独立）** | Redis 数据结构练习 |
 | 4 | 图片上传 | **`file-service`（独立）** | 横切复用（头像/菜品图/评论图） |
 | 5 | 站内消息推送 | **`notification-service`（独立）** | WebSocket 长连接练习 |
-| 6 | 菜单搜索 | **`search-service`（独立，稍后）** | ES 检索练习 |
+| 6 | 菜单搜索 | **`search-service`（独立，首期源码已补）** | ES 检索；MySQL 为准，RocketMQ 驱动索引刷新 |
 | 7 | 经营报表 | **`statistics-service`（独立，稍后）** | 只读聚合 / CQRS 雏形 |
 | 8 | 订单超时自动取消（15 分钟） | `order-service` | 只操作本服务库，本地定时任务，无新技术点 |
 | 9 | 余额 + 余额流水 | `user-service` | 必须与余额字段同事务，拆开会制造无收益的分布式事务 |
@@ -302,7 +302,7 @@
     4) file         前端上传依赖   ✅ 已完成
 阶段 C（技术扩展，3 个）
     5) notification WebSocket 长连接（消费 RocketMQ 事件）
-    6) search       ES 检索（RocketMQ 消息同步索引）
+    6) search       ES 检索（RocketMQ 消息同步索引）   🟡 首期源码已补
     7) statistics   报表，依赖其它服务稳定后再做
 ```
 
@@ -313,7 +313,7 @@
 | **超卖 / 库存不一致** | `stock-service` | Redis Lua 原子预扣；Seata 全局回滚；**库存流水 + 定时对账**作为 TC 故障时的最后防线。**已落地**（2026-10-19）：Redis Lua 预扣可降级、DB 行锁 + 版本号乐观锁条件更新、`stock_flow` 唯一键幂等、`StockReconcileTask` 定时对账 |
 | 分布式事务不可收敛 | `order × stock` | 用 Seata AT 的全局回滚做主路径；全局锁 + `undo_log` 保证一致性；禁止"先建单后扣库存无补偿"的写法。**已落地**（2026-10-19）：`createOrder` 标 `@GlobalTransactional`，订单与明细落库后调用 `StockServiceClient.deduct`，扣减失败即整体回滚 |
 | Seata TC 单点 | `seata-server` | 本地单 TC 即可；TC 不可用时事务挂起 → 必须靠对账修复，因此对账不能省 |
-| ES 与 MySQL 数据漂移 | `search-service` | 以 MySQL 为唯一事实来源；提供全量重建索引脚本，索引随时可丢弃重建 |
+| ES 与 MySQL 数据漂移 | `search-service` | 以 MySQL 为唯一事实来源；提供内部全量重建接口，索引随时可丢弃重建 |
 | 消息重复 / 丢失 | RocketMQ 消费方 | 消费端幂等（用业务唯一键）+ 消费失败重试 + 死信队列 |
 | **评论内容与元数据跨库不一致** | `comment-service`（MongoDB × MySQL） | 固定写入顺序（先内容后元数据）+ 定时对账清理孤儿文档（见 6.7） |
 | **菜品评分跨服务不一致** | `comment × product` | RocketMQ 事件 + 消费端幂等 + 定时对账（见 6.7） |
@@ -379,4 +379,5 @@
 | 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |
 
 
-2026-10-28 评论服务首期源码已补：发布与查询、评分汇总、MongoDB内容先写及孤儿对账、MySQL outbox、商品侧版本幂等评分投影。未执行迁移或启动服务，部署和验证边界见 [评论服务](COMMENT_SERVICE.md)。
+| 2026-10-28 | 评论服务首期源码已补：发布与查询、评分汇总、MongoDB 内容先写及孤儿对账、MySQL outbox、商品侧版本幂等评分投影。未执行迁移或启动服务，部署和验证边界见 [评论服务](COMMENT_SERVICE.md)。 |
+| 2026-10-28 | 搜索服务首期源码已补：商品目录事务 outbox、RocketMQ 窗口刷新事件、商品内部菜单快照、ES 菜品搜索与全量重建、Nacos 路由和本地 ES profile。product_db V9 已执行；未运行 Maven、未启动容器/服务，消息和搜索运行态仍待验收，详见 [搜索服务](SEARCH_SERVICE.md)。 |

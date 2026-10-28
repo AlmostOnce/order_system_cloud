@@ -231,7 +231,8 @@ class RestaurantAdministrationServiceImplTest {
                 restaurantMapper,
                 diningWindowMapper,
                 dataScopeService,
-                org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class)
+                org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class),
+                org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class)
         );
     }
 

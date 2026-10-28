@@ -458,8 +458,8 @@
 
 ### 本次优先级调整（2026-10-22）
 
-1. **当前进行：完成销量榜消息链路核验**。代码与本机 RocketMQ、outbox 表已就绪，订单服务也已启动；先排查 `salesRankingPaid` / `salesRankingRetryError` 函数发现告警，再用真实或明确授权的订单确认 Producer、Consumer、Redis 投影及重试/死信。详见 [销量榜](SALES_RANKING.md)。
-2. **之后：库存事件与缓存一致性改造**。保留 order × stock 的 Seata AT 同步扣减/取消回补边界，不把核心扣库存直接改成不确定结果的异步消息。库存流水与库存变更事件在 stock_db 同库事务持久化，通过 RocketMQ 传播已提交变更，用于缓存失效/重建、库存预警和后续统计；消费按流水业务唯一键去重，失败重试、死信告警和库存对账兜底。必须验证 Seata 全局回滚时不发布已回滚事件、消息乱序不覆盖较新库存、Redis 不可用/恢复和重复回补场景。具体文档见 [库存接入下一步](STOCK_INTEGRATION.md#下一步库存事件与缓存一致性改造)。本次只登记计划，不更改库存核心流程。
+1. **当前进行：验收库存变更消息链路**。源码已加入 stock_db outbox、Seata undo-log 发布门控、RocketMQ 发布/消费配置及 Redis 快照失效。[库存 outbox V2 迁移](database/migrations/stock_db/V2__stock_event_outbox.sql) 已执行，备份及核验见 [库存接入](STOCK_INTEGRATION.md)。库存服务尚未更新启动，需后续验证下单、取消、Seata 回滚、重复/乱序消费、Broker 重试和死信。
+2. **仍待办：完成销量榜消息链路核验**。订单服务代码与本机 RocketMQ、outbox 表已有配置；曾观察到 `salesRankingPaid` / `salesRankingRetryError` 函数发现告警，需用真实或明确授权的订单确认 Producer、Consumer、Redis 投影及重试/死信。详见 [销量榜](SALES_RANKING.md)。
 
 
 0. ~~购物车服务（cart-service）~~ **已完成（2026-10-17）**：Redis 增删改查、商品实时核价与订单成功后的按提交快照清理接口已实现，详见"2026-10-17 本次完成"；**取消** MySQL 备份与游客合并。前端接入时需显式串联下单与清理。
@@ -548,6 +548,20 @@ order-service ── OpenFeign ──> user-service ──> user_db
 
 
 2026-10-28 后续部署：用户授权创建MongoDB容器，已启动order-system-cloud-mongo-1（127.0.0.1:27017），完成评论库应用账号、集合、索引及认证读写验证。MySQL迁移、MQ新主题、路由发布和Java服务联调仍未执行；未运行Maven。
+
+### 2026-10-28 搜索服务首期源码
+
+- 新增 `search-service`（9106）和 ES 8 本地 `search` profile；索引保存当前可售菜品快照，使用内置 CJK analyzer 与 `search_as_you_type` 菜名字段。
+- 商品服务目录管理事务新增 product_db outbox 事件，覆盖餐厅、窗口、分类、菜品及图片更新；RocketMQ 发布器同步发送窗口刷新触发事件，失败退避重试，已发布记录保留 30 天。
+- 搜索服务按窗口通过带 `X-Internal-Token` 的商品内部接口读取 MySQL 当前快照，并加 Redis 分布式锁整体替换该窗口文档；提供带 CUSTOMER JWT 的分页搜索和内部全量重建入口。
+- 新增 V9 outbox 迁移、RocketMQ Topic、Gateway Nacos 路由样例和 `docs/SEARCH_SERVICE.md`。源码静态审查完成；迁移执行情况见下条，服务/容器启动、接口联调与 Maven 构建/测试未执行。
+- **数据库迁移已执行**：已备份 `product_db` 后执行 V9，`product_search_outbox` 的 7 个字段、InnoDB 引擎核对通过，当前 0 条记录。备份：`C:\Users\DELL\.codex\backups\order_system_cloud\product_db_before_search_outbox_20261028_113623_235589.sql`。未启动 ES、MQ 或业务服务，未运行 Maven。
+
+### 2026-10-28 库存变更 MQ 源码接入
+
+- 库存扣减/回补仍由 Seata AT 同步确认；成功流水与 outbox 同事务写入，事件带 Seata XID。发布查询等待对应 undo_log 清理后，才通过 RocketMQ 同步发送确认；失败按退避重试。
+- 新增库存变更主题 `stock-changed-v1`、消费组 `stock-cache-invalidator-v1`。消费者按事件键幂等删除 Redis 库存快照，保持数据库为事实来源。
+- 已新增 stock_db V2 迁移和静态契约脚本，并扩展 RocketMQ Topic 初始化列表。迁移已执行：stock 77 行、stock_flow 13 行未变，新 outbox/消费幂等表均为空；执行前备份及 SHA-256 见 `docs/STOCK_INTEGRATION.md`。未运行 Maven、Java 测试/构建或服务启动；需后续启动库存服务做 Seata 回滚与 RocketMQ 端到端验证。
 
 ### 2026-10-28 评论库初始化及图片引用改造
 

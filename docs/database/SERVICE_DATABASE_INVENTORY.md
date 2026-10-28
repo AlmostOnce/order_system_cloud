@@ -46,7 +46,7 @@
 |---|---|---|---|
 | `order_db` | `orders`、`order_items`、`undo_log`、`sales_event_outbox` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) → [销量事件 outbox](migrations/order_db/V1__add_sales_event_outbox.sql) |
 | `user_db` | `users`（含 `pay_password_hash`、`user_uuid`、`user_no`、`email`；V6 后不含 `phone`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) → [user_db/V4__add_public_user_uuid.sql](migrations/user_db/V4__add_public_user_uuid.sql) → [user_db/V5__add_user_number_and_email_login.sql](migrations/user_db/V5__add_user_number_and_email_login.sql) → [user_db/V6__remove_user_phone.sql](migrations/user_db/V6__remove_user_phone.sql) |
-| `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`） | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) |
+| `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`）、`product_search_outbox` | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) → [product_db/V6__add_window_description_and_sort_order.sql](migrations/product_db/V6__add_window_description_and_sort_order.sql) → [product_db/V7__seed_window_messages.sql](migrations/product_db/V7__seed_window_messages.sql) → [product_db/V8__add_product_rating_projection.sql](migrations/product_db/V8__add_product_rating_projection.sql) → [product_db/V9__create_product_search_outbox.sql](migrations/product_db/V9__create_product_search_outbox.sql)；V9 于 2026-10-28 执行成功 |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
 | `file_db` | `file_objects` | file-service | [file_db/V1__create_file_objects_table.sql](migrations/file_db/V1__create_file_objects_table.sql) |
 | `stock_db` | `stock`、`stock_flow`、`undo_log` | stock-service | [stock_db/V1__create_stock_tables.sql](migrations/stock_db/V1__create_stock_tables.sql) |
@@ -186,7 +186,7 @@ FLUSH PRIVILEGES;
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
 | `cart_db`（取消） | 不建设购物车备份表 | cart-service | 2026-10-17 用户确认仅使用 Redis（AOF + 数据卷），不做 MySQL 双存储，也不做游客合并 |
-| ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建 |
+| ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建；Elasticsearch Compose profile 已配置，尚未启动 |
 | `notification_db`（可选） | 离线消息表 | notification-service | 离线消息需要落库才能补投 |
 | 无库 | — | statistics-service | 只读聚合，经 Feign 从 order/product 拉取 |
 
@@ -197,7 +197,7 @@ FLUSH PRIVILEGES;
 | ~~Seata Server（TC）~~ | 9109（旧端口段 8094） | B | ✅ **2026-10-19 已落地**：下单扣库存的分布式事务协调者，注册到现有 Nacos（见第 5 节） |
 | RocketMQ NameServer / Broker / Dashboard | 9876 / 10911 / 8180 | B | ✅ 2026-10-23 本机 NameServer/Broker 已启动并创建销量主题；Dashboard 未部署，业务消息端到端仍待验收 |
 | MongoDB | 27017 | B | 评论内容 |
-| Elasticsearch | 9200 | C | 菜单全文检索 |
+| Elasticsearch | 9200 | C | 菜单全文检索；本地 Compose 使用 `search` profile，尚未启动 |
 
 > 目标状态：数据库 Schema 从阶段 A 的 **4 个** → 阶段 B 后 **7 个**（+`stock_db`、`comment_db`、`file_db`）→ 阶段 C 再加 ES 索引与（可选）`notification_db`。当前已建 **6 个**（含 `stock_db`），仅剩 `comment_db` + MongoDB 未落地。服务数从 6 → 13，见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 1、3 节。
 

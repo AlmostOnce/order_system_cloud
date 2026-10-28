@@ -1,0 +1,28 @@
+product:
+  search-messaging:
+    enabled: true
+    publish-delay-ms: 1000
+
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    stream:
+      output-bindings: productSearchRefresh-out-0
+      bindings:
+        productSearchRefresh-out-0:
+          destination: product-search-refresh-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          productSearchRefresh-out-0:
+            producer:
+              group: product-search-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000

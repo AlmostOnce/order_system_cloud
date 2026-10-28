@@ -19,6 +19,7 @@ import com.hbue.ordering.product.mapper.ProductMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.vo.ProductAdminVO;
 import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
@@ -69,6 +70,7 @@ public class ProductAdministrationServiceImpl
     /** 商品布隆过滤器管理器。 */
     private final ProductBloomFilterManager bloomFilterManager;
     private final ManagedImageClient images;
+    private final ProductSearchOutboxWriter searchOutbox;
 
     /**
      * 创建目录管理服务。
@@ -87,7 +89,8 @@ public class ProductAdministrationServiceImpl
             DataScopeService dataScopeService,
             ProductMenuCacheService menuCacheService,
             ProductBloomFilterManager bloomFilterManager,
-            ManagedImageClient images
+            ManagedImageClient images,
+            ProductSearchOutboxWriter searchOutbox
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
@@ -96,6 +99,7 @@ public class ProductAdministrationServiceImpl
         this.menuCacheService = menuCacheService;
         this.bloomFilterManager = bloomFilterManager;
         this.images = images;
+        this.searchOutbox = searchOutbox;
     }
 
     @Override
@@ -107,6 +111,7 @@ public class ProductAdministrationServiceImpl
         int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
                 .eq("window_id", windowId).set("image_file_key", images.requireImageKey(fileKey, operatorId, "WINDOW_IMAGE", windowId)));
         if (updated != 1) throw notFound("窗口不存在");
+        searchOutbox.recordWindow(windowId);
         evictActiveWindowsAfterCommit();
         evictWindowMenuAfterCommit(windowId);
         return toWindowVO(requireWindow(windowId));
@@ -121,6 +126,7 @@ public class ProductAdministrationServiceImpl
         int updated = productMapper.update(null, new UpdateWrapper<ProductDO>()
                 .eq("product_id", productId).set("image_file_key", images.requireImageKey(fileKey, operatorId, "PRODUCT_IMAGE", productId)));
         if (updated != 1) throw notFound("菜品不存在");
+        searchOutbox.recordWindow(product.getWindowId());
         evictWindowMenuAfterCommit(product.getWindowId());
         return toProductVO(requireProduct(productId));
     }
@@ -176,6 +182,7 @@ public class ProductAdministrationServiceImpl
         }
         // 新增窗口后补写布隆过滤器，并失效启用窗口列表缓存（均待事务提交后执行）。
         addWindowToBloomFilterAfterCommit(window.getWindowId());
+        searchOutbox.recordWindow(window.getWindowId());
         evictActiveWindowsAfterCommit();
         DiningWindowDO persistedWindow = diningWindowMapper.selectById(
                 window.getWindowId()
@@ -216,6 +223,7 @@ public class ProductAdministrationServiceImpl
                 .set("is_open", request.getIsOpen());
         try {
             diningWindowMapper.update(null, update);
+            searchOutbox.recordWindow(windowId);
         } catch (DuplicateKeyException exception) {
             throw conflict("窗口编码已存在");
         }
@@ -238,6 +246,7 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<DiningWindowDO> update = new UpdateWrapper<>();
         update.eq("window_id", windowId).set("status", 0);
         diningWindowMapper.update(null, update);
+        searchOutbox.recordWindow(windowId);
         // 窗口停用后失效启用窗口列表缓存与窗口菜单缓存（均待事务提交后执行）。
         evictActiveWindowsAfterCommit();
         evictWindowMenuAfterCommit(windowId);
@@ -284,6 +293,7 @@ public class ProductAdministrationServiceImpl
         category.setStatus(request.getStatus());
         try {
             productCategoryMapper.insert(category);
+            searchOutbox.recordWindow(windowId);
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在同名分类");
         }
@@ -320,6 +330,7 @@ public class ProductAdministrationServiceImpl
                 .set("status", request.getStatus());
         try {
             productCategoryMapper.update(null, update);
+            searchOutbox.recordWindow(existingCategory.getWindowId());
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在同名分类");
         }
@@ -341,6 +352,7 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<ProductCategoryDO> update = new UpdateWrapper<>();
         update.eq("category_id", categoryId).set("status", 0);
         productCategoryMapper.update(null, update);
+        searchOutbox.recordWindow(category.getWindowId());
         // 分类停用后失效所属窗口的菜单缓存（待事务提交后执行）。
         evictWindowMenuAfterCommit(category.getWindowId());
     }
@@ -397,6 +409,7 @@ public class ProductAdministrationServiceImpl
         copyProductFields(operatorId, request, product);
         try {
             productMapper.insert(product);
+            searchOutbox.recordWindow(windowId);
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在相同菜品编码");
         }
@@ -443,6 +456,7 @@ public class ProductAdministrationServiceImpl
                 .set("sort_order", request.getSortOrder());
         try {
             productMapper.update(null, update);
+            searchOutbox.recordWindow(existingProduct.getWindowId());
         } catch (DuplicateKeyException exception) {
             throw conflict("该窗口下已存在相同菜品编码");
         }
@@ -464,6 +478,7 @@ public class ProductAdministrationServiceImpl
         UpdateWrapper<ProductDO> update = new UpdateWrapper<>();
         update.eq("product_id", productId).set("sale_status", 0);
         productMapper.update(null, update);
+        searchOutbox.recordWindow(product.getWindowId());
         // 菜品下架后失效所属窗口的菜单缓存（待事务提交后执行）。
         evictWindowMenuAfterCommit(product.getWindowId());
     }

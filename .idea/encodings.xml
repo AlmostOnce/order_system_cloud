@@ -5,6 +5,10 @@
     <file url="file://$PROJECT_DIR$/auth-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/cart-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/cart-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comment-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comment-api/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comment-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comment-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-core/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-core/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-redis/src/main/java" charset="UTF-8" />
@@ -27,6 +31,8 @@
     <file url="file://$PROJECT_DIR$/product-api/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/product-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/product-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/search-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/search-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/stock-api/src/main/java" charset="UTF-8" />

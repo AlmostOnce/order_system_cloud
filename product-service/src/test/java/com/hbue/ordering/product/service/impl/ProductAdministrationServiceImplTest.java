@@ -325,7 +325,8 @@ class ProductAdministrationServiceImplTest {
                 dataScopeService,
                 menuCacheService,
                 bloomFilterManager,
-                images
+                images,
+                org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class)
         );
     }
 
