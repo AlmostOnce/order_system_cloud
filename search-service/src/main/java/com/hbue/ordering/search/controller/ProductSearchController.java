@@ -1,7 +1,7 @@
 package com.hbue.ordering.search.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.search.model.ProductSearchPage;
+import com.hbue.ordering.search.vo.ProductSearchPageVO;
 import com.hbue.ordering.search.service.ProductSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +26,7 @@ public class ProductSearchController {
     @GetMapping("/products")
     @PreAuthorize("hasRole('CUSTOMER')")
     @Operation(summary = "搜索当前可售菜品", description = "按菜品名、描述、分类、窗口和餐厅名称检索；可选餐厅、窗口和分类过滤。")
-    public ApiResponse<ProductSearchPage> searchProducts(
+    public ApiResponse<ProductSearchPageVO> searchProducts(
             @RequestParam("q") @NotBlank @Size(max = 80) String keyword,
             @RequestParam(value = "restaurantId", required = false) @Min(1) Long restaurantId,
             @RequestParam(value = "windowId", required = false) @Min(1) Long windowId,

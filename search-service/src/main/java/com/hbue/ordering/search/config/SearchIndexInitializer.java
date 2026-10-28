@@ -1,6 +1,6 @@
 package com.hbue.ordering.search.config;
 
-import com.hbue.ordering.search.model.MenuProductDocument;
+import com.hbue.ordering.search.document.MenuProductDocument;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

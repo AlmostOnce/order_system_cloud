@@ -1,4 +1,4 @@
-package com.hbue.ordering.search.model;
+package com.hbue.ordering.search.document;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
