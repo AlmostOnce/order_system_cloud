@@ -184,6 +184,7 @@ FLUSH PRIVILEGES;
 | ~~`stock_db`~~ | ~~`stock`、`stock_flow`、`undo_log`~~ | stock-service | ✅ **2026-10-19 已建**，见第 2 节 |
 | ~~`order_db.undo_log`（补表）~~ | ~~`undo_log`~~ | order-service | ✅ **2026-10-19 已补**（`migrations/V4__add_undo_log.sql`），Seata 参与库都要有 `undo_log` |
 | `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
+| `comment_db` | `window_reviews` | comment-service | 已完成订单的店铺评价，按订单唯一；与菜品评价和菜品评分独立 |
 | — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
 | `cart_db`（取消） | 不建设购物车备份表 | cart-service | 2026-10-17 用户确认仅使用 Redis（AOF + 数据卷），不做 MySQL 双存储，也不做游客合并 |
 | ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建；Elasticsearch Compose profile 已配置，尚未启动 |
