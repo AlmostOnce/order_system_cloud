@@ -32,6 +32,7 @@
         <module>comment-api</module>
         <module>comment-service</module>
         <module>search-service</module>
+        <module>notification-service</module>
     </modules>
 
     <properties>

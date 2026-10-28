@@ -1,0 +1,26 @@
+notification:
+  messaging:
+    enabled: true
+spring:
+  cloud:
+    function:
+      definition: orderNotification
+    stream:
+      bindings:
+        orderNotification-in-0:
+          destination: order-status-notification-v1
+          group: notification-order-status-v1
+          content-type: application/json
+          error-handler-definition: orderNotificationRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          orderNotification-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
