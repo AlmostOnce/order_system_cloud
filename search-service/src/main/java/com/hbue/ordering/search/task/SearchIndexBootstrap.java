@@ -4,6 +4,8 @@ import com.hbue.ordering.search.service.ProductSearchService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,16 +20,23 @@ public class SearchIndexBootstrap {
 
     private final ProductSearchService searchService;
     private volatile boolean synchronizedOnce;
+    private volatile boolean applicationReady;
 
     public SearchIndexBootstrap(ProductSearchService searchService) {
         this.searchService = searchService;
+    }
+
+    /** 索引初始化由启动 runner 完成；应用就绪前不能访问尚未建立的别名。 */
+    @EventListener(ApplicationReadyEvent.class)
+    public void markApplicationReady() {
+        applicationReady = true;
     }
 
     /** 同步所有现有窗口；失败时在下一次调度继续重试。 */
     @Scheduled(initialDelayString = "${search.bootstrap.initial-delay-ms:5000}",
             fixedDelayString = "${search.bootstrap.retry-delay-ms:60000}")
     public void synchronize() {
-        if (synchronizedOnce) {
+        if (!applicationReady || synchronizedOnce) {
             return;
         }
         try {
