@@ -8,7 +8,7 @@ import org.springframework.data.elasticsearch.annotations.Setting;
 import java.math.BigDecimal;
 
 /** Elasticsearch 中的一份可售菜品快照；ID 由窗口和菜品 ID 组成。 */
-@Document(indexName = "menu-products-v1", createIndex = false)
+@Document(indexName = "menu-products-current", createIndex = false)
 @Setting(shards = 1, replicas = 0)
 public class MenuProductDocument {
     @Id private String id;

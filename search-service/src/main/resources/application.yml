@@ -2,6 +2,8 @@ server:
   port: 9106
 
 spring:
+  profiles:
+    include: search-mq
   application:
     name: search-service
   data:

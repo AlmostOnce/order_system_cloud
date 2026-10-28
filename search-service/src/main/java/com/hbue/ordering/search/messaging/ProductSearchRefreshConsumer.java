@@ -16,7 +16,8 @@ public class ProductSearchRefreshConsumer {
     public Consumer<ProductSearchRefreshEvent> productSearchRefresh() {
         return event -> {
             if (event == null || !event.valid()) throw new IllegalArgumentException("搜索刷新事件内容无效");
-            search.refreshWindow(event.windowId());
+            if (event.productId() == null) search.refreshWindow(event.windowId());
+            else search.refreshProduct(event.windowId(), event.productId());
         };
     }
 
