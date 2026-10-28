@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -37,9 +38,9 @@ public class RestaurantSaveRequest {
     @Size(max = 20)
     private String phone;
 
-    /** 门面图地址；允许为空。 */
-    @Size(max = 255)
-    private String imageUrl;
+    /** 门面图文件键；省略保留，空串清除。 */
+    @Pattern(regexp = "(?:[a-fA-F0-9]{32})?")
+    private String imageFileKey;
 
     /** 公告/简介；允许为空。 */
     @Size(max = 255)

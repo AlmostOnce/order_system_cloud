@@ -60,10 +60,10 @@ public class ProductDO {
     private String description;
 
     /**
-     * 菜品图片地址。
+     * 菜品图片文件键。
      */
-    @TableField("image_url")
-    private String imageUrl;
+    @TableField("image_file_key")
+    private String imageFileKey;
 
     /**
      * 当前窗口售价。

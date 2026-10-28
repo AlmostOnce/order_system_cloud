@@ -81,10 +81,10 @@ public class UserDO {
     private String payPasswordHash;
 
     /**
-     * 头像地址。
+     * 头像文件键。
      */
-    @TableField("avatar_url")
-    private String avatarUrl;
+    @TableField("avatar_file_key")
+    private String avatarFileKey;
 
     /**
      * 用户状态。

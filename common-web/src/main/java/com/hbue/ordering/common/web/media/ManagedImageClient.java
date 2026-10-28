@@ -26,8 +26,17 @@ public class ManagedImageClient {
         this.client = RestClient.builder().baseUrl(fileServiceBaseUrl).requestFactory(factory).build();
     }
 
-    public String requireImage(String fileKey, Long operatorId, String bizType, Long bizRef) {
-        if (fileKey == null || !fileKey.matches("[a-fA-F0-9]{32}")) {
+    /** 省略字段保留旧图，空串清除；未改变的引用不重复要求原上传人权限。 */
+    public String resolveUpdateKey(String requested, String existing, Long operatorId, String bizType, Long bizRef) {
+        if (requested == null) return existing;
+        String key = FileReferences.normalize(requested);
+        if (key == null || key.equals(existing)) return key;
+        return requireImageKey(key, operatorId, bizType, bizRef);
+    }
+
+    public String requireImageKey(String fileKey, Long operatorId, String bizType, Long bizRef) {
+        fileKey = FileReferences.normalize(fileKey);
+        if (fileKey == null) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "图片文件键格式不正确");
         }
         if (internalToken == null || internalToken.isBlank()) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "文件内部调用凭据未配置");
@@ -56,6 +65,6 @@ public class ManagedImageClient {
         if (!java.util.Set.of("image/jpeg", "image/png", "image/gif", "image/webp").contains(type)) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "仅支持 JPG、PNG、GIF、WebP 图片");
         }
-        return "/api/files/" + fileKey + "/content";
+        return fileKey;
     }
 }

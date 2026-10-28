@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -42,9 +43,9 @@ public class ProductSaveRequest {
     @Size(max = 500)
     private String description;
 
-    /** 菜品图片地址；为空表示不填写。 */
-    @Size(max = 512)
-    private String imageUrl;
+    /** 菜品图片文件键；省略保留原图，空串清除。 */
+    @Pattern(regexp = "(?:[a-fA-F0-9]{32})?")
+    private String imageFileKey;
 
     /** 菜品售价，最多两位小数。 */
     @NotNull

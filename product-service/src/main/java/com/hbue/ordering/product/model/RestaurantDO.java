@@ -55,8 +55,8 @@ public class RestaurantDO {
     /**
      * 门面图地址。
      */
-    @TableField("image_url")
-    private String imageUrl;
+    @TableField("image_file_key")
+    private String imageFileKey;
 
     /**
      * 公告/简介。

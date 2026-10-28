@@ -230,7 +230,8 @@ class RestaurantAdministrationServiceImplTest {
         return new RestaurantAdministrationServiceImpl(
                 restaurantMapper,
                 diningWindowMapper,
-                dataScopeService
+                dataScopeService,
+                org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class)
         );
     }
 

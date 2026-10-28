@@ -1,5 +1,7 @@
 package com.hbue.ordering.product.service.impl;
 
+import com.hbue.ordering.common.web.media.FileReferences;
+import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -48,6 +50,7 @@ public class RestaurantAdministrationServiceImpl
 
     /** 数据范围判定服务。 */
     private final DataScopeService dataScopeService;
+    private final ManagedImageClient images;
 
     /**
      * 创建餐厅管理服务。
@@ -59,11 +62,13 @@ public class RestaurantAdministrationServiceImpl
     public RestaurantAdministrationServiceImpl(
             RestaurantMapper restaurantMapper,
             DiningWindowMapper diningWindowMapper,
-            DataScopeService dataScopeService
+            DataScopeService dataScopeService,
+            ManagedImageClient images
     ) {
         this.restaurantMapper = restaurantMapper;
         this.diningWindowMapper = diningWindowMapper;
         this.dataScopeService = dataScopeService;
+        this.images = images;
     }
 
     /** {@inheritDoc} */
@@ -101,7 +106,7 @@ public class RestaurantAdministrationServiceImpl
         restaurant.setRestaurantName(request.getRestaurantName());
         restaurant.setLocation(request.getLocation());
         restaurant.setPhone(request.getPhone());
-        restaurant.setImageUrl(request.getImageUrl());
+        restaurant.setImageFileKey(images.resolveUpdateKey(request.getImageFileKey(), null, operatorId, "RESTAURANT_IMAGE", null));
         restaurant.setNotice(request.getNotice());
         restaurant.setSortOrder(resolveSortOrder(request.getSortOrder(), 0));
         restaurant.setStatus(ACTIVE_STATUS);
@@ -146,7 +151,8 @@ public class RestaurantAdministrationServiceImpl
                 .set("restaurant_name", request.getRestaurantName())
                 .set("location", request.getLocation())
                 .set("phone", request.getPhone())
-                .set("image_url", request.getImageUrl())
+                .set(request.getImageFileKey() != null, "image_file_key", images.resolveUpdateKey(
+                        request.getImageFileKey(), existing.getImageFileKey(), operatorId, "RESTAURANT_IMAGE", restaurantId))
                 .set("notice", request.getNotice())
                 .set(
                         "sort_order",
@@ -320,7 +326,7 @@ public class RestaurantAdministrationServiceImpl
                 restaurant.getRestaurantName(),
                 restaurant.getLocation(),
                 restaurant.getPhone(),
-                restaurant.getImageUrl(),
+                FileReferences.url(restaurant.getImageFileKey()),
                 restaurant.getNotice(),
                 restaurant.getSortOrder(),
                 restaurant.getStatus(),

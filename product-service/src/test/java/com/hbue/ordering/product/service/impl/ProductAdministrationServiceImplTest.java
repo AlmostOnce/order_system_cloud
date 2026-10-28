@@ -295,10 +295,10 @@ class ProductAdministrationServiceImplTest {
     void shouldUpdateOnlyWindowImageAndEvictBothCaches() {
         when(diningWindowMapper.selectById(7L)).thenReturn(window(7L, 1));
         when(diningWindowMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
-        service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content");
+        service().updateWindowImage(OPERATOR_ID, 7L, "0123456789abcdef0123456789abcdef");
         ArgumentCaptor<UpdateWrapper<DiningWindowDO>> update = ArgumentCaptor.forClass(UpdateWrapper.class);
         verify(diningWindowMapper).update(isNull(), update.capture());
-        assertTrue(update.getValue().getSqlSet().contains("image_url="));
+        assertTrue(update.getValue().getSqlSet().contains("image_file_key="));
         assertTrue(!update.getValue().getSqlSet().contains("window_name="));
         verify(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
         verify(menuCacheService).evictActiveWindows();
@@ -310,19 +310,22 @@ class ProductAdministrationServiceImplTest {
     void shouldRejectImageChangeOutsideManagedWindow() {
         doThrow(new BusinessException(CommonErrorCode.FORBIDDEN, "无管理权限"))
                 .when(dataScopeService).checkWindowAccess(OPERATOR_ID, 7L);
-        assertThrows(BusinessException.class, () -> service().updateWindowImage(OPERATOR_ID, 7L, "/api/files/test/content"));
+        assertThrows(BusinessException.class, () -> service().updateWindowImage(OPERATOR_ID, 7L, "0123456789abcdef0123456789abcdef"));
         verify(diningWindowMapper, never()).update(isNull(), any(UpdateWrapper.class));
         verify(menuCacheService, never()).evictWindowMenu(7L);
     }
 
     private ProductAdministrationService service() {
+        var images = org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class);
+        org.mockito.Mockito.lenient().when(images.requireImageKey(anyString(), anyLong(), anyString(), anyLong())).thenAnswer(a -> a.getArgument(0));
         return new ProductAdministrationServiceImpl(
                 diningWindowMapper,
                 productCategoryMapper,
                 productMapper,
                 dataScopeService,
                 menuCacheService,
-                bloomFilterManager
+                bloomFilterManager,
+                images
         );
     }
 
@@ -360,7 +363,7 @@ class ProductAdministrationServiceImplTest {
         request.setProductCode("DEMO-31");
         request.setProductName("测试商品");
         request.setDescription("开发测试商品");
-        request.setImageUrl("");
+        request.setImageFileKey("");
         request.setPrice(new BigDecimal("8.50"));
         request.setSaleStatus(1);
         request.setSortOrder(10);

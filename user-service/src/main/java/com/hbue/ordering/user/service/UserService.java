@@ -25,7 +25,7 @@ public interface UserService extends IService<UserDO> {
     /** 更新当前用户头像，不接收调用方指定的其他账号。 */
     Long resolvePublicUserId(String userUuid);
 
-    void updateOwnAvatar(Long userId, String url);
+    void updateOwnAvatar(Long userId, String fileKey);
 
     /**
      * 根据用户 ID 查询用户基础信息。

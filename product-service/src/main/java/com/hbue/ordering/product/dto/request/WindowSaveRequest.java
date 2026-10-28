@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -47,9 +48,9 @@ public class WindowSaveRequest {
     @Size(max = 255)
     private String location;
 
-    /** 窗口图片地址；允许为空。 */
-    @Size(max = 255)
-    private String imageUrl;
+    /** 窗口图片文件键；省略保留，空串清除。 */
+    @Pattern(regexp = "(?:[a-fA-F0-9]{32})?")
+    private String imageFileKey;
 
     /** 窗口状态：1 启用，0 停用。 */
     @NotNull

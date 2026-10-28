@@ -1,5 +1,6 @@
 package com.hbue.ordering.product.service.impl;
 
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -194,7 +195,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getDescription(),
                     window.getSortOrder(),
                     window.getLocation(),
-                    window.getImageUrl()
+                    FileReferences.url(window.getImageFileKey())
             ));
         }
         menuCacheService.saveActiveWindows(summaries);
@@ -359,7 +360,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 window.getLocation(),
                 categoryMenus,
                 uncategorizedProducts,
-                window.getImageUrl()
+                FileReferences.url(window.getImageFileKey())
         );
     }
 
@@ -375,7 +376,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 product.getProductCode(),
                 product.getProductName(),
                 product.getDescription(),
-                product.getImageUrl(),
+                FileReferences.url(product.getImageFileKey()),
                 product.getPrice(),
                 product.getSortOrder()
         );

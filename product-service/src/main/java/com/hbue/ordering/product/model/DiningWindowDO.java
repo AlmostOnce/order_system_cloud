@@ -60,10 +60,10 @@ public class DiningWindowDO {
     private String location;
 
     /**
-     * 窗口图片地址。
+     * 窗口图片文件键。
      */
-    @TableField("image_url")
-    private String imageUrl;
+    @TableField("image_file_key")
+    private String imageFileKey;
 
     /**
      * 窗口状态：1 启用，0 停用。

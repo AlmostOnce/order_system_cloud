@@ -43,40 +43,64 @@ class ManagedImageClientTest {
     }
 
     @Test
-    void shouldAcceptOwnedImageForExactBusinessAndUseRelativeGatewayUrl() throws Exception {
+    void shouldReturnOwnedImageKeyForExactBusiness() throws Exception {
         var client = client(meta(7, "USER_AVATAR", null, "image/png"), 200);
-        assertEquals("/api/files/" + KEY + "/content", client.requireImage(KEY, 7L, "USER_AVATAR", null));
+        assertEquals(KEY, client.requireImageKey(KEY, 7L, "USER_AVATAR", null));
         assertEquals(1, requests.get());
+    }
+
+    @Test
+    void shouldPreserveOrClearExistingImageWithoutRequiringOriginalUploader() throws Exception {
+        var client = client("null", 200);
+        assertEquals(KEY, client.resolveUpdateKey(null, KEY, 99L, "PRODUCT_IMAGE", 12L));
+        assertEquals(KEY, client.resolveUpdateKey(KEY.toUpperCase(), KEY, 99L, "PRODUCT_IMAGE", 12L));
+        assertNull(client.resolveUpdateKey("", KEY, 99L, "PRODUCT_IMAGE", 12L));
+        assertEquals(0, requests.get());
+    }
+
+    @Test
+    void shouldVerifyChangedImageRatherThanTrustCaller() throws Exception {
+        var client = client(meta(8, "PRODUCT_IMAGE", 12, "image/png"), 200);
+        assertThrows(BusinessException.class, () -> client.resolveUpdateKey(KEY, null, 7L, "PRODUCT_IMAGE", 12L));
+        assertEquals(1, requests.get());
+    }
+
+    @Test
+    void shouldDeriveUrlAndRejectUrlAsAStoredKey() {
+        assertEquals("/api/files/" + KEY + "/content",
+                com.hbue.ordering.common.web.media.FileReferences.url(KEY.toUpperCase()));
+        assertNull(com.hbue.ordering.common.web.media.FileReferences.url(null));
+        assertThrows(BusinessException.class, () -> com.hbue.ordering.common.web.media.FileReferences.normalize("https://example.test/image"));
     }
 
     @Test
     void shouldRejectAnotherUploadersImage() throws Exception {
         var client = client(meta(8, "USER_AVATAR", null, "image/png"), 200);
-        assertThrows(BusinessException.class, () -> client.requireImage(KEY, 7L, "USER_AVATAR", null));
+        assertThrows(BusinessException.class, () -> client.requireImageKey(KEY, 7L, "USER_AVATAR", null));
     }
 
     @Test
     void shouldRejectWrongTargetEvenWhenUploaderMatches() throws Exception {
         var client = client(meta(7, "PRODUCT_IMAGE", 11, "image/png"), 200);
-        assertThrows(BusinessException.class, () -> client.requireImage(KEY, 7L, "PRODUCT_IMAGE", 12L));
+        assertThrows(BusinessException.class, () -> client.requireImageKey(KEY, 7L, "PRODUCT_IMAGE", 12L));
     }
 
     @Test
     void shouldRejectNonImageOrMissingFile() throws Exception {
         var client = client(meta(7, "USER_AVATAR", null, "application/pdf"), 200);
-        assertThrows(BusinessException.class, () -> client.requireImage(KEY, 7L, "USER_AVATAR", null));
+        assertThrows(BusinessException.class, () -> client.requireImageKey(KEY, 7L, "USER_AVATAR", null));
     }
 
     @Test
     void shouldRejectDeletedFiles() throws Exception {
         var client = client("null", 404);
-        assertThrows(BusinessException.class, () -> client.requireImage(KEY, 7L, "USER_AVATAR", null));
+        assertThrows(BusinessException.class, () -> client.requireImageKey(KEY, 7L, "USER_AVATAR", null));
     }
 
     @Test
     void shouldRejectPathInjectionBeforeMakingRequest() throws Exception {
         var client = client("null", 200);
-        assertThrows(BusinessException.class, () -> client.requireImage("../../users", 7L, "USER_AVATAR", null));
+        assertThrows(BusinessException.class, () -> client.requireImageKey("../../users", 7L, "USER_AVATAR", null));
         assertEquals(0, requests.get());
     }
 }

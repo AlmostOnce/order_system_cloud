@@ -1,5 +1,6 @@
 package com.hbue.ordering.user.service.impl;
 
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -106,7 +107,7 @@ public class UserWalletServiceImpl implements UserWalletService {
         UserDO user = userMapper.selectOwnProfile(userId);
         requireAvailable(user);
         return new UserProfileVO(user.getUserUuid(), user.getUserNo(), user.getUsername(), user.getRoleCode(), user.getEmail(),
-                user.getAvatarUrl(), user.getCreatedAt());
+                FileReferences.url(user.getAvatarFileKey()), user.getCreatedAt());
     }
 
     private void requireAvailable(UserDO user) {

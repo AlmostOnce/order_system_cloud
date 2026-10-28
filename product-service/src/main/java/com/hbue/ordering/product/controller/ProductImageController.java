@@ -2,7 +2,6 @@ package com.hbue.ordering.product.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.media.ImageFileRequest;
-import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.vo.ProductAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;
@@ -19,11 +18,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/products/admin")
 @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')")
 public class ProductImageController {
-    private final ManagedImageClient images;
     private final ProductAdministrationService catalog;
 
-    public ProductImageController(ManagedImageClient images, ProductAdministrationService catalog) {
-        this.images = images;
+    public ProductImageController(ProductAdministrationService catalog) {
         this.catalog = catalog;
     }
 
@@ -31,15 +28,13 @@ public class ProductImageController {
     public ApiResponse<WindowAdminVO> window(@AuthenticationPrincipal Jwt jwt,
             @PathVariable("windowId") @Positive Long windowId, @Valid @RequestBody ImageFileRequest request) {
         Long operator = Long.valueOf(jwt.getSubject());
-        String url = images.requireImage(request.fileKey(), operator, "WINDOW_IMAGE", windowId);
-        return ApiResponse.success(catalog.updateWindowImage(operator, windowId, url));
+        return ApiResponse.success(catalog.updateWindowImage(operator, windowId, request.fileKey()));
     }
 
     @PutMapping("/products/{productId}/image")
     public ApiResponse<ProductAdminVO> product(@AuthenticationPrincipal Jwt jwt,
             @PathVariable("productId") @Positive Long productId, @Valid @RequestBody ImageFileRequest request) {
         Long operator = Long.valueOf(jwt.getSubject());
-        String url = images.requireImage(request.fileKey(), operator, "PRODUCT_IMAGE", productId);
-        return ApiResponse.success(catalog.updateProductImage(operator, productId, url));
+        return ApiResponse.success(catalog.updateProductImage(operator, productId, request.fileKey()));
     }
 }

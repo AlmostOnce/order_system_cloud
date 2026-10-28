@@ -58,7 +58,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /** 本人资料的字段白名单，不查询密码和支付凭据。 */
     @Select("""
-        SELECT user_id, user_uuid, user_no, username, role_code, email, avatar_url, created_at, status
+        SELECT user_id, user_uuid, user_no, username, role_code, email, avatar_file_key, created_at, status
         FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
         """)
     UserDO selectOwnProfile(@Param("userId") Long userId);
@@ -79,7 +79,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
             email,
             balance,
             password_hash,
-            avatar_url,
+            avatar_file_key,
             status,
             version,
             created_at,

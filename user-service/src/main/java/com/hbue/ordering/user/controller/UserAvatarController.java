@@ -1,5 +1,6 @@
 package com.hbue.ordering.user.controller;
 
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.media.ImageFileRequest;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
@@ -25,8 +26,8 @@ public class UserAvatarController {
     @PutMapping
     public ApiResponse<String> update(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ImageFileRequest request) {
         Long userId = Long.valueOf(jwt.getSubject());
-        String url = images.requireImage(request.fileKey(), userId, "USER_AVATAR", null);
-        users.updateOwnAvatar(userId, url);
-        return ApiResponse.success(url);
+        String fileKey = images.requireImageKey(request.fileKey(), userId, "USER_AVATAR", null);
+        users.updateOwnAvatar(userId, fileKey);
+        return ApiResponse.success(FileReferences.url(fileKey));
     }
 }

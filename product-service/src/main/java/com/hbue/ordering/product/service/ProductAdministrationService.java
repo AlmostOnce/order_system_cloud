@@ -22,8 +22,8 @@ import java.util.List;
  */
 public interface ProductAdministrationService {
     /** 仅更新图片，不覆盖其他目录字段；沿用当前管理范围与缓存规则。 */
-    WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String url);
-    ProductAdminVO updateProductImage(Long operatorId, Long productId, String url);
+    WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String fileKey);
+    ProductAdminVO updateProductImage(Long operatorId, Long productId, String fileKey);
 
 
     /**

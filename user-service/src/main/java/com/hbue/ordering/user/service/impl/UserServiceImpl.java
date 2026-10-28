@@ -1,5 +1,6 @@
 package com.hbue.ordering.user.service.impl;
 
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -129,10 +130,10 @@ public class UserServiceImpl
 
     @Override
     @Transactional
-    public void updateOwnAvatar(Long userId, String url) {
+    public void updateOwnAvatar(Long userId, String fileKey) {
         int updated = baseMapper.update(null, new UpdateWrapper<UserDO>()
                 .eq("user_id", userId).eq("status", USER_STATUS_ENABLED).isNull("deleted_at")
-                .set("avatar_url", url).set("updated_at", LocalDateTime.now()));
+                .set("avatar_file_key", FileReferences.normalize(fileKey)).set("updated_at", LocalDateTime.now()));
         if (updated != 1) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
     }
 
@@ -173,7 +174,7 @@ public class UserServiceImpl
         }
         UserDO saved = baseMapper.selectOwnProfile(userId);
         return new UserProfileVO(saved.getUserUuid(), saved.getUserNo(),
-                saved.getUsername(), saved.getRoleCode(), saved.getEmail(), saved.getAvatarUrl(), saved.getCreatedAt());
+                saved.getUsername(), saved.getRoleCode(), saved.getEmail(), FileReferences.url(saved.getAvatarFileKey()), saved.getCreatedAt());
     }
 
     /**

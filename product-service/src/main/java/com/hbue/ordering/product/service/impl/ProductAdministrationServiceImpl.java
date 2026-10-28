@@ -1,5 +1,7 @@
 package com.hbue.ordering.product.service.impl;
 
+import com.hbue.ordering.common.web.media.FileReferences;
+import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -66,6 +68,7 @@ public class ProductAdministrationServiceImpl
 
     /** 商品布隆过滤器管理器。 */
     private final ProductBloomFilterManager bloomFilterManager;
+    private final ManagedImageClient images;
 
     /**
      * 创建目录管理服务。
@@ -83,7 +86,8 @@ public class ProductAdministrationServiceImpl
             ProductMapper productMapper,
             DataScopeService dataScopeService,
             ProductMenuCacheService menuCacheService,
-            ProductBloomFilterManager bloomFilterManager
+            ProductBloomFilterManager bloomFilterManager,
+            ManagedImageClient images
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.productCategoryMapper = productCategoryMapper;
@@ -91,16 +95,17 @@ public class ProductAdministrationServiceImpl
         this.dataScopeService = dataScopeService;
         this.menuCacheService = menuCacheService;
         this.bloomFilterManager = bloomFilterManager;
+        this.images = images;
     }
 
     @Override
     @Transactional
-    public WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String url) {
+    public WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String fileKey) {
         validateId(windowId, "窗口");
         dataScopeService.checkWindowAccess(operatorId, windowId);
         requireWindow(windowId);
         int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
-                .eq("window_id", windowId).set("image_url", url));
+                .eq("window_id", windowId).set("image_file_key", images.requireImageKey(fileKey, operatorId, "WINDOW_IMAGE", windowId)));
         if (updated != 1) throw notFound("窗口不存在");
         evictActiveWindowsAfterCommit();
         evictWindowMenuAfterCommit(windowId);
@@ -109,12 +114,12 @@ public class ProductAdministrationServiceImpl
 
     @Override
     @Transactional
-    public ProductAdminVO updateProductImage(Long operatorId, Long productId, String url) {
+    public ProductAdminVO updateProductImage(Long operatorId, Long productId, String fileKey) {
         validateId(productId, "菜品");
         ProductDO product = requireProduct(productId);
         dataScopeService.checkWindowAccess(operatorId, product.getWindowId());
         int updated = productMapper.update(null, new UpdateWrapper<ProductDO>()
-                .eq("product_id", productId).set("image_url", url));
+                .eq("product_id", productId).set("image_file_key", images.requireImageKey(fileKey, operatorId, "PRODUCT_IMAGE", productId)));
         if (updated != 1) throw notFound("菜品不存在");
         evictWindowMenuAfterCommit(product.getWindowId());
         return toProductVO(requireProduct(productId));
@@ -161,7 +166,7 @@ public class ProductAdministrationServiceImpl
         window.setDescription(request.getDescription());
         window.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         window.setLocation(request.getLocation());
-        window.setImageUrl(request.getImageUrl());
+        window.setImageFileKey(images.resolveUpdateKey(request.getImageFileKey(), null, operatorId, "WINDOW_IMAGE", null));
         window.setStatus(request.getStatus());
         window.setIsOpen(request.getIsOpen());
         try {
@@ -195,7 +200,7 @@ public class ProductAdministrationServiceImpl
                 operatorId,
                 request.getRestaurantId()
         );
-        requireWindow(windowId);
+        DiningWindowDO existingWindow = requireWindow(windowId);
 
         UpdateWrapper<DiningWindowDO> update = new UpdateWrapper<>();
         update.eq("window_id", windowId)
@@ -205,7 +210,8 @@ public class ProductAdministrationServiceImpl
                 .set(request.getDescription() != null, "description", request.getDescription())
                 .set(request.getSortOrder() != null, "sort_order", request.getSortOrder())
                 .set("location", request.getLocation())
-                .set("image_url", request.getImageUrl())
+                .set(request.getImageFileKey() != null, "image_file_key", images.resolveUpdateKey(
+                        request.getImageFileKey(), existingWindow.getImageFileKey(), operatorId, "WINDOW_IMAGE", windowId))
                 .set("status", request.getStatus())
                 .set("is_open", request.getIsOpen());
         try {
@@ -388,7 +394,7 @@ public class ProductAdministrationServiceImpl
 
         ProductDO product = new ProductDO();
         product.setWindowId(windowId);
-        copyProductFields(request, product);
+        copyProductFields(operatorId, request, product);
         try {
             productMapper.insert(product);
         } catch (DuplicateKeyException exception) {
@@ -430,7 +436,8 @@ public class ProductAdministrationServiceImpl
                 .set("product_code", request.getProductCode())
                 .set("product_name", request.getProductName())
                 .set("description", request.getDescription())
-                .set("image_url", request.getImageUrl())
+                .set(request.getImageFileKey() != null, "image_file_key", images.resolveUpdateKey(
+                        request.getImageFileKey(), existingProduct.getImageFileKey(), operatorId, "PRODUCT_IMAGE", productId))
                 .set("price", request.getPrice())
                 .set("sale_status", request.getSaleStatus())
                 .set("sort_order", request.getSortOrder());
@@ -516,6 +523,7 @@ public class ProductAdministrationServiceImpl
      * @param product 菜品持久化对象
      */
     private void copyProductFields(
+            Long operatorId,
             ProductSaveRequest request,
             ProductDO product
     ) {
@@ -523,7 +531,7 @@ public class ProductAdministrationServiceImpl
         product.setProductCode(request.getProductCode());
         product.setProductName(request.getProductName());
         product.setDescription(request.getDescription());
-        product.setImageUrl(request.getImageUrl());
+        product.setImageFileKey(images.resolveUpdateKey(request.getImageFileKey(), null, operatorId, "PRODUCT_IMAGE", null));
         product.setPrice(request.getPrice());
         product.setSaleStatus(request.getSaleStatus());
         product.setSortOrder(request.getSortOrder());
@@ -715,7 +723,7 @@ public class ProductAdministrationServiceImpl
                 window.getDescription(),
                 window.getSortOrder(),
                 window.getLocation(),
-                window.getImageUrl(),
+                FileReferences.url(window.getImageFileKey()),
                 window.getStatus(),
                 window.getIsOpen(),
                 window.getCreatedAt(),
@@ -755,7 +763,7 @@ public class ProductAdministrationServiceImpl
                 product.getProductCode(),
                 product.getProductName(),
                 product.getDescription(),
-                product.getImageUrl(),
+                FileReferences.url(product.getImageFileKey()),
                 product.getPrice(),
                 product.getSaleStatus(),
                 product.getSortOrder(),
