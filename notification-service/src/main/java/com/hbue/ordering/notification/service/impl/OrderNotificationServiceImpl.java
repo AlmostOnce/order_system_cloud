@@ -1,7 +1,7 @@
 package com.hbue.ordering.notification.service.impl;
 
 import com.hbue.ordering.notification.messaging.OrderNotificationEvent;
-import com.hbue.ordering.notification.repository.NotificationRepository;
+import com.hbue.ordering.notification.mapper.NotificationMapper;
 import com.hbue.ordering.notification.service.OrderNotificationService;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -15,10 +15,10 @@ import org.slf4j.LoggerFactory;
 
 @Service
 public class OrderNotificationServiceImpl implements OrderNotificationService {
-    private final NotificationRepository repository;
+    private final NotificationMapper repository;
     private final NotificationSocketBus socketBus;
     private static final Logger log = LoggerFactory.getLogger(OrderNotificationServiceImpl.class);
-    public OrderNotificationServiceImpl(NotificationRepository repository, NotificationSocketBus socketBus) { this.repository = repository; this.socketBus = socketBus; }
+    public OrderNotificationServiceImpl(NotificationMapper repository, NotificationSocketBus socketBus) { this.repository = repository; this.socketBus = socketBus; }
     @Transactional
     public void accept(OrderNotificationEvent event) {
         if (event == null || !event.valid()) throw new IllegalArgumentException("订单通知事件不正确");
