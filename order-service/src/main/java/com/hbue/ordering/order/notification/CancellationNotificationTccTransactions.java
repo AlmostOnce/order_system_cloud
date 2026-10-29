@@ -3,13 +3,14 @@ package com.hbue.ordering.order.notification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.hbue.ordering.order.mapper.CancellationNotificationTccMapper;
 
 /** TCC 二阶段通过独立 Spring 事务代理执行，保证状态与 outbox 原子提交。 */
 @Service
 public class CancellationNotificationTccTransactions {
-    private final CancellationNotificationTccStore store;
+    private final CancellationNotificationTccMapper store;
     private final OrderNotificationOutboxWriter outbox;
-    public CancellationNotificationTccTransactions(CancellationNotificationTccStore store, OrderNotificationOutboxWriter outbox) {
+    public CancellationNotificationTccTransactions(CancellationNotificationTccMapper store, OrderNotificationOutboxWriter outbox) {
         this.store = store; this.outbox = outbox;
     }
     @Transactional(propagation = Propagation.REQUIRES_NEW)

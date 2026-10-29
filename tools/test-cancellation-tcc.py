@@ -13,14 +13,14 @@ jars += [Path.home() / '.m2/repository/org/apache/seata/seata-all/2.5.0/seata-al
 if not all(p.exists() for p in jars):
     raise SystemExit('需要本机已有的 Spring 6.2.11 依赖才能运行此检查')
 
-store = '''package com.hbue.ordering.order.notification;
+store = '''package com.hbue.ordering.order.mapper;
 import java.util.*;
-public class CancellationNotificationTccStore {
+public class CancellationNotificationTccMapper {
  public record Row(long orderId,int orderVersion,long recipientId,String status) {}
  public final Map<String,Row> rows=new HashMap<>();
- public void insertIfMissing(String x,long o,int v,long u,String s){rows.putIfAbsent(x,new Row(o,v,u,s));}
+ public int insertIfMissing(String x,long o,int v,long u,String s){rows.putIfAbsent(x,new Row(o,v,u,s));return 1;}
  public Row lock(String x){return rows.get(x);}
- public void setStatus(String x,String s){Row r=rows.get(x);rows.put(x,new Row(r.orderId(),r.orderVersion(),r.recipientId(),s));}
+ public int setStatus(String x,String s){Row r=rows.get(x);rows.put(x,new Row(r.orderId(),r.orderVersion(),r.recipientId(),s));return 1;}
 }'''
 outbox = '''package com.hbue.ordering.order.notification;
 import java.util.*;
@@ -29,11 +29,12 @@ public class OrderNotificationOutboxWriter {
  public void record(OrderNotificationEvent e){events.add(e);}
 }'''
 test = '''package com.hbue.ordering.order.notification;
+import com.hbue.ordering.order.mapper.CancellationNotificationTccMapper;
 public class TestCancellationTcc {
  static void check(boolean b){if(!b)throw new AssertionError();}
  static void rejected(Runnable f){try{f.run();throw new AssertionError("expected failure");}catch(IllegalStateException expected){}}
  public static void main(String[] args){
-  var s=new CancellationNotificationTccStore();var o=new OrderNotificationOutboxWriter();var t=new CancellationNotificationTccTransactions(s,o);
+  var s=new CancellationNotificationTccMapper();var o=new OrderNotificationOutboxWriter();var t=new CancellationNotificationTccTransactions(s,o);
   check(t.prepare("one",7,2,9));check(o.events.isEmpty());check(t.confirm("one"));check(t.confirm("one"));check(o.events.size()==1);check(o.events.get(0).status().equals("已取消"));
   check(t.cancel("two",8,2,10));check(t.cancel("two",8,2,10));rejected(()->t.prepare("two",8,2,10));check(o.events.size()==1);
   check(t.prepare("three",8,2,10));check(t.cancel("three",8,2,10));rejected(()->t.confirm("three"));check(o.events.size()==1);
@@ -44,7 +45,7 @@ public class TestCancellationTcc {
 with tempfile.TemporaryDirectory(prefix='notification-tcc-') as directory:
     base = Path(directory)
     files = []
-    for name, text in [('CancellationNotificationTccStore.java', store), ('OrderNotificationOutboxWriter.java', outbox), ('TestCancellationTcc.java', test)]:
+    for name, text in [('CancellationNotificationTccMapper.java', store), ('OrderNotificationOutboxWriter.java', outbox), ('TestCancellationTcc.java', test)]:
         path = base / name
         path.write_text(text, encoding='utf-8')
         files.append(str(path))
