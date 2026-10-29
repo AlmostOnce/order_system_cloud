@@ -3,7 +3,7 @@ package com.hbue.ordering.comment.service.impl;
 import com.hbue.ordering.comment.service.RatingSummaryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.api.ProductRatingVO;
-import com.hbue.ordering.comment.repository.CommentRepository;
+import com.hbue.ordering.comment.mapper.CommentMapper;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -12,10 +12,10 @@ import org.springframework.stereotype.Service;
 /** 评分读模型短缓存，包含零评论结果；Redis故障回源，不返回伪造的零评分。 */
 @Service
 public class RatingSummaryServiceImpl implements RatingSummaryService {
-    private final CommentRepository rows;
+    private final CommentMapper rows;
     private final StringRedisTemplate redis;
     private final ObjectMapper json;
-    public RatingSummaryServiceImpl(CommentRepository rows,StringRedisTemplate redis,ObjectMapper json) {
+    public RatingSummaryServiceImpl(CommentMapper rows,StringRedisTemplate redis,ObjectMapper json) {
         this.rows=rows;this.redis=redis;this.json=json;
     }
     public ProductRatingVO get(Long productId) {

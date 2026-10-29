@@ -4,8 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.client.CommentOrderClient;
 import com.hbue.ordering.comment.dto.CreateWindowReviewRequest;
-import com.hbue.ordering.comment.repository.WindowReviewRepository;
-import com.hbue.ordering.comment.repository.WindowReviewRepository.Row;
+import com.hbue.ordering.comment.mapper.WindowReviewMapper;
+import com.hbue.ordering.comment.mapper.WindowReviewMapper.Row;
 import com.hbue.ordering.comment.service.WindowReviewService;
 import com.hbue.ordering.comment.vo.WindowReviewPageVO;
 import com.hbue.ordering.comment.vo.WindowReviewVO;
@@ -25,11 +25,11 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class WindowReviewServiceImpl implements WindowReviewService {
-    private final WindowReviewRepository reviews;
+    private final WindowReviewMapper reviews;
     private final CommentOrderClient orders;
     private final ManagedImageClient images;
     private final ObjectMapper json;
-    public WindowReviewServiceImpl(WindowReviewRepository reviews, CommentOrderClient orders, ManagedImageClient images, ObjectMapper json) {
+    public WindowReviewServiceImpl(WindowReviewMapper reviews, CommentOrderClient orders, ManagedImageClient images, ObjectMapper json) {
         this.reviews = reviews; this.orders = orders; this.images = images; this.json = json;
     }
     public WindowReviewVO create(Long userId, String author, String bearer, String key, CreateWindowReviewRequest input) {

@@ -2,7 +2,7 @@ package com.hbue.ordering.comment.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.dto.CreateCommentRequest;
 import com.hbue.ordering.comment.model.*;
-import com.hbue.ordering.comment.repository.CommentRepository;
+import com.hbue.ordering.comment.mapper.CommentMapper;
 import com.hbue.ordering.comment.repository.CommentContentRepository;
 import com.hbue.ordering.comment.service.impl.CommentServiceImpl;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -16,7 +16,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 class CommentServiceTest {
-    private final CommentRepository rows=mock(CommentRepository.class);
+    private final CommentMapper rows=mock(CommentMapper.class);
     private final CommentMetadataWriter writer=mock(CommentMetadataWriter.class);
     private final PurchaseVerifier purchases=mock(PurchaseVerifier.class);
     private final CommentContentRepository mongo=mock(CommentContentRepository.class);

@@ -10,7 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.dto.CreateCommentRequest;
 import com.hbue.ordering.comment.model.*;
-import com.hbue.ordering.comment.repository.CommentRepository;
+import com.hbue.ordering.comment.mapper.CommentMapper;
 import com.hbue.ordering.comment.vo.*;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -26,13 +26,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class CommentServiceImpl implements CommentService {
     private static final Logger log = LoggerFactory.getLogger(CommentService.class);
-    private final CommentRepository rows;
+    private final CommentMapper rows;
     private final CommentMetadataWriter writer;
     private final PurchaseVerifier purchases;
     private final ManagedImageClient images;
     private final CommentContentRepository contents;
     private final ObjectMapper json;
-    public CommentServiceImpl(CommentRepository rows, CommentMetadataWriter writer, PurchaseVerifier purchases,
+    public CommentServiceImpl(CommentMapper rows, CommentMetadataWriter writer, PurchaseVerifier purchases,
             ManagedImageClient images, CommentContentRepository contents, ObjectMapper json) {
         this.rows=rows; this.writer=writer; this.purchases=purchases; this.images=images; this.contents=contents; this.json=json;
     }

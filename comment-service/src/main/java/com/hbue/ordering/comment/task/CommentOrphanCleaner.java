@@ -1,6 +1,6 @@
 package com.hbue.ordering.comment.task;
 import com.hbue.ordering.comment.model.CommentContentDO;
-import com.hbue.ordering.comment.repository.CommentRepository;
+import com.hbue.ordering.comment.mapper.CommentMapper;
 import com.hbue.ordering.comment.repository.CommentContentRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
 public class CommentOrphanCleaner {
     private static final Logger log=LoggerFactory.getLogger(CommentOrphanCleaner.class);
     private final CommentContentRepository contents;
-    private final CommentRepository rows;
-    public CommentOrphanCleaner(CommentContentRepository contents,CommentRepository rows) {this.contents=contents;this.rows=rows;}
+    private final CommentMapper rows;
+    public CommentOrphanCleaner(CommentContentRepository contents,CommentMapper rows) {this.contents=contents;this.rows=rows;}
     @Scheduled(fixedDelayString="${comment.orphan-scan-ms:3600000}")
     public void reconcile() {
         try {
