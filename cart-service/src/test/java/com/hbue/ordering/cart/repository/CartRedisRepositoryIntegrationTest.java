@@ -5,6 +5,7 @@ import com.hbue.ordering.cart.config.CartProperties;
 import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -333,7 +334,7 @@ class CartRedisRepositoryIntegrationTest {
      * @return 真实 Redis 持久化组件
      */
     private CartRedisRepository repositoryWithLimit(int maxItems) {
-        return new CartRedisRepository(redis, new ObjectMapper(),
+        return new CartRedisRepository(new RedisOperationsService(redis), new ObjectMapper(),
                 new CartProperties(maxItems, 99, Duration.ofDays(30), PREFIX));
     }
 

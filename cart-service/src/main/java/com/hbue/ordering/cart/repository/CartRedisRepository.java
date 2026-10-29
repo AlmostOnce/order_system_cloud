@@ -7,11 +7,11 @@ import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
 import com.hbue.ordering.cart.model.CartItemDO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
@@ -47,7 +47,7 @@ public class CartRedisRepository {
     /** 提交快照清理脚本，版本比较与删除位于同一 Redis 原子操作。 */
     private static final DefaultRedisScript<Long> CLEANUP_SCRIPT = cleanupScript();
     /** 同步 Redis 模板，只在 Servlet 请求线程执行。 */
-    private final StringRedisTemplate redis;
+    private final RedisOperationsService redis;
     /** JSON 反序列化组件，与 HTTP 响应使用相同的数字类型约定。 */
     private final ObjectMapper objectMapper;
     /** 购物车命名空间、容量与过期配置。 */
@@ -56,11 +56,11 @@ public class CartRedisRepository {
     /**
      * 创建购物车存储访问组件。
      *
-     * @param redis Redis 字符串模板
+     * @param redis 公共 Redis 操作组件
      * @param objectMapper JSON 反序列化组件
      * @param properties 购物车存储约束
      */
-    public CartRedisRepository(StringRedisTemplate redis, ObjectMapper objectMapper, CartProperties properties) {
+    public CartRedisRepository(RedisOperationsService redis, ObjectMapper objectMapper, CartProperties properties) {
         this.redis = redis;
         this.objectMapper = objectMapper;
         this.properties = properties;
@@ -75,7 +75,7 @@ public class CartRedisRepository {
      */
     public List<CartItemDO> findAll(Long userId) {
         try {
-            Map<Object, Object> values = redis.opsForHash().entries(key(userId));
+            Map<Object, Object> values = redis.getHashValues(key(userId));
             List<CartItemDO> items = new ArrayList<>();
             for (Map.Entry<Object, Object> entry : values.entrySet()) {
                 CartItemDO item = objectMapper.readValue(entry.getValue().toString(), CartItemDO.class);
@@ -173,7 +173,7 @@ public class CartRedisRepository {
                 snapshots.add(Map.of("productId", item.productId().toString(),
                         "quantity", item.quantity(), "revision", item.revision()));
             }
-            Long removed = redis.execute(CLEANUP_SCRIPT, List.of(key(userId)), windowId.toString(),
+            Long removed = redis.executeScript(CLEANUP_SCRIPT, List.of(key(userId)), windowId.toString(),
                     objectMapper.writeValueAsString(snapshots));
             if (removed == null || removed < 0 || removed > submitted.size()) {
                 throw unavailable("购物车清理状态无法确认，请保留原始快照重试");
@@ -212,7 +212,7 @@ public class CartRedisRepository {
                         String value, String name, String code) {
         try {
             // UUID 每次重新生成，后续删除重建也不会出现旧版本被误认为新版本的情况。
-            Long result = redis.execute(MUTATE_SCRIPT, List.of(key(userId)), action, field(windowId, productId),
+            Long result = redis.executeScript(MUTATE_SCRIPT, List.of(key(userId)), action, field(windowId, productId),
                     windowId.toString(), productId.toString(), value, UUID.randomUUID().toString(), name, code,
                     String.valueOf(properties.maxItems()), String.valueOf(properties.maxQuantity()),
                     String.valueOf(properties.timeToLive().toMillis()));

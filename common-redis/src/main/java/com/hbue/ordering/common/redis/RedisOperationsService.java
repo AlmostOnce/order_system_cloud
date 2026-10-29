@@ -2,6 +2,7 @@ package com.hbue.ordering.common.redis;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -136,6 +137,18 @@ public class RedisOperationsService {
     public Map<Object, Object> getHashValues(String key) {
         // 返回 Redis Hash 中保存的全部字段和值。
         return stringRedisTemplate.opsForHash().entries(key);
+    }
+
+    /**
+     * 执行调用方提供的 Redis 脚本，按原样传递 Key 和参数。
+     *
+     * @param script 已配置结果类型的脚本
+     * @param keys 脚本使用的 Redis Key
+     * @param args 脚本参数
+     * @return Redis 返回的脚本结果，可能为 null
+     */
+    public <T> T executeScript(RedisScript<T> script, List<String> keys, Object... args) {
+        return stringRedisTemplate.execute(script, keys, args);
     }
 
     /**
