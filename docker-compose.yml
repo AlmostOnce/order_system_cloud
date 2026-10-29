@@ -190,6 +190,21 @@ services:
           done
         done
 
+  nginx:
+    profiles: [edge]
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      NGINX_GATEWAY_HOST: ${NGINX_GATEWAY_HOST:-host.docker.internal}
+      NGINX_ENVSUBST_FILTER: ^NGINX_GATEWAY_HOST$
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./docker/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../order_system_cloud_user/unpackage/dist/build/nginx-web:/usr/share/nginx/html:ro
+
   gateway:
     profiles:
       - app

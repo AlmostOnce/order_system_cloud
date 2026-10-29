@@ -1,0 +1,39 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    client_max_body_size 6m;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Web 页面由用户端发布产物提供；实际资源缺失时返回 404。
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /assets/ {
+        try_files $uri =404;
+    }
+
+    location /static/ {
+        try_files $uri =404;
+    }
+
+    # 不改写 /api 路径；WebSocket 与普通 HTTP 使用同一网关入口。
+    location /api/ {
+        proxy_pass http://${NGINX_GATEWAY_HOST}:9090;
+        proxy_http_version 1.1;
+        # 保留浏览器访问的端口，确保网关正确识别同源请求。
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 75s;
+    }
+}
