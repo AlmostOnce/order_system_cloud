@@ -3,6 +3,21 @@ server:
   port: 9092
 
 spring:
+  config:
+    # IDEA 在项目根目录或 user-service 目录运行时读取本机配置；不会提交凭据。
+    import: optional:file:./user-service/email-local.properties,optional:file:./email-local.properties
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
@@ -52,6 +67,10 @@ spring:
 
         # Nacos 登录密码。
         password: root
+
+email:
+  verification:
+    secret: ${EMAIL_VERIFICATION_SECRET:}
 
 management:
   endpoints:

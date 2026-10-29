@@ -25,12 +25,16 @@ public interface UserMapper extends BaseMapper<UserDO> {
     UserDO selectProfileForUpdate(@Param("userId") Long userId);
 
     @Update("""
-        UPDATE users SET username = #{username}, email = #{email},
-            version = version + 1, updated_at = NOW()
+        UPDATE users SET username = #{username}, version = version + 1, updated_at = NOW()
         WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
         """)
-    int updateOwnProfile(@Param("userId") Long userId, @Param("username") String username,
-                         @Param("email") String email);
+    int updateOwnProfile(@Param("userId") Long userId, @Param("username") String username);
+
+    @Update("""
+        UPDATE users SET email = #{email}, version = version + 1, updated_at = NOW()
+        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+        """)
+    int updateOwnEmail(@Param("userId") Long userId, @Param("email") String email);
 
     @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND status = 1 AND deleted_at IS NULL")
     Long selectIdByUuid(@Param("userUuid") String userUuid);
@@ -199,6 +203,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /**
      * 按永久用户号或邮箱查询登录用户。
+     * 用户号使用 ASCII 二进制排序，参数按字节比较以兼容含非 ASCII 字符的邮箱输入。
      *
      * @param account 用户号或邮箱
      * @return 用户持久化对象
@@ -213,7 +218,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
         status,
         deleted_at
     FROM users
-    WHERE (user_no = #{account} OR email = #{account})
+    WHERE (user_no = CAST(#{account} AS BINARY) OR email = #{account})
     LIMIT 1
     """)
     UserDO selectByAccountForLogin(

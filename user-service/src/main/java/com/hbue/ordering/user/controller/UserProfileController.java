@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.*;
 public class UserProfileController {
     private final UserService users;
 
-    public UserProfileController(UserService users) { this.users = users; }
+    public UserProfileController(UserService users) {
+        this.users = users;
+    }
 
     @PutMapping
     public ApiResponse<UserProfileVO> update(@AuthenticationPrincipal Jwt jwt,

@@ -21,7 +21,8 @@ class UserAccountLoginTest {
     private final UserMapper mapper = mock(UserMapper.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
     private final UserServiceImpl service = new UserServiceImpl(passwords,
-            mock(UserDataScopeService.class), mock(ManagementAuditLogger.class));
+            mock(UserDataScopeService.class), mock(ManagementAuditLogger.class),
+            mock(com.hbue.ordering.user.service.EmailVerification.class));
 
     UserAccountLoginTest() {
         ReflectionTestUtils.setField(service, "baseMapper", mapper);

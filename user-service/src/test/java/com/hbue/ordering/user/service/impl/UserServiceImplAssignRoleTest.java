@@ -57,7 +57,8 @@ class UserServiceImplAssignRoleTest {
         userService = new UserServiceImpl(
                 passwordEncoder,
                 userDataScopeService,
-                auditLogger
+                auditLogger,
+                org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
         );
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }

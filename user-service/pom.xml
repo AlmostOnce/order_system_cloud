@@ -19,6 +19,11 @@
     <name>user-service</name>
 
     <dependencies>
+        <!-- QQ 邮箱 SMTP 发送验证码，版本由 Spring Boot BOM 管理。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <!-- JDBC 连接池实现，版本由根项目管理。 -->
         <dependency>
             <groupId>com.alibaba</groupId>

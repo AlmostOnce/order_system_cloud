@@ -14,9 +14,11 @@ import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
 import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
+import com.hbue.ordering.user.dto.request.ChangeOwnEmailRequest;
 import com.hbue.ordering.user.vo.UserProfileVO;
 import com.hbue.ordering.user.service.UserDataScopeService;
 import com.hbue.ordering.user.service.UserService;
+import com.hbue.ordering.user.service.EmailVerification;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -90,6 +92,7 @@ public class UserServiceImpl
     private static final String ACTION_STATUS_UPDATE = "USER_STATUS_UPDATE";
 
     private final PasswordEncoder passwordEncoder;
+    private final EmailVerification emailVerificationService;
 
     /**
      * 用户数据范围业务服务，用于为初始总经理写入全平台范围。
@@ -111,11 +114,13 @@ public class UserServiceImpl
     public UserServiceImpl(
             PasswordEncoder passwordEncoder,
             UserDataScopeService userDataScopeService,
-            ManagementAuditLogger auditLogger
+            ManagementAuditLogger auditLogger,
+            EmailVerification emailVerificationService
     ) {
         this.passwordEncoder = passwordEncoder;
         this.userDataScopeService = userDataScopeService;
         this.auditLogger = auditLogger;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @Override
@@ -140,41 +145,62 @@ public class UserServiceImpl
     @Override
     @Transactional
     public UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request) {
-        String name = request.username() == null ? "" : request.username().trim();
-        String email = request.email() == null ? "" : request.email().trim().toLowerCase(java.util.Locale.ROOT);
-        if (name.length() < 2 || name.length() > 64 || email.length() > 254
-                || (!email.isEmpty() && !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"))) {
-            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "昵称或邮箱格式不正确");
+        String name = request == null || request.username() == null ? "" : request.username().trim();
+        if (name.length() < 2 || name.length() > 64) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "昵称格式不正确");
+        }
+        UserDO current = baseMapper.selectProfileForUpdate(userId);
+        if (current == null || !Integer.valueOf(1).equals(current.getStatus()) || current.getDeletedAt() != null) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+        }
+        UserDO nameOwner = baseMapper.selectByUsername(name);
+        if (nameOwner != null && !userId.equals(nameOwner.getUserId())) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称已被使用");
+        }
+        try {
+            if (baseMapper.updateOwnProfile(userId, name) != 1) {
+                throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称已被使用");
+        }
+        UserDO saved = baseMapper.selectOwnProfile(userId);
+        return new UserProfileVO(saved.getUserUuid(), saved.getUserNo(),
+                saved.getUsername(), saved.getRoleCode(), saved.getEmail(), FileReferences.url(saved.getAvatarFileKey()), saved.getCreatedAt());
+    }
+
+    @Override
+    @Transactional
+    public void changeOwnEmail(Long userId, ChangeOwnEmailRequest request) {
+        String email = request == null || request.email() == null
+                ? "" : request.email().trim().toLowerCase(java.util.Locale.ROOT);
+        String authorizationToken = request == null ? null : request.authorizationToken();
+        String emailCode = request == null ? null : request.emailCode();
+        if (email.length() > 254 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "请输入正确的新邮箱地址");
         }
         UserDO current = baseMapper.selectProfileForUpdate(userId);
         if (current == null || !Integer.valueOf(1).equals(current.getStatus()) || current.getDeletedAt() != null) {
             throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
         }
         String oldEmail = current.getEmail() == null ? "" : current.getEmail();
-        if (!oldEmail.equals(email)) {
-            if (email.isEmpty()) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "绑定邮箱不能为空");
-            String password = request.loginPassword();
-            if (password == null || password.isEmpty() || password.length() > 64
-                    || current.getPasswordHash() == null || !passwordEncoder.matches(password, current.getPasswordHash())) {
-                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "登录密码不正确");
-            }
+        if (oldEmail.equalsIgnoreCase(email)) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "新邮箱与当前邮箱相同");
         }
-        UserDO nameOwner = baseMapper.selectByUsername(name);
-        UserDO emailOwner = email.isEmpty() ? null : baseMapper.selectByEmail(email);
-        if ((nameOwner != null && !userId.equals(nameOwner.getUserId()))
-                || (emailOwner != null && !userId.equals(emailOwner.getUserId()))) {
-            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称或邮箱已被使用");
+        emailVerificationService.verifyAuthorization(userId, authorizationToken);
+        UserDO emailOwner = baseMapper.selectByEmail(email);
+        if (emailOwner != null && !userId.equals(emailOwner.getUserId())) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "邮箱已被使用");
         }
+        emailVerificationService.consume(userId, authorizationToken, email, emailCode);
         try {
-            if (baseMapper.updateOwnProfile(userId, name, email.isEmpty() ? null : email) != 1) {
+            if (baseMapper.updateOwnEmail(userId, email) != 1) {
                 throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或不可用");
             }
+            emailVerificationService.consumeAuthorization(userId, authorizationToken);
         } catch (DuplicateKeyException exception) {
-            throw new BusinessException(CommonErrorCode.CONFLICT, "昵称或邮箱已被使用");
+            throw new BusinessException(CommonErrorCode.CONFLICT, "邮箱已被使用");
         }
-        UserDO saved = baseMapper.selectOwnProfile(userId);
-        return new UserProfileVO(saved.getUserUuid(), saved.getUserNo(),
-                saved.getUsername(), saved.getRoleCode(), saved.getEmail(), FileReferences.url(saved.getAvatarFileKey()), saved.getCreatedAt());
     }
 
     /**

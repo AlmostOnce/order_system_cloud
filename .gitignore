@@ -2,6 +2,7 @@ target/
 .env
 .env.*
 !.env.example
+user-service/email-local.properties
 docker-compose.override.yml
 *.log
 !.mvn/wrapper/maven-wrapper.jar

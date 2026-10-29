@@ -6,6 +6,7 @@ import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.model.UserDO;
 import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
+import com.hbue.ordering.user.dto.request.ChangeOwnEmailRequest;
 import com.hbue.ordering.user.vo.UserProfileVO;
 
 /**
@@ -21,6 +22,9 @@ import com.hbue.ordering.user.vo.UserProfileVO;
 public interface UserService extends IService<UserDO> {
 
     UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request);
+
+    /** 独立验证登录密码和邮箱验证码后，只更新本人邮箱。 */
+    void changeOwnEmail(Long userId, ChangeOwnEmailRequest request);
 
     /** 更新当前用户头像，不接收调用方指定的其他账号。 */
     Long resolvePublicUserId(String userUuid);
