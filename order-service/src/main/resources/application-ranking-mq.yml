@@ -1,12 +1,12 @@
-# 只在已部署 RocketMQ 时激活 ranking-mq profile；普通启动仍持久化 outbox。
+# 本地默认激活 ranking-mq；销量和订单通知共用已部署的 RocketMQ。
 ranking:
   messaging:
     enabled: true
 notification:
   order-events:
-    enabled: ${NOTIFICATION_ORDER_EVENTS_ENABLED:false}
+    enabled: ${NOTIFICATION_ORDER_EVENTS_ENABLED:true}
   cancel-tcc:
-    enabled: ${NOTIFICATION_CANCEL_TCC_ENABLED:false}
+    enabled: ${NOTIFICATION_CANCEL_TCC_ENABLED:true}
 spring:
   task:
     scheduling:

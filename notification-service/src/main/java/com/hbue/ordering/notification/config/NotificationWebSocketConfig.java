@@ -15,7 +15,7 @@ public class NotificationWebSocketConfig implements WebSocketConfigurer {
     private final NotificationHandshakeInterceptor interceptor;
     private final String[] origins;
     public NotificationWebSocketConfig(NotificationSocketHandler handler, NotificationHandshakeInterceptor interceptor,
-            @Value("${notification.websocket.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}") String origins) {
+            @Value("${notification.websocket.allowed-origins:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173}") String origins) {
         this.handler = handler; this.interceptor = interceptor; this.origins = origins.split(",");
     }
     @Override public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {

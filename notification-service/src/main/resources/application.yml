@@ -1,5 +1,8 @@
 server:
   port: 9107
+notification:
+  websocket:
+    allowed-origins: ${NOTIFICATION_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -14,6 +17,10 @@ spring:
     password: ${NOTIFICATION_DB_PASSWORD:notification_password_dev_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}

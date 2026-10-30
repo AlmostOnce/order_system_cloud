@@ -23,6 +23,9 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
       # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
       initial-size: 1
       min-idle: 1
