@@ -6,6 +6,7 @@ import com.hbue.ordering.comment.vo.WindowReviewVO;
 
 public interface WindowReviewService {
     WindowReviewVO create(Long userId, String author, String bearer, String key, CreateWindowReviewRequest request);
+    WindowReviewVO forOrder(Long userId, Long orderId);
     WindowReviewPageVO page(Long userId, Long windowId, String cursor, int limit);
     com.hbue.ordering.comment.vo.WindowRatingVO rating(Long windowId);
 }

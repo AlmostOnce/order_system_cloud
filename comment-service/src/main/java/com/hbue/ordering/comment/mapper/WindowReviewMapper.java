@@ -12,6 +12,8 @@ public interface WindowReviewMapper {
     String COLUMNS = "review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at";
     @Select("SELECT " + COLUMNS + " FROM window_reviews WHERE user_id=#{user} AND request_key=#{key}")
     Row byRequest(@Param("user") Long user, @Param("key") String key);
+    @Select("SELECT " + COLUMNS + " FROM window_reviews WHERE user_id=#{user} AND order_id=#{order}")
+    Row byOrder(@Param("user") Long user, @Param("order") Long order);
     @Insert("""
         INSERT INTO window_reviews(review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at)
         VALUES(#{row.id},#{row.userId},#{row.author},#{row.orderId},#{row.windowId},#{row.score},#{row.content},#{row.images},#{row.tags},#{row.requestKey},#{row.requestHash},#{row.createdAt})

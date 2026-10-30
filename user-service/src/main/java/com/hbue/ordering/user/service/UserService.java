@@ -20,6 +20,7 @@ import com.hbue.ordering.user.vo.UserProfileVO;
  * @date 2026-09-20
  */
 public interface UserService extends IService<UserDO> {
+    java.util.Map<Long, String> getAvatarUrls(java.util.List<Long> userIds);
 
     UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request);
 

@@ -22,7 +22,7 @@ class CommentServiceTest {
     private final CommentContentRepository mongo=mock(CommentContentRepository.class);
     private final ManagedImageClient images=mock(ManagedImageClient.class);
     private final ObjectMapper json=new ObjectMapper().findAndRegisterModules();
-    private final CommentService service=new CommentServiceImpl(rows,writer,purchases,images,mongo,json);
+    private final CommentService service=new CommentServiceImpl(rows,writer,purchases,images,mongo,json,mock(AuthorAvatarService.class));
     private final String key="a1111111-1111-4111-8111-111111111111";
     private final CreateCommentRequest input=new CreateCommentRequest(7L,5L,5,"味道很好",List.of(),List.of("好吃"));
     CommentServiceTest() {
@@ -70,4 +70,18 @@ class CommentServiceTest {
         assertEquals(List.of(fileKey),saved.getValue().imageFileKeys());
         assertEquals(List.of("/api/files/"+fileKey+"/content"),response.images());
     }
+    @Test void ratingOnlyNormalizesOmittedOptionalFields() {
+        when(mongo.byId(anyString())).thenAnswer(a ->
+                new CommentContentDO(a.getArgument(0), "", List.of(), List.of(), Instant.now(), true));
+        var response = service.create(9L, "同学", "Bearer signed", key,
+                new CreateCommentRequest(7L, 5L, 4, null, null, null));
+        assertEquals(4, response.score());
+        assertEquals("", response.content());
+        var saved = org.mockito.ArgumentCaptor.forClass(CommentContentDO.class);
+        verify(mongo).insert(saved.capture());
+        assertEquals("", saved.getValue().body());
+        assertTrue(saved.getValue().imageFileKeys().isEmpty());
+        assertTrue(saved.getValue().tags().isEmpty());
+    }
+
 }

@@ -7,6 +7,7 @@ import com.hbue.ordering.comment.dto.CreateWindowReviewRequest;
 import com.hbue.ordering.comment.mapper.WindowReviewMapper;
 import com.hbue.ordering.comment.mapper.WindowReviewMapper.Row;
 import com.hbue.ordering.comment.service.WindowReviewService;
+import com.hbue.ordering.comment.service.AuthorAvatarService;
 import com.hbue.ordering.comment.vo.WindowReviewPageVO;
 import com.hbue.ordering.comment.vo.WindowReviewVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -29,15 +30,16 @@ public class WindowReviewServiceImpl implements WindowReviewService {
     private final CommentOrderClient orders;
     private final ManagedImageClient images;
     private final ObjectMapper json;
-    public WindowReviewServiceImpl(WindowReviewMapper reviews, CommentOrderClient orders, ManagedImageClient images, ObjectMapper json) {
-        this.reviews = reviews; this.orders = orders; this.images = images; this.json = json;
+    private final AuthorAvatarService authors;
+    public WindowReviewServiceImpl(WindowReviewMapper reviews, CommentOrderClient orders, ManagedImageClient images, ObjectMapper json, AuthorAvatarService authors) {
+        this.reviews = reviews; this.orders = orders; this.images = images; this.json = json; this.authors = authors;
     }
     public WindowReviewVO create(Long userId, String author, String bearer, String key, CreateWindowReviewRequest input) {
         CommentServiceImpl.requireUuid(key);
-        var body = new CreateWindowReviewRequest(input.orderId(), input.score(), input.content().trim(),
-                input.imageFileKeys().stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
-                input.tags().stream().map(String::trim).distinct().toList());
-        if (body.content().isEmpty() || body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价内容或标签不能为空");
+        var body = new CreateWindowReviewRequest(input.orderId(), input.score(), input.content() == null ? "" : input.content().trim(),
+                (input.imageFileKeys() == null ? List.<String>of() : input.imageFileKeys()).stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
+                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList());
+        if (body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
         String hash;
         try { hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(body))); }
         catch (Exception e) { throw new IllegalStateException("评价内容编码失败", e); }
@@ -73,12 +75,18 @@ public class WindowReviewServiceImpl implements WindowReviewService {
             throw new BusinessException(code, "无法确认本人订单");
         }
     }
+    public WindowReviewVO forOrder(Long userId, Long orderId) {
+        var row = reviews.byOrder(userId, orderId);
+        return row == null ? null : view(row);
+    }
     public WindowReviewPageVO page(Long userId, Long windowId, String cursor, int limit) {
         if (limit < 1 || limit > 50 || (windowId != null && windowId <= 0)) throw bad("分页参数不正确");
         if (cursor != null) CommentServiceImpl.requireUuid(cursor);
         var rows = reviews.page(userId, windowId, cursor, limit + 1);
         boolean more = rows.size() > limit;
-        var items = rows.stream().limit(limit).map(this::view).toList();
+        var visible = rows.stream().limit(limit).toList();
+        var avatars = authors.resolve(visible.stream().map(Row::userId).toList());
+        var items = visible.stream().map(row -> view(row, avatars.getOrDefault(row.userId(), ""))).toList();
         return new WindowReviewPageVO(items, more ? items.getLast().reviewId() : null, more);
     }
     public com.hbue.ordering.comment.vo.WindowRatingVO rating(Long windowId) {
@@ -90,10 +98,13 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         return view(row);
     }
     private WindowReviewVO view(Row row) {
+        return view(row, authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), ""));
+    }
+    private WindowReviewVO view(Row row, String avatarUrl) {
         try {
             List<String> keys = json.readValue(row.images(), new TypeReference<List<String>>() {});
             List<String> tags = json.readValue(row.tags(), new TypeReference<List<String>>() {});
-            return new WindowReviewVO(row.id(), row.windowId(), row.author(), row.score(), row.content(),
+            return new WindowReviewVO(row.id(), row.windowId(), row.author(), avatarUrl, row.score(), row.content(),
                     keys.stream().map(FileReferences::url).toList(), tags, row.createdAt());
         } catch (Exception e) { throw new IllegalStateException("评价内容读取失败", e); }
     }

@@ -25,6 +25,8 @@ public interface CommentMapper {
         </otherwise></choose> ORDER BY id DESC LIMIT #{size}</script>
         """)
     List<CommentRowDO> page(@Param("user") Long user, @Param("product") Long product, @Param("before") String before, @Param("size") int size);
+    @Select("SELECT " + COLUMNS + " FROM comments WHERE user_id=#{user} AND order_id=#{order} ORDER BY id")
+    List<CommentRowDO> byOrder(@Param("user") Long user, @Param("order") Long order);
     @Select("SELECT review_count,score_total FROM comment_rating_stats WHERE product_id=#{id}")
     Summary summaryRow(@Param("id") Long id);
     default ProductRatingVO summary(Long productId) {

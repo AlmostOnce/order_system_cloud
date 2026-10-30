@@ -134,6 +134,19 @@ public class UserServiceImpl
     }
 
     @Override
+    public java.util.Map<Long, String> getAvatarUrls(java.util.List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty() || userIds.size() > 50
+                || userIds.stream().anyMatch(id -> id == null || id <= 0))
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "头像批量查询参数不正确");
+        var result = new java.util.LinkedHashMap<Long, String>();
+        for (UserDO user : baseMapper.selectAvatars(userIds.stream().distinct().toList())) {
+            String url = FileReferences.url(user.getAvatarFileKey());
+            result.put(user.getUserId(), url == null ? "" : url);
+        }
+        return result;
+    }
+
+    @Override
     @Transactional
     public void updateOwnAvatar(Long userId, String fileKey) {
         int updated = baseMapper.update(null, new UpdateWrapper<UserDO>()

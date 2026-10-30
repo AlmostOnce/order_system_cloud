@@ -1,6 +1,7 @@
 package com.hbue.ordering.comment.service.impl;
 
 import com.hbue.ordering.comment.service.CommentService;
+import com.hbue.ordering.comment.service.AuthorAvatarService;
 import com.hbue.ordering.comment.service.CommentMetadataWriter;
 import com.hbue.ordering.comment.service.PurchaseVerifier;
 import com.hbue.ordering.comment.repository.CommentContentRepository;
@@ -32,17 +33,18 @@ public class CommentServiceImpl implements CommentService {
     private final ManagedImageClient images;
     private final CommentContentRepository contents;
     private final ObjectMapper json;
+    private final AuthorAvatarService authors;
     public CommentServiceImpl(CommentMapper rows, CommentMetadataWriter writer, PurchaseVerifier purchases,
-            ManagedImageClient images, CommentContentRepository contents, ObjectMapper json) {
-        this.rows=rows; this.writer=writer; this.purchases=purchases; this.images=images; this.contents=contents; this.json=json;
+            ManagedImageClient images, CommentContentRepository contents, ObjectMapper json, AuthorAvatarService authors) {
+        this.rows=rows; this.writer=writer; this.purchases=purchases; this.images=images; this.contents=contents; this.json=json; this.authors=authors;
     }
     public CommentVO create(Long userId, String authorName, String bearer, String key, CreateCommentRequest input) {
         requireUuid(key);
         // 统一归一化后计算幂等摘要；更改内容不能复用原请求键。
-        var body = new CreateCommentRequest(input.orderId(), input.productId(), input.score(), input.content().trim(),
-                input.imageFileKeys().stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
-                input.tags().stream().map(String::trim).distinct().toList());
-        if (body.content().isEmpty() || body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价内容或标签不能为空");
+        var body = new CreateCommentRequest(input.orderId(), input.productId(), input.score(), input.content() == null ? "" : input.content().trim(),
+                (input.imageFileKeys() == null ? List.<String>of() : input.imageFileKeys()).stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
+                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList());
+        if (body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
         String hash = hash(body);
         CommentRowDO existing = rows.byRequest(userId, key);
         if (existing != null) return replay(existing, hash);
@@ -67,6 +69,13 @@ public class CommentServiceImpl implements CommentService {
         catch (RuntimeException exception) { log.warn("评论提交后内容标记待对账，commentId={}",id); }
         return view(row);
     }
+    public List<CommentVO> forOrder(Long userId, Long orderId) {
+        var found = rows.byOrder(userId, orderId);
+        if (found.isEmpty()) return List.of();
+        var bodies = contents.byIds(found.stream().map(CommentRowDO::commentId).toList());
+        var avatars = authors.resolve(List.of(userId));
+        return found.stream().map(row -> view(row, bodies.get(row.commentId()), avatars.getOrDefault(userId, ""))).toList();
+    }
     public CommentVO detail(String id) { requireUuid(id); return view(requireRow(id)); }
     public CommentPageVO page(Long userId, Long productId, String before, int limit) {
         if (limit<1||limit>50||(productId!=null&&productId<=0)) throw bad("分页参数不正确");
@@ -78,7 +87,8 @@ public class CommentServiceImpl implements CommentService {
         if(!visible.isEmpty()) {
             contents.putAll(this.contents.byIds(visible.stream().map(CommentRowDO::commentId).toList()));
         }
-        List<CommentVO> items=visible.stream().map(row->view(row,contents.get(row.commentId()))).toList();
+        var avatars=authors.resolve(visible.stream().map(CommentRowDO::userId).toList());
+        List<CommentVO> items=visible.stream().map(row->view(row,contents.get(row.commentId()),avatars.getOrDefault(row.userId(),""))).toList();
         return new CommentPageVO(items,more?items.getLast().commentId():null,more);
     }
     private CommentRowDO requireRow(String id) {
@@ -92,11 +102,11 @@ public class CommentServiceImpl implements CommentService {
     }
     private CommentVO view(CommentRowDO row) {
         CommentContentDO content=contents.byId(row.commentId());
-        return view(row,content);
+        return view(row,content,authors.resolve(List.of(row.userId())).getOrDefault(row.userId(),""));
     }
-    private CommentVO view(CommentRowDO row,CommentContentDO content) {
+    private CommentVO view(CommentRowDO row,CommentContentDO content,String avatarUrl) {
         if(content==null)throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"评价内容暂不可用");
-        return new CommentVO(row.commentId(),row.productId(),row.windowId(),row.authorName(),row.score(),
+        return new CommentVO(row.commentId(),row.productId(),row.windowId(),row.authorName(),avatarUrl,row.score(),
                 content.body(),content.imageFileKeys().stream().map(FileReferences::url).toList(),content.tags(),row.createdAt());
     }
     private String hash(CreateCommentRequest body) {

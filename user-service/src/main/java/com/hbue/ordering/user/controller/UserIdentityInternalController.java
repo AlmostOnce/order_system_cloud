@@ -25,6 +25,13 @@ public class UserIdentityInternalController {
         if (id == null) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或已停用");
         return ApiResponse.success(id);
     }
+    @GetMapping("/avatars")
+    public ApiResponse<java.util.Map<Long, String>> avatars(
+            @RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @RequestParam("userIds") java.util.List<Long> userIds) {
+        verifier.verify(token);
+        return ApiResponse.success(users.getAvatarUrls(userIds));
+    }
     @GetMapping("/{userId}/basic")
     public ApiResponse<com.hbue.ordering.user.api.vo.UserBasicVO> basic(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,

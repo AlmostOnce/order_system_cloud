@@ -19,6 +19,14 @@ import java.math.BigDecimal;
  */
 @Mapper
 public interface UserMapper extends BaseMapper<UserDO> {
+    /** 内部头像批量查询，仅投影用户标识和文件键。 */
+    @Select("""
+        <script>SELECT user_id, avatar_file_key FROM users
+        WHERE status = 1 AND deleted_at IS NULL AND user_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </script>
+        """)
+    java.util.List<UserDO> selectAvatars(@Param("ids") java.util.List<Long> ids);
 
     /** 串行化本人资料修改，避免并发换绑绕过对当前邮箱的核对。 */
     @Select("SELECT user_id, username, email, password_hash, status, deleted_at FROM users WHERE user_id = #{userId} FOR UPDATE")
