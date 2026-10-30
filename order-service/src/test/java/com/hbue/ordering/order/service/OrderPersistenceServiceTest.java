@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -189,4 +191,38 @@ class OrderPersistenceServiceTest {
         assertFalse(persistence.updateStatusIfUnchanged(81L, "已支付", 3, "制作中"));
         verify(notificationOutbox, times(1)).record(OrderNotificationEvent.of(81L, 4, 7L, "制作中"));
     }
+
+    @Test
+    void pickupCompletionConsumesCodeAndNotifiesOnlyWinningTransition() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
+        var completed = new OrderDO(); completed.setOrderId(81L); completed.setUserId(7L);
+        completed.setVersion(5); completed.setStatus("已完成");
+        when(orderMapper.completeWithPickupCode(81L, 4, "012345")).thenReturn(1, 0);
+        when(orderMapper.selectById(81L)).thenReturn(completed);
+        assertTrue(persistence.completeWithPickupCode(81L, 4, "012345"));
+        assertFalse(persistence.completeWithPickupCode(81L, 4, "012345"));
+        verify(notificationOutbox, times(1)).record(OrderNotificationEvent.of(81L, 5, 7L, "已完成"));
+    }
+
+    @Test
+    void sharedOrderResponsesNeverExposePickupCode() throws Exception {
+        var order = new OrderDO(); order.setOrderId(81L); order.setPickupCode("012345");
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertFalse(json.writeValueAsString(order).contains("012345"));
+        assertFalse(json.writeValueAsString(com.hbue.ordering.order.vo.OrderDetailVO.from(order)).contains("012345"));
+        assertFalse(order.toString().contains("012345"));
+    }
+    @Test
+    void pickupCodeCollisionRetriesWithoutReplacingAnotherOrdersCode() {
+        var order = new OrderDO(); order.setOrderId(81L); order.setUserId(7L);
+        order.setStatus("待取货"); order.setPickupCode("012345");
+        when(orderMapper.assignPickupCodeIfMissing(eq(81L), eq(7L), anyString()))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("collision")).thenReturn(1);
+        when(orderMapper.selectById(81L)).thenReturn(order);
+        assertEquals("012345", persistence.ensurePickupCode(81L, 7L));
+        verify(orderMapper, times(2)).assignPickupCodeIfMissing(eq(81L), eq(7L), anyString());
+    }
+
 }

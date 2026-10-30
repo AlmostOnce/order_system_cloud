@@ -26,6 +26,52 @@ import java.util.List;
  */
 @Service
 public class OrderPersistenceServiceImpl implements OrderPersistenceService {
+    private static final java.security.SecureRandom PICKUP_RANDOM = new java.security.SecureRandom();
+
+    /** 兼容已有未生成取餐码的已支付订单，并发读取不会覆盖已签发的码。 */
+    @Override
+    @Transactional
+    public String ensurePickupCode(Long orderId, Long userId) {
+        boolean assigned = false;
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String code = String.format(java.util.Locale.ROOT, "%06d", PICKUP_RANDOM.nextInt(1_000_000));
+            try {
+                orderMapper.assignPickupCodeIfMissing(orderId, userId, code);
+                assigned = true;
+                break;
+            } catch (org.springframework.dao.DuplicateKeyException collision) {
+                // 活跃取餐码唯一索引解决并发碰撞；不覆盖其他订单的码。
+            }
+        }
+        if (!assigned) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "取餐码生成繁忙，请稍后重试");
+        OrderDO current = orderMapper.selectById(orderId);
+        if (current == null || !userId.equals(current.getUserId()))
+            throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单不存在");
+        OrderStatus status = OrderStatus.findByLabel(current.getStatus());
+        if (status != OrderStatus.PAID && status != OrderStatus.PREPARING && status != OrderStatus.WAITING_FOR_PICKUP)
+            throw new BusinessException(CommonErrorCode.CONFLICT, "当前订单不能获取取餐码");
+        if (current.getPickupCode() == null || !current.getPickupCode().matches("[0-9]{6}"))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "取餐码暂不可用，请联系窗口处理");
+        return current.getPickupCode();
+    }
+
+    /** 凭据消费、完成状态和通知 outbox 在同一本地事务提交。 */
+    @Override
+    @Transactional
+    public boolean completeWithPickupCode(Long orderId, Integer expectedVersion, String code) {
+        boolean changed = orderMapper.completeWithPickupCode(orderId, expectedVersion, code) == 1;
+        if (changed) recordStatusNotification(orderId, expectedVersion, OrderStatus.COMPLETED.getLabel());
+        return changed;
+    }
+
+    private void recordStatusNotification(Long orderId, Integer expectedVersion, String targetStatus) {
+        if (!notificationsEnabled || OrderStatus.CANCELLED.getLabel().equals(targetStatus)) return;
+        OrderDO current = orderMapper.selectById(orderId);
+        if (current == null || current.getUserId() == null || current.getVersion() == null
+                || current.getVersion() != expectedVersion + 1 || !targetStatus.equals(current.getStatus()))
+            throw new IllegalStateException("订单通知事件缺少有效订单快照");
+        notificationOutbox.record(OrderNotificationEvent.of(orderId, current.getVersion(), current.getUserId(), targetStatus));
+    }
 
     /** 订单表 Mapper。 */
     private final OrderMapper orderMapper;
@@ -102,13 +148,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         ) == 1;
         if (changed && OrderStatus.PAID.getLabel().equals(targetStatus)) salesOutbox.recordPaid(orderId);
         // 取消订单在 Seata 全局事务中，由单独的 TCC 确认阶段生成通知。
-        if (changed && notificationsEnabled && !OrderStatus.CANCELLED.getLabel().equals(targetStatus)) {
-            OrderDO current = orderMapper.selectById(orderId);
-            if (current == null || current.getUserId() == null || current.getVersion() == null
-                    || current.getVersion() != expectedVersion + 1 || !targetStatus.equals(current.getStatus()))
-                throw new IllegalStateException("订单通知事件缺少有效订单快照");
-            notificationOutbox.record(OrderNotificationEvent.of(orderId, current.getVersion(), current.getUserId(), targetStatus));
-        }
+        if (changed) recordStatusNotification(orderId, expectedVersion, targetStatus);
         return changed;
     }
 }

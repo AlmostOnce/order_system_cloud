@@ -35,7 +35,7 @@ class OrderStatusTest {
                 .canBeAdvancedByManagerTo(OrderStatus.PREPARING));
         assertTrue(OrderStatus.PREPARING
                 .canBeAdvancedByManagerTo(OrderStatus.WAITING_FOR_PICKUP));
-        assertTrue(OrderStatus.WAITING_FOR_PICKUP
+        assertFalse(OrderStatus.WAITING_FOR_PICKUP
                 .canBeAdvancedByManagerTo(OrderStatus.COMPLETED));
         assertFalse(OrderStatus.PENDING_PAYMENT
                 .canBeAdvancedByManagerTo(OrderStatus.PAID));

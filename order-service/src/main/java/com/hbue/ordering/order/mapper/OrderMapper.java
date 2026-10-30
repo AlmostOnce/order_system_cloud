@@ -21,6 +21,28 @@ import java.util.List;
  */
 @Mapper
 public interface OrderMapper extends BaseMapper<OrderDO> {
+    @Select("SELECT * FROM orders WHERE order_no = #{orderNo} LIMIT 1")
+    OrderDO selectByOrderNo(@Param("orderNo") String orderNo);
+
+    /** 唯一生成列只覆盖仍有效的取餐码，完成或取消后自动释放。 */
+    @Select("SELECT * FROM orders WHERE active_pickup_code = #{code}")
+    OrderDO selectByActivePickupCode(@Param("code") String code);
+
+    @Update("""
+        UPDATE orders SET pickup_code = #{code}
+        WHERE order_id = #{orderId} AND user_id = #{userId}
+          AND status IN ('已支付','制作中','待取货')
+          AND (pickup_code IS NULL OR pickup_code = '')
+        """)
+    int assignPickupCodeIfMissing(@Param("orderId") Long orderId, @Param("userId") Long userId, @Param("code") String code);
+
+    @Update("""
+        UPDATE orders SET status = '已完成', pickup_code = NULL,
+            updated_at = CURRENT_TIMESTAMP, version = version + 1
+        WHERE order_id = #{orderId} AND status = '待取货'
+          AND version = #{version} AND pickup_code = #{code}
+        """)
+    int completeWithPickupCode(@Param("orderId") Long orderId, @Param("version") Integer version, @Param("code") String code);
 
     /**
      * 查询指定用户的订单。

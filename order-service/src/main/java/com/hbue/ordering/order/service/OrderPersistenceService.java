@@ -15,6 +15,8 @@ import java.util.List;
  * @date 2026-09-28
  */
 public interface OrderPersistenceService {
+    String ensurePickupCode(Long orderId, Long userId);
+    boolean completeWithPickupCode(Long orderId, Integer expectedVersion, String code);
 
     /**
      * 在同一数据库事务内保存订单头和全部菜品快照。

@@ -57,6 +57,8 @@ public class OrderDetailVO {
     private String remark;
 
     /** 取餐码。 */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @lombok.ToString.Exclude
     private String pickupCode;
 
     /** 订单创建时间。 */

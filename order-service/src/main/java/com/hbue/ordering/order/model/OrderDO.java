@@ -55,6 +55,8 @@ public class OrderDO {
   private String requestHash;
 
   /** 订单支付成功后生成或保存的取餐码。 */
+  @com.fasterxml.jackson.annotation.JsonIgnore
+  @lombok.ToString.Exclude
   private String pickupCode;
 
   /** 订单状态版本号；每次成功状态迁移递增，用于防止并发覆盖。 */

@@ -73,7 +73,8 @@ public interface OrderService extends IService<OrderDO> {
      * 商家按合法履约顺序推进订单状态。
      *
      * <p>调用方必须持有 STALL_MANAGER 或 RESTAURANT_MANAGER 角色；
-     * 订单属私有数据，目标订单不在操作者数据范围内时按不存在处理（404）。</p>
+     * 订单属私有数据，目标订单不在操作者数据范围内时按不存在处理（404）。
+     * 只允许推进到制作中或待取货；已完成通过取餐码核销服务处理。</p>
      *
      * @param operatorId 当前登录操作者 ID
      * @param orderId 订单 ID
