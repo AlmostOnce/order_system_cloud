@@ -32,6 +32,7 @@ public class InternalCatalogController {
 
     /** 窗口数据 Mapper。 */
     private final DiningWindowMapper diningWindowMapper;
+    private final com.hbue.ordering.product.service.WindowCatalogService windowCatalog;
 
     /** 餐厅数据 Mapper。 */
     private final RestaurantMapper restaurantMapper;
@@ -49,11 +50,22 @@ public class InternalCatalogController {
     public InternalCatalogController(
             DiningWindowMapper diningWindowMapper,
             RestaurantMapper restaurantMapper,
-            InternalScopeTokenVerifier internalScopeTokenVerifier
+            InternalScopeTokenVerifier internalScopeTokenVerifier,
+            com.hbue.ordering.product.service.WindowCatalogService windowCatalog
     ) {
         this.diningWindowMapper = diningWindowMapper;
+        this.windowCatalog = windowCatalog;
         this.restaurantMapper = restaurantMapper;
         this.internalScopeTokenVerifier = internalScopeTokenVerifier;
+    }
+
+    /** 批量读取订单展示所需的店铺名称；校验内部凭据后交给目录服务。 */
+    @GetMapping("/windows/names")
+    public ApiResponse<java.util.Map<Long, String>> windowNames(
+            @org.springframework.web.bind.annotation.RequestParam("windowIds") java.util.List<Long> ids,
+            @RequestHeader(value = "X-Internal-Token", required = false) String token) {
+        internalScopeTokenVerifier.verify(token);
+        return ApiResponse.success(windowCatalog.names(ids));
     }
 
     /**

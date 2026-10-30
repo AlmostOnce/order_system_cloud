@@ -24,7 +24,7 @@ import java.util.Objects;
  * @date 2026-09-28
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @ToString
 public class OrderDetailVO {
 
@@ -43,6 +43,9 @@ public class OrderDetailVO {
 
     /** 窗口 ID。 */
     private Long windowId;
+
+    /** 商品服务提供的店铺名称；历史订单也可展示停用店铺。 */
+    private String windowName;
 
     /** 服务端计算的订单总金额。 */
     private BigDecimal totalAmount;
@@ -139,7 +142,6 @@ public class OrderDetailVO {
                 .totalAmount(order.getTotalAmount())
                 .status(order.getStatus())
                 .remark(order.getRemark())
-                .pickupCode(order.getPickupCode())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .items(items)

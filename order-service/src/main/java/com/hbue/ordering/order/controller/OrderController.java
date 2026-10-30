@@ -34,14 +34,16 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final com.hbue.ordering.order.service.OrderWindowNameService windowNames;
 
     /**
      * 创建订单 HTTP 接口控制器。
      *
      * @param orderService 订单业务服务
      */
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, com.hbue.ordering.order.service.OrderWindowNameService windowNames) {
         this.orderService = orderService;
+        this.windowNames = windowNames;
     }
 
     /**
@@ -81,7 +83,7 @@ public class OrderController {
         }
 
         // 返回当前用户的订单列表。
-        return ApiResponse.success(orderVOList);
+        return ApiResponse.success(windowNames.enrich(orderVOList));
     }
 
     /**
@@ -107,7 +109,7 @@ public class OrderController {
                 );
 
         // 返回订单详情。
-        return ApiResponse.success(orderDetailVO);
+        return ApiResponse.success(windowNames.enrich(List.of(orderDetailVO)).getFirst());
     }
 
 
@@ -139,7 +141,7 @@ public class OrderController {
                 );
 
         // 返回订单详情。
-        return ApiResponse.success(orderDetailVO);
+        return ApiResponse.success(windowNames.enrich(List.of(orderDetailVO)).getFirst());
     }
 
     /**

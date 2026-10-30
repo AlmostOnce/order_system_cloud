@@ -38,6 +38,11 @@ public class WindowInternalClientFallbackFactory
     public WindowInternalClient create(Throwable cause) {
         log.error("调用 product-service 档口/餐厅内部查询接口失败", cause);
         return new WindowInternalClient() {
+            @Override
+            public ApiResponse<java.util.Map<Long, String>> getWindowNames(java.util.List<Long> ids, String token) {
+                return serviceUnavailable();
+            }
+
 
             /**
              * 档口查询降级处理。
