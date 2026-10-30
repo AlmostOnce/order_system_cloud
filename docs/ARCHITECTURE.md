@@ -1,8 +1,9 @@
 # order-system-cloud 架构与模块规划
 
-> 文档性质：**定稿规划**（回答"我们一共要建多少个模块/服务"的唯一依据）。
+> 文档性质：**架构规划与当前落地状态**；最近核对日期：**2026-10-30**。
 > 与进度日志的分工：`PROJECT_PROGRESS.md` 记录"已经做完了什么"（追加式）；
-> 本文档记录"打算建成什么样"（可修订，修订须更新第 13 节变更记录）。
+> 本文档记录目标架构、当前实现和剩余工作（修订须更新第 13 节变更记录）。
+> 状态以当前源码、配置及已记录的验证结果为依据；存在模块或测试源码不等于已通过运行验收。
 >
 > **立项前提（决定本文档所有判据）**：本项目是**学习项目**，目标是练到尽可能多的
 > 分布式技术（分布式事务、最终一致、ES 检索、WebSocket 长连接、缓存热点、NoSQL）。
@@ -10,21 +11,25 @@
 
 ## 1. 结论
 
-| 维度 | 现状 | 阶段 B 完成后 | 阶段 C 完成后 |
-|---|---|---|---|
-| 可部署服务 | 9 个 | **10 个** | **13 个**（上限） |
-| Maven 模块 | 17 个 | 约 19 个 | 约 21 个（服务 + 公共库 4 + 按需契约模块） |
-| 数据库 Schema | 6 个 | + `comment_db` | + ES 索引、（可选）`notification_db` |
+| 维度 | 当前落地（2026-10-30） | 全部规划完成后 |
+|---|---|---|
+| 独立服务 | **12 个已有启动入口和业务源码**；不代表 12 个服务全部通过运行验收 | **13 个**，剩余 `statistics-service` |
+| 独立子模块 | **21 个**：12 个服务 + 4 个公共库 + 5 个契约库；不计根聚合工程 | 至少 22 个；统计契约库按实际服务调用需要决定 |
+| MySQL 业务 Schema | **8 个**：`user_db`、`order_db`、`product_db`、`payment_db`、`stock_db`、`file_db`、`comment_db`、`notification_db` | 统计服务首期无独立库；是否建统计读模型另行设计 |
+| 其他业务存储 | Redis、MongoDB 评论内容集合、Elasticsearch 菜品索引 | 在现有设施上继续演进 |
 
-- **阶段 A 已有 6 个**：`gateway` / `auth` / `user` / `order` / `product` / `payment`
-- **阶段 B 已落地 3 个**：`cart`（Redis 增删改查、商品实时核价、订单成功后的快照清理）、`stock`（Seata AT + Lua 原子扣减）、`file`（上传与存储抽象）
-- **阶段 B 剩余 1 个**：`comment`（混合存储）
-- **阶段 C（技术扩展，3 个）**：`notification`（WebSocket）/ `search`（ES）/ `statistics`
-- **并入不拆**：餐厅层级 → `product-service`；订单超时取消 → `order-service`；余额流水 → `user-service`
-- **中间件选型**：**RocketMQ（+ Spring Cloud Stream）**、**Seata**、**Elasticsearch** —— 见第 6 节
+- **阶段 A（6 个）**：`gateway` / `auth` / `user` / `order` / `product` / `payment` 已有实现，后续持续增强。
+- **阶段 B（4 个）**：`stock` / `cart` / `comment` / `file` 均已有实现；评论不再是未创建服务。
+- **阶段 C（3 个）**：`notification`、`search` 首期代码及学生端接入已实现；**`statistics` 尚未建模块**，商家与顾客聊天也尚未实现。
+- **基础设施配置已接入**：Nginx、RocketMQ、Seata、Elasticsearch、MongoDB、Redis、MySQL、Nacos。本文不据此断言当前容器或业务进程正在运行。
+- **交易一致性现状**：下单扣库存、待支付取消回补仍使用 Seata AT；取消通知通过 TCC Confirm 写 outbox；MQ 处理销量、库存快照失效、评分投影、搜索索引和订单通知。**未将全部业务改为 TCC，也未把核心库存扣减改成无确认的异步操作。**
+- **端侧边界**：uni-app 只作为普通学生端；商家及其他管理角色属于独立 Vue 管理端。已有非学生页面为临时调试入口，后续清理。
 
-**唯一被否决的候选**：`restaurant-service` —— 不是因为它"业务上不重要"，
-而是因为它**学不到任何新技术**（见第 4.3 节）。
+**当前验证边界**：前端已有登录、退出竞态、通知会话及分页、订单、评价、核销等隔离检查和 Web 编译记录；最近的唯一取餐码迁移及 SQL 约束验证已完成。新后端源码未在本次核对中运行 Maven、Java 测试或启动验证，不能将“已实现”解读为全链路验收完成。
+
+**并入不拆**：餐厅层级归 `product-service`；余额和流水归 `user-service`；订单超时取消归 `order-service`，但其定时自动取消仍为后续工作。
+
+**唯一被否决的候选**：`restaurant-service`，理由见第 4.3 节。
 
 ## 2. 判定准则
 
@@ -35,7 +40,7 @@
    能 → 加；练不到 → 不加。
 2. **风险可收敛**：它引入的复杂度必须有明确方案。高风险 + 有方案 → 加；
    高风险 + 无方案 → **先设计方案再加**（禁止"先建服务，一致性以后再说"）。
-3. **依赖方向成 DAG**：新增依赖不得形成环（A 调 B、B 又调回 A）。
+3. **控制调用依赖**：避免无边界的同步循环与多服务共同写同一数据；核对配置、身份、目录等既有调用，不能仅凭规划宣称当前所有依赖均已是 DAG。
 4. **可分期**：能排进阶段计划，不与当前主线冲突。
 
 **唯一仍然禁止的**：拆开后只多一跳网络、学不到任何新技术。服务数量本身不是评分项，
@@ -43,46 +48,49 @@
 
 ## 3. 服务总表
 
-端口列格式：`9090 段 / 当前设备旧端口段`。
+端口为当前仓库配置默认值，非运行状态探测；历史设备端口不再作为当前分配依据。
 
-| # | 服务 | 端口 | 存储 | 阶段 | 能练到的技术 |
+| # | 服务 | 当前端口 | 存储 | 阶段与当前进度 | 主要实现 |
 |---|---|---|---|---|---|
-| 1 | `gateway-service` | 9090 / 8080 | 无 | A ✅ | 路由、限流、认证前置（WebFlux） |
-| 2 | `auth-service` | 9094 / 8084 | Redis | A ✅ | JWT 签发/刷新轮换、黑名单、Redisson 分布式锁 |
-| 3 | `user-service` | 9092 / 8083 | `user_db` | A ✅ | RBAC + 数据范围 |
-| 4 | `order-service` | 9091 / 8081 | `order_db` | A ✅ | 状态机、乐观锁、幂等键、定时任务 |
-| 5 | `product-service` | 9093 / 8086 | `product_db` | A ✅ | 目录层级、软停用 |
-| 6 | `payment-service` | 9101 / 9101 | `payment_db` | A ✅ | 渠道隔离、HMAC 验签、回调幂等 |
-| 7 | `stock-service` | 9104 / 8089 | `stock_db` + Redis | B ✅ | **Seata AT 分布式事务**、Lua 原子扣减、对账补偿 |
-| 8 | `cart-service` | 9103 / 8088 | 仅 Redis（AOF + 数据卷） | B ✅ | Redis Hash、Lua 并发修改与 TTL；仅登录顾客使用 |
-| 9 | `comment-service` | 9105 / 8090 | MongoDB（内容）+ `comment_db`（关系元数据） | B 源码初版，待部署验收 | **混合存储**、跨服务校验链、读写分离的缓存热点、评分聚合 |
-| 10 | `file-service` | 9102 / 8087 | `file_db` | B ✅ | 多部分上传、存储抽象、横切复用 |
-| 11 | `notification-service` | 9107 / 8092 | 可选 `notification_db` | C ⬜ | **WebSocket 长连接**、离线消息、消息可靠投递 |
-| 12 | `search-service` | 9106 / 8091 | ES 索引 | C 🟡 | **ES 菜品全文检索**、outbox + RocketMQ 索引同步、全量重建（首期源码已补，待运行验收） |
-| 13 | `statistics-service` | 9108 / 8093 | 无（只读聚合） | C ⬜ | 读模型 / CQRS 雏形、Feign 扇出聚合、报表 |
+| 1 | `gateway-service` | 9090 | 无业务库 | A，已有实现 | WebFlux 路由、认证前置、限流、HTTP/WS 转发 |
+| 2 | `auth-service` | 9094 | Redis | A，已有实现 | JWT、刷新令牌轮换与 TTL、注销黑名单、分布式锁 |
+| 3 | `user-service` | 9092 | `user_db` | A，已有实现 | 用户号/邮箱登录资料、RBAC、数据范围、余额流水、独立支付密码、邮箱绑定验证 |
+| 4 | `order-service` | 9091 | `order_db` + Redis | A，持续增强 | 幂等建单、状态机、AT 事务、销量 ZSet、通知 outbox/TCC；已补唯一取餐码核销、批量店铺名称 |
+| 5 | `product-service` | 9093 | `product_db` + Redis | A，已有实现 | 餐厅/窗口/分类/菜品目录、核价、缓存防护、库存查询、评分投影、搜索 outbox |
+| 6 | `payment-service` | 9101 | `payment_db` | A，已有实现 | 渠道编排、余额同步扣款、回调验签与幂等；支付一致性边界见 6.4 |
+| 7 | `stock-service` | 9104 | `stock_db` + Redis | B，核心实现及 MQ 源码已落地 | AT 扣减/回补、Lua 快照、流水、对账、outbox 与快照失效；新版 MQ 链路待完整运行验收 |
+| 8 | `cart-service` | 9103 | 仅 Redis（AOF + 数据卷） | B，已有实现 | Hash、Lua、TTL、实时核价和下单后快照清理；仅登录顾客使用 |
+| 9 | `comment-service` | 9105 | `comment_db` + MongoDB + Redis | B，首期及学生端接入已实现 | 店铺/逐菜独立评价、仅评分、分页、评分聚合、MQ 投影、订单评价状态与作者当前头像 |
+| 10 | `file-service` | 9102 | `file_db` + 文件存储 | B，已有实现 | 上传校验、存储抽象、fileKey 引用；头像/窗口/菜品/评价图片复用 |
+| 11 | `notification-service` | 9107 | `notification_db` + Redis | C，第一阶段及学生端接入已实现 | MQ 幂等落库、游标分页、已读/未读、一次性票据 WebSocket、断线补查；聊天未实现 |
+| 12 | `search-service` | 9106 | Elasticsearch + Redis 同步锁 | C，首期及学生端接入已实现 | 中文搜索、店内筛选、单菜品增量/窗口刷新、别名切换全量重建、定时对账 |
+| 13 | `statistics-service` | **待分配** | 规划无独立库 | C，**尚未创建模块** | 规划：经营概览、趋势及食堂/店铺/菜品聚合报表；由 Vue 管理端展示 |
 
-> `auth-service` 的分拆**有代价**：登录链路多一跳 Feign，跨服务错误映射需额外处理
-> （曾因此修复 401/503 映射）。它的学习价值在于令牌策略独立演进。
+> “已有实现”表示源码与配置存在，不替代故障、并发、多实例及端到端验收。评论、搜索、通知的新能力仍需在各服务加载最新代码后验证。
+>
+> 历史规划将统计服务放在 9108，但当前 Compose 已将该端口映射到 Seata 控制台；实施统计服务前须重新分配端口，不直接沿用 9108。
+>
+> `auth-service` 独立后登录链路多一跳远程调用，跨服务错误映射与降级仍需维护。
 
-## 4. 三个待定服务的详细分析
+## 4. 拆分决策与当前实现
 
-### 4.1 `comment-service` —— **建议建**（收益高、风险低）
+### 4.1 `comment-service` —— 已建，保留独立服务
 
 | 技术点 | 说明 |
 |---|---|
-| 跨服务校验链 | 评论前必须校验"该订单已完成且属于本人"：`comment → order`（可用 Feign + Sentinel 降级）；这是"下游只读依赖"的典型 DAG，不是环 |
-| 读写比悬殊 | 评论是极端的读多写少，正好承接 `PROJECT_PROGRESS.md` 已规划的缓存防护（穿透/击穿/雪崩 + 布隆过滤器），是**缓存练习的最佳载体** |
+| 跨服务校验链 | 评论前必须校验"该订单已完成且属于本人"：`comment → order`（可用 Feign + Sentinel 降级）；这是一条下游只读校验依赖 |
+| 读写比悬殊 | 当前已有评分短缓存、随机 TTL 和失败回源；完整布隆过滤器、热点互斥及 Sentinel 防护仍属增强项，不标记为已实现 |
 | 评分聚合 | 菜品平均分/评论数属于读模型冗余字段，写入后异步更新 → 练"写后异步 + 最终一致" |
-| **混合存储（已定）** | 评论**内容**（正文/图片/标签/回复）入 **MongoDB**；**关系元数据**（评论 ID、订单 ID、用户 ID、菜品 ID、评分、时间）留 **MySQL**。理由与写入顺序见 6.7 |
+| **混合存储（已定）** | 菜品评价正文/图片文件键/标签入 MongoDB，关系元数据和评分留 MySQL；店铺评价单独保存在 MySQL `window_reviews`。回复未实现，见 6.7 |
 
 - **一致性风险：低**。评论写失败不影响交易，最终一致即可收敛。
-- **结论：建**。三者中收益/风险比最好。
+- **当前**：已实现店铺和逐菜独立评价，支持仅评分；学生端同页填写、已评价只读回显，未评价项可补充。新接口与头像链路仍需最新后端运行验证。
 
-### 4.2 `stock-service` —— **建议建，用 Seata AT 做主方案**
+### 4.2 `stock-service` —— 已建，核心交易保留 Seata AT
 
 | 技术点 | 说明 |
 |---|---|
-| 分布式事务主战场 | 下单 = `order-service` 建单 + `stock-service` 扣减，**跨服务**。这是本项目唯一需要"回滚"语义的场景（库存被扣了但建单失败，库存必须还回去） |
+| 分布式事务主战场 | 下单 = `order-service` 建单 + `stock-service` 扣减，**跨服务**。待支付取消回补同样需要全局回滚语义，不能把本地分支提交视为最终完成 |
 | Redis Lua 原子扣减 | 防超卖是硬技能；脚本原子性 + 库存流水 |
 | 对账兜底 | 除 Seata 全局回滚外，仍保留库存流水 + 定时对账（TC 故障时的最后防线） |
 | 方案对比 | 主方案 **Seata AT**；对比方案 **本地消息表 / 可靠消息**（见 6.4） |
@@ -92,8 +100,8 @@
   1. 参与库（`order_db`、`stock_db`）建 `undo_log` 表；
   2. 下单方法加 `@GlobalTransactional`，由 OpenFeign 自动传播 `XID`；
   3. 库存流水 + 定时对账作为**兜底**保留；
-  4. 完成后用"本地消息表"再实现一遍同一场景，做方案对比（学习重点）。
-- **结论：建**。但**不能"建个服务就完"**，第 9 节的风险表必须同时落地。
+  4. 当前库存本地 outbox 已用于快照失效通知；它不替代 AT 扣减/回补。后续可再对比资源预占 TCC 或可靠消息补偿方案。
+- **当前**：核心扣减/回补及派生事件源码已落地；第 9 节继续列出新版消息链路与故障验收缺口。
 
 ### 4.3 `restaurant-service` —— **不建议建**（并入 `product-service`）
 
@@ -106,43 +114,47 @@
 
 - **结论：不建**。这是三个里唯一建议不拆的。
 
-### 4.4 你在上一轮明确要的另外三项（已纳入规划）
+### 4.4 购物车、搜索和通知的落地状态
 
 | 服务 | 定位 | 说明 |
 |---|---|---|
-| `cart-service` | 阶段 B | 购物车是学习 Redis 数据结构的标准场景（Hash 存明细、登录/未登录合并、TTL、与下单衔接） |
-| `search-service`（ES） | 阶段 C | 首期源码已补、待部署验收。技术点：索引与 MySQL 的同步（**RocketMQ 消息驱动**）、中文检索与全量重建 |
-| `notification-service`（Web） | 阶段 C | 用 WebSocket/SSE 做站内消息，不接短信。技术点：长连接、网关 WS 路由、离线消息与可靠投递 |
+| `cart-service` | 阶段 B | 购物车是学习 Redis 数据结构的标准场景（Hash 存明细、TTL、与下单衔接；当前不做游客合并） |
+| `search-service`（ES） | 阶段 C | 首期与学生端已接入；单菜品增量、窗口刷新、中文检索、别名切换重建及对账均已有源码，仍需完整运行验收 |
+| `notification-service`（Web） | 阶段 C | 第一阶段订单通知、WebSocket、离线持久化、分页及学生端会话已实现；商家与顾客聊天仍为下一阶段 |
 
 ## 5. 非服务模块
 
-| 类别 | 模块 | 作用 |
-|---|---|---|
-| 公共库（4） | `common-core` | 通用常量、领域枚举、`DataScopeService` 契约 |
-| | `common-redis` | Redis 基础操作、缓存键常量 |
-| | `common-response` | `ApiResponse`（无 Servlet 依赖，供 Gateway WebFlux 使用） |
-| | `common-web` | 全局异常处理（仅 Servlet 服务） |
-| 契约库（3 → 按需） | `user-api` | `UserBasicVO` + `UserServiceClient` |
-| | `product-api` | 报价契约 + `ProductServiceClient` |
-| | `order-api` | 订单详情的购买事实只读投影 + `OrderServiceClient`，供购物车核实下单结果 |
-| | `xxx-api` | **当且仅当**该服务被别的服务经 Feign 调用时才建（如 `stock-api`、`comment-api`） |
+当前有 4 个公共库、5 个契约库，均不作为独立业务进程部署。
 
-**规则**：契约模块按"被 Feign 调用"才建。只被前端调用、不被服务调用的服务（如 `cart`、`file`），
-不建契约模块。
+| 类别 | 模块 | 当前作用 |
+|---|---|---|
+| 公共库 | `common-core` | 通用错误、领域常量、数据范围契约 |
+| 公共库 | `common-redis` | 统一 Redis 操作、分布式锁、Lua 执行与缓存支持 |
+| 公共库 | `common-response` | `ApiResponse`，不依赖 Servlet，供 Gateway 与业务服务共用 |
+| 公共库 | `common-web` | Servlet 异常处理、认证身份映射、内部凭据和文件引用等公共能力 |
+| 契约库 | `user-api` | 用户基础信息、内部账务及用户服务调用契约 |
+| 契约库 | `product-api` | 核价、目录范围及店铺名称、搜索快照等跨服务契约 |
+| 契约库 | `order-api` | 订单购买事实只读投影及内部调用契约，供购物车、评价、支付等使用 |
+| 契约库 | `stock-api` | 库存扣减、回补、内部库存查询契约 |
+| 契约库 | `comment-api` | 共享评分与评分变化事件契约 |
+
+契约模块按实际跨服务复用需要建立，不因新增服务而机械创建。`cart`、`file`、`search`、`notification` 当前没有对应独立 `*-api` 目录。
 
 ## 6. 中间件与分布式事务选型
 
 ### 6.1 选型总表
 
-| 中间件 | 选型 | 用途 | 阶段 | 状态 |
-|---|---|---|---|---|
-| 消息队列 | **RocketMQ 5.x** + **Spring Cloud Stream**（Binder 抽象） | 事件驱动、事务消息、最终一致 | B | 销量榜接入源码已补，待部署与运行验收 |
-| 分布式事务 | **Seata**（AT 模式） | `order × stock` 下单扣库存 | B | ⬜ 待引入 |
-| 搜索引擎 | Elasticsearch 8.x | 菜单全文检索 | C | ⬜ 待引入 |
-| 文档库 | **MongoDB 7.x** | 评论**内容**（正文/图片/标签/回复），**非全量评论**（元数据仍在 MySQL） | B | ✅ 已选定 |
-| 注册/配置 | Nacos | 服务发现与配置 | A | ✅ 已有 |
-| 熔断限流 | Sentinel | 保护参与方，防雪崩（**非事务组件**） | A | ✅ 已有 |
-| 缓存 | Redis | 缓存、分布式锁、库存扣减 | A | ✅ 已有 |
+| 中间件 | 当前配置选型 | 当前用途与状态 |
+|---|---|---|
+| 消息队列 | RocketMQ 5.3.2 + Spring Cloud Stream | 已有销量、库存快照失效、菜品评分、搜索索引、订单通知的生产/消费源码及 Topic 初始化配置；可靠发布主要使用本地 outbox，不等同于已实现半消息事务 |
+| 分布式事务 | Seata 2.5.0 | 订单 × 库存使用 AT；取消通知使用 TCC Confirm 后写 outbox；不是待引入 |
+| 搜索引擎 | Elasticsearch 8.19.4 | 搜索服务已有索引、查询、增量同步及重建；新同步策略待完整运行验收 |
+| 文档库 | MongoDB 7.0 | 菜品评价正文/图片文件键/标签；MySQL 仍保存关系与评分，店铺评价单独存 MySQL |
+| 注册/配置 | Nacos 3.0.3 | 服务发现与配置；本地 Seata 客户端直连规则见 8.1 |
+| 熔断限流 | Sentinel | 现有 HTTP/Feign 防护；不是分布式事务组件，也不等于各新服务防护全部完成 |
+| 缓存 | Redis 7.4 | 缓存、购物车、令牌、锁、Lua、销量 ZSet、通知票据/多实例消息分发等 |
+| 统一入口 | Nginx 1.27 | 已配置 Web 静态托管、HTTP/WS 转发到 Gateway；生产 HTTPS 和多 Gateway 验收仍属后续 |
+| MySQL 连接池 | Druid | MySQL 服务已有统一 Druid 配置，连接会话时区固定 UTC+8 |
 
 ### 6.2 为什么是 RocketMQ + Spring Cloud Stream
 
@@ -150,8 +162,8 @@
 
 | 决策 | 理由 |
 |---|---|
-| **具体产品选 RocketMQ** | ① 国内企业事实标准（阿里开源，电商/交易类系统默认选择）；② 与 Nacos/Sentinel/Seata 同属 SCA 生态；③ **只有 RocketMQ 原生支持「事务消息」（半消息 + 回查）** —— Kafka 与 RabbitMQ 都没有，而"事务消息"正是场景 ② 的解法（见 6.4） |
-| **接入用 Spring Cloud Stream** | 业务代码面向 **Binder** 编程，**不绑定具体 MQ 实现**；将来若要换 Kafka，只改依赖与配置、不动业务代码。这层"抽象 vs 实现"本身就是学习点 |
+| **具体产品选 RocketMQ** | 与现有 Spring Cloud Alibaba 技术栈配合，学习消息重试、幂等、死信及最终一致；保留研究半消息与回查的空间。**当前已实现的可靠发布以本地 outbox 为主，余额支付未使用 MQ 半消息事务** |
+| **接入用 Spring Cloud Stream** | 生产/消费入口使用 Binder 与 StreamBridge，减少业务入口与客户端 API 耦合；但换中间件仍需验证确认、重试、顺序及事务语义，不能保证只改配置 |
 | **备选/降级路径** | 直连 `rocketmq-spring-boot-starter`：更简单、国内更常见、出问题好排查。若 Stream binder 与 SCA 2025 版本不兼容，**降级为直连 starter，业务设计不变** |
 | 版本提醒 | RocketMQ 5.x；Stream 的 RocketMQ binder 版本需在实施时确认，**不要照抄旧版教程** |
 
@@ -161,69 +173,70 @@
   能对上的"Spring Cloud 元素"只有 SCA 家族里的 **Seata**。
 - **四种模式选 AT**：无侵入（自动记录前后镜像 + 全局锁）、兼容 MySQL + MyBatis-Plus，
   是最该先掌握的一种。
-  TCC（手写 Try/Confirm/Cancel）留作进阶；SAGA（长流程编排）我们链路太短；XA 性能差，了解即可。
+  当前取消通知已使用 TCC（Try/Confirm/Cancel），核心订单与库存资源仍采用 AT；未实施全项目 TCC 改造。SAGA、XA 暂未用于业务链路。
 - **只用在"需要回滚"的场景**（见 6.4）——这是选型的唯一判据。
 - **依赖既有组件**：全局事务 `XID` 由 **OpenFeign 拦截器**自动传播给参与方；
   **Seata Server（TC）注册到现有 Nacos**，不必另装注册中心。
 
-### 6.4 分布式事务场景归属（三个场景，两种方案）
+### 6.4 分布式事务与消息场景的当前归属
 
-| # | 场景 | 服务对 | 需要"回滚"吗 | 方案 |
-|---|---|---|---|---|
-| ① | 下单扣库存 | `order × stock` | **需要**（先占库存，失败必须还） | **Seata AT**：`@GlobalTransactional` + `undo_log` 表 + 对账兜底 |
-| ② | 余额支付扣款 | `payment × user` | 不需要（单向、幂等、`WHERE balance >= ?` 条件更新） | **RocketMQ 事务消息** + 幂等消费 + 定时对账；**不用 Seata** |
-| ③ | 支付成功推进订单 | `payment × order` | 不需要（已有幂等回调 + 重试） | 保持现状；阶段 B 起改为**异步事件**（RocketMQ） |
+| 场景 | 参与服务 | 当前代码采用的方案 | 剩余边界 |
+|---|---|---|---|
+| 下单与扣库存 | `order × stock` | Seata AT，订单及明细落库后同步扣库存，失败全局回滚 | 保持同步成功判定；不以“消息已发送”替代扣减成功 |
+| 待支付取消与回补 | `order × stock` | Seata AT，版本竞争取消状态、按原订单号幂等回补 | 已支付订单的退款取消不在此范围 |
+| 取消成功通知 | `order → notification` | AT 业务配合通知 TCC：Try 预备，Confirm 本地事务写通知 outbox，Cancel 阻止悬挂 | 仍需 Seata 二阶段重试、回滚、宕机恢复完整验收 |
+| 余额支付扣款 | `payment → user` | 同步内部接口；`user_db` 同库事务修改余额与写流水，支付标识幂等 | **未实现 MQ 事务消息**；跨服务失败仍需核查，不能声称账务全链路已自动补偿 |
+| 支付成功推进订单 | `payment → order` | 支付成功记录后同步调用订单内部已支付接口 | 当前失败保留支付事实并记录错误；持久化重试/补偿需单独设计，未改为 MQ 异步推进 |
+| 已支付销量 | `order → RocketMQ → order` | 支付确认同事务写销量 outbox；消费者 Lua 去重并更新 ZSet，重建及对账兜底 | 已支付菜品累计份数；待支付、已取消不计入 |
+| 库存、评分、搜索、订单通知 | 各事实源 → 对应消费者 | 本地事务写 outbox，Broker 确认后标记发送，消费端幂等 | 各链路独立验收；发送成功不代表消费或用户已读 |
 
-**判据一句话**：这个操作"先占了资源、后面可能失败要还回去"吗？是 → Seata；不是 → 最终一致。
+余额账务归 `user-service`，支付编排归 `payment-service`，不跨库直接改余额。支付密码与登录密码独立，使用独立哈希及失败计数限制；充值和余额支付按业务验证支付密码，不把支付密码放入 JWT。
 
-**关键设计约束**：余额的**账务**（改 `users.balance` + 写 `balance_records`）留在 `user-service`
-同库同事务；`payment-service` 只做**支付编排**（把余额当作一个 `PaymentChannel` 实现）。
-即 `payment → user` 走内部接口调用，**不跨服务做分布式事务**。
+取消通知使用 TCC 不表示库存已整体迁移为 TCC；后续是否改成 Try 预占、Confirm 扣减、Cancel 释放，需先设计冻结资源、幂等、空回滚、防悬挂与恢复策略。
 
-**余额支付必须使用独立的「支付密码」（已定）**：不复用登录密码。理由——账号被盗时，
-登录态窃取不应直接导致余额被花掉，支付需要第二道凭据。
+### 6.5 中间件基础设施（按当前 Compose 配置）
 
-- 独立存储：`users.pay_password_hash`（加盐哈希，与 `password_hash` 完全分离）；
-- 设置在余额首次使用（充值 / 余额支付）前强制完成；
-- 校验失败需计数与锁定（防暴力破解）；
-- 它**不参与 JWT**，只在余额相关接口的请求体里传入，用后即弃。
+| 中间件 | 镜像/配置 | 宿主机端口 | 状态边界 |
+|---|---|---|---|
+| MySQL | `mysql:8.0` | 9095 → 3306 | 8 个业务库及 Seata 参与库；UTC+8 |
+| Redis | `redis:7.4-alpine` | 9096 → 6379 | 共享实例、AOF 及数据卷 |
+| Nacos | `nacos/nacos-server:v3.0.3` | 9098 控制台、9097 HTTP、10097/10098 gRPC | 本地服务发现与配置 |
+| Seata Server | `apache/seata-server:2.5.0` | **9109 TC、9108 控制台** | 9108 不是可用的统计服务端口 |
+| RocketMQ NameServer | `apache/rocketmq:5.3.2` | 9876 | `mq` profile |
+| RocketMQ Broker | 同上 | 10911、10909、10912 | 初始化器配置 5 类业务 Topic；当前未配置 Dashboard |
+| Elasticsearch | `docker.elastic.co/elasticsearch/elasticsearch:8.19.4` | 9200 | `search` profile |
+| MongoDB | `mongo:7.0` | 127.0.0.1:27017 | `comment` profile，应用账号限定评论库 |
+| Nginx | `nginx:1.27-alpine` | 8088 → 8080 | `edge` profile，静态 Web、HTTP/WS 代理 |
 
-### 6.5 中间件基础设施（容器与端口）
+上表说明仓库已有配置，不表示当前容器在线；本次更新未启动、重启或探测这些中间件。
 
-| 中间件 | 容器镜像 | 9090 段端口 | 当前设备端口 | 备注 |
-|---|---|---|---|---|
-| Seata Server（TC） | `seataio/seata-server`（2.x） | 9109 | 8094 | 注册到现有 Nacos |
-| RocketMQ NameServer | `apache/rocketmq`（5.x） | 9876 | 9876 | |
-| RocketMQ Broker | 同上 | 10911 | 10911 | |
-| RocketMQ Dashboard | `apacherocketmq/rocketmq-dashboard` | 8180 | 8180 | **默认 8080 会与 gateway 撞**，必须改 |
-| Elasticsearch | `elasticsearch`（8.x） | 9200 | 9200 | 阶段 C |
-| MongoDB | `mongo`（7.x） | 27017 | 27017 | 阶段 B，随 `comment-service` 同期引入 |
+### 6.6 中间件落地清单（当前进度）
 
-### 6.6 中间件落地清单
+- [x] 已有 Seata、RocketMQ Binder、Elasticsearch、MongoDB 相关源码和配置；本次不读取或修改 Maven 声明。
+- [x] `order_db`、`stock_db` 已有 AT 参与及 `undo_log` 迁移记录；本地 TC 直连方案已记录。
+- [x] Compose 已纳入 Seata、MQ NameServer/Broker/初始化器、MongoDB、ES 和 Nginx。
+- [x] MQ 初始化配置覆盖 `order-paid-sales-v1`、`product-rating-changed-v1`、`stock-changed-v1`、`product-search-refresh-v1`、`order-status-notification-v1`。
+- [x] 评论/库存/搜索/通知的数据库迁移脚本及执行记录已补；2026-10-30 唯一活跃取餐码迁移已执行并验证约束。
+- [ ] 对最新源码做完整 Java 编译、单测与运行验收；Maven 操作须遵守当前请求明确授权约束。
+- [ ] 补齐真实故障、多实例、重复/乱序、Seata 二阶段重试、MQ 重试/DLQ 及回滚隔离验收。
+- [ ] 数据留存与 outbox/消费幂等记录归档、生产 HTTPS、Gateway 多实例部署等后续治理。
 
-1. 根 pom 加依赖：`spring-cloud-starter-alibaba-seata`、Stream 的 RocketMQ binder
-   （或降级方案 `rocketmq-spring-boot-starter`）；
-2. `order_db`、`stock_db` 建 `undo_log` 表（AT 模式必需）；
-3. `docker-compose.yml` 加 `seata-server`、RocketMQ（NameServer + Broker + Dashboard）；
-4. 端口按 6.5 登记，两套端口段同步；
-5. 阶段 B 随 `comment-service` 引入 **MongoDB（27017）**；阶段 C 再加 Elasticsearch。
+### 6.7 评论服务的当前存储与一致性
 
-### 6.7 评论服务的存储方案（已定：混合存储）
-
-企业里稳妥的形态**不是把评论整体搬进 MongoDB**，而是**混合存储**：内容进文档库，关系元数据留关系库。
-
-| 存什么 | 放哪 | 为什么 |
+| 数据 | 当前存储 | 约束 |
 |---|---|---|
-| 正文、图片数组、标签数组、商家回复、点赞数 | **MongoDB**（集合 `comments`，内含与 MySQL 对应的 `commentId`） | 嵌套结构免 join，是评论这个**聚合根**的自然形态 |
-| `comment_id`、`order_id`、`user_id`、`product_id`、`window_id`、`score`、`status`、`created_at` | **MySQL `comment_db.comments`** | 关联查询、评分聚合、统计、风控都需要关系型能力 |
+| 菜品评价正文、图片文件键、标签 | MongoDB `comments` 集合 | 与公开 `commentId` 对应，图片只存 fileKey，响应生成 URL |
+| 菜品评价用户、订单、菜品、评分、请求幂等及时间 | MySQL `comment_db.comments` | `(order_id, product_id)` 保证每订单每菜一次 |
+| 菜品权威评分、版本及可靠发布事件 | `comment_rating_stats`、`comment_rating_outbox` | 元数据、汇总版本、outbox 同一本地事务提交 |
+| 店铺评价（评分、正文、图片键、标签） | MySQL `comment_db.window_reviews` | 每订单一次，不拆分写入 MongoDB |
+| 商品评分读模型 | `product_db.product_rating_stats` | MQ 按 revision 幂等覆盖；重复/旧版本不累加 |
+| 作者头像 | 运行时按页批量查询用户服务 | 使用用户当前头像，不在评价表复制头像 URL |
 
-- **写入顺序（重要）**：**先写 MongoDB（内容）→ 再写 MySQL（元数据，本地事务）**。
-  兜底是"**孤儿文档清理**"：定时任务扫出 MongoDB 中存在、MySQL 中无对应元数据的文档并补偿。
-  选这个顺序的理由：反过来会产生"**有元数据但没有内容**"的评论——用户能看到评论条目却点不开，比孤儿文档更难发现。
-- **本方案自带两处不一致**（已在 9.2 风险表登记）：
-  1. **内容（MongoDB）与元数据（MySQL）跨存储不一致** → 固定写入顺序 + 定时对账；
-  2. **菜品评分写回 `product_db` 时跨服务不一致** → RocketMQ 事件 + 消费端幂等 + 定时对账。
-- **取舍一句话**：宁可留孤儿文档（可清理、不可见），也不要留无内容的评论（可见但坏）。
+菜品内容写入顺序是 **MongoDB 先写 → MySQL 元数据/评分/outbox 提交 → Mongo 标记 committed**。查询以已提交 MySQL 元数据为准，Mongo 正文缺失明确报错。SQL 提交失败不立即删除 Mongo 内容，避免不确定结果下误删；延迟对账确认后清理孤儿或补标。
+
+店铺与各道菜分别评分、填写文字和照片，**允许仅评分**；其他内容选填。学生端同页展示店铺与订单全部菜品，菜品可选；不要求先提交店铺再评价菜品。`GET /comments/orders/{orderId}` 校验本人订单并回显已有评价，成功项只读，未评价项可补充。前端按项保存原请求与幂等键，部分成功后不重复发布成功项。
+
+当前只有评分短缓存、随机 TTL、失败回源及评分事件对账；完整布隆过滤器、热点互斥、回复、点赞、审核、评价修改删除均不能标记为已完成。评分投影属于最终一致，内容与元数据跨存储对账也不等于分布式事务。
 
 ## 7. 功能缺口与归属
 
@@ -231,14 +244,14 @@
 
 | # | 功能 | 归属 | 决策依据 |
 |---|---|---|---|
-| 1 | 菜品库存 | **`stock-service`（独立）** | 唯一需要回滚语义的场景 → 用 Seata AT（见 6.3/6.4） |
+| 1 | 菜品库存 | **`stock-service`（独立）** | 核心扣减/回补使用 Seata AT；MQ 用于派生快照失效（见 6.4） |
 | 2 | 评论/评价 | **`comment-service`（独立）** | 高读写比 → 缓存练习载体；风险低 |
 | 3 | 购物车 | **`cart-service`（独立）** | Redis 数据结构练习 |
 | 4 | 图片上传 | **`file-service`（独立）** | 横切复用（头像/菜品图/评论图） |
 | 5 | 站内消息推送 | **`notification-service`（独立）** | WebSocket 长连接练习 |
-| 6 | 菜单搜索 | **`search-service`（独立，首期源码已补）** | ES 检索；MySQL 为准，RocketMQ 驱动索引刷新 |
+| 6 | 菜单搜索 | **`search-service`（独立，首期及学生端已实现）** | ES 检索；MySQL 为准，RocketMQ 驱动索引刷新 |
 | 7 | 经营报表 | **`statistics-service`（独立，稍后）** | 只读聚合 / CQRS 雏形 |
-| 8 | 订单超时自动取消（15 分钟） | `order-service` | 只操作本服务库，本地定时任务，无新技术点 |
+| 8 | 订单超时自动取消（15 分钟，待实现） | `order-service` | 现有取消涉及跨服务库存回补，后续定时入口应复用取消及一致性规则，不能仅本地改状态 |
 | 9 | 余额 + 余额流水 | `user-service` | 必须与余额字段同事务，拆开会制造无收益的分布式事务 |
 | 10 | 餐厅（食堂）层级 | `product-service` | 见 4.3，拆开只多一跳 |
 | 11 | 窗口申请 / 入驻审核 | `product-service` + `user-service` | 本质是归属关系的建立流程，无新技术点 |
@@ -247,64 +260,54 @@
 
 ### 8.1 端口
 
-**9090 段**：`9090~9101` 已分配（gateway/order/user/product/auth/MySQL/Redis/Nacos/Sentinel/payment），
-新服务顺延：
+当前源码默认端口见第 3 节；基础设施端口见 6.5。**当前两套端口表已不再同步维护，不应把历史设备端口当作可直接使用的分配。**
 
-| 服务 | 9090 段 | 当前设备旧端口段 |
-|---|---|---|
-| `file-service` | 9102 | 8087 |
-| `cart-service` | 9103 | 8088 |
-| `stock-service` | 9104 | 8089 |
-| `comment-service` | 9105 | 8090 |
-| `search-service` | 9106 | 8091 |
-| `notification-service` | 9107 | 8092 |
-| `statistics-service` | 9108 | 8093 |
-| Seata Server | 9109 | 8094 |
+- 业务服务：Gateway 9090、订单 9091、用户 9092、商品 9093、认证 9094、支付 9101、文件 9102、购物车 9103、库存 9104、评论 9105、搜索 9106、通知 9107。
+- Nginx 当前统一入口为 8088，提供 Web 静态托管及 `/api` HTTP/WS 转发；**8088 不再是当前购物车服务默认端口**。
+- Seata TC 9109、控制台 9108；统计服务尚未创建，端口需在实施前重新确认。
+- 商品服务 Sentinel 通信端口已让位为 9110，避免占用文件服务 9102。
+- Windows 宿主机开发时，订单/库存 Seata 客户端使用 `registry.type: file` 和 `grouplist.default` 直连 `127.0.0.1:9109`，避免访问不可路由的 Docker 内网地址。服务与 TC 同 Docker 网络部署时需按该环境重新确认发现及寻址配置。
 
-> 注：`file-service` 占用 9102 后，`product-service` 的 **Sentinel 通信端口**已由 9102 让位改为 `9110`
-> （见 `product-service/application.yml` 的 `SENTINEL_TRANSPORT_PORT`）。
->
-> `stock-service`（9104）与 `file-service`（9102）已按上表落地；Seata Server 已占用 9109。
->
-> **注意（2026-10-20 修正）**：TC 注册到 Nacos 的地址是**容器内网 IP**（如 `172.19.0.3:9109`），
-> 该镜像无法用 `SEATA_IP` 覆盖。而本机开发时 TM/RM 跑在 Windows 宿主机上，WSL2 NAT 下宿主机
-> 没有到容器网段的路由（该网段还会被本机代理软件的 TUN 接管，连过去只是 `198.18.x.x` 的假连接），
-> 表现为 TCP 看似可连、30 秒无响应。因此 `order-service` / `stock-service` 的 Seata 客户端
-> **不走注册中心发现**，改为 `seata.registry.type: file` + `seata.service.grouplist.default`
-> 直连 `127.0.0.1:9109`。容器化部署（服务与 TC 同处一个 Docker 网络）时改回 `type: nacos`。
-
-**两套端口的规矩不变**：9090 段属于另一台设备，当前设备的改动不要合并过去
-（见 `PROJECT_PROGRESS.md`"当前设备本地端口恢复"）。
+修改端口须同步检查配置、Nacos、Nginx、Compose、前端入口及文档，不能仅修改本文表格。
 
 ### 8.2 数据库
 
 | 服务 | 存储 | 说明 |
 |---|---|---|
-| `stock-service` | `stock_db`（`stock`、`stock_flow`）+ Redis | 库存量在 Redis 做原子扣减，流水落 MySQL 供对账 |
+| `stock-service` | `stock_db`（主表、流水、outbox、消费幂等等）+ Redis | MySQL 为库存事实源，Redis 是可重建快照；AT 核心交易不依赖 MQ 作为成功判定 |
 | `cart-service` | 仅 Redis | 共享 Redis 即可跨设备访问；开启 AOF 与数据卷，不建 cart_db，不做游客合并 |
 | `comment-service` | **MongoDB**（评论内容）+ `comment_db`（关系元数据） | 混合存储：内容免 join，元数据供关联与统计（见 6.7） |
-| `file-service` | `file_db`（`file_objects`） | 元数据；若用对象存储且无需检索，可不建库 |
+| `file-service` | `file_db`（`file_objects`）+ 文件存储 | 已使用元数据表；业务表存 fileKey，文件服务生成内容访问地址 |
 | `search-service` | ES 索引 | 与 MySQL 的主从式关系：**MySQL 为准，索引可随时重建** |
-| `notification-service` | 可选 `notification_db` | 离线消息需要落库才能补投 |
-| `statistics-service` | 无库 | 只读聚合，经 Feign 从 order/product 拉取后汇总 |
-| Seata 参与库 | `order_db`、`stock_db` 各加 `undo_log` 表 | AT 模式必需的全局回滚日志 |
+| `notification-service` | **已使用 `notification_db`** + Redis | 通知持久化与幂等、本人游标分页；Redis 票据与在线分发，WebSocket 不是消息事实源 |
+| `statistics-service` | 规划无独立库，尚未实现 | 首期规划由其他服务提供统计结果后汇总；后续 MQ 统计读模型另行设计 |
+| Seata 参与库 | `order_db`、`stock_db` 的 `undo_log` | AT 全局回滚日志；`order_db` 另有取消通知 TCC 状态及通知 outbox |
 
 ## 9. 分期实施与风险
 
-### 9.1 分期路线
+### 9.1 分期路线与剩余工作
 
 ```text
-阶段 A（已完成，6 个）  gateway · auth · user · order · product · payment
-阶段 B（交易闭环与内容，4 个）
-    1) stock        先补真实漏洞（当前可无限下单）+ Seata AT 主战场   ✅ 已完成
-    2) cart         交易链路前置环节   ✅ 已完成（仅 Redis，不含 MySQL 备份与游客合并）
-    3) comment      缓存练习载体
-    4) file         前端上传依赖   ✅ 已完成
-阶段 C（技术扩展，3 个）
-    5) notification WebSocket 长连接（消费 RocketMQ 事件）
-    6) search       ES 检索（RocketMQ 消息同步索引）   🟡 首期源码已补
-    7) statistics   报表，依赖其它服务稳定后再做
+阶段 A：6 个服务均已有实现，交易及身份能力持续增强
+阶段 B：stock / cart / comment / file 均已有实现
+阶段 C：notification 第一阶段与 search 首期及学生端已实现
+        statistics 尚未建模块；商家与顾客订单聊天尚未实现
 ```
+
+| 优先范围 | 当前状态 | 下一步 |
+|---|---|---|
+| 学生端订单闭环 | 建单、余额支付、取消回补、取餐码展示、评价、通知已有实现 | 运行最新后端代码，联调真实订单、失败与并发场景 |
+| 评论 | 仅评分、店铺/逐菜独立评价、状态回显、头像已补 | 新接口及头像批量调用运行验收，完善缓存防护与后续治理 |
+| 搜索 | 搜索、店内筛选、历史记录/定位、增量与重建策略已补 | 验证实际 MQ 同步、别名切换及对账；治理旧/失败索引保留 |
+| 通知第一阶段 | HTTP 分页、已读/未读、票据 WS、学生端订单中心已有实现 | 验证实际 MQ→落库→WS、离线补查、重复事件、取消全局回滚及 TCC 重试 |
+| 库存 MQ | outbox、undo-log 门控及快照失效消费者已补、迁移已执行 | 验证 AT 提交/回滚与事件发布时序、Redis 故障、重复消息及死信 |
+| 商家与顾客沟通 | 仅方案 | 后续再实施，当前不把订单通知视为聊天 |
+| 统计服务 | 仅规划，无模块 | 确认指标定义、权限、聚合接口及端口后实施；不能标记为已完成 |
+| 端侧收口 | 边界已定，旧调试入口暂留 | 商家接入独立 Vue 管理端后清理 uni-app 非学生页面，严格限制登录角色 |
+
+最近的取餐码改造只要求六位码，活跃码唯一迁移与 SQL 约束已验证；前端旧核销调试页按用户明确要求同步适配，不作为继续扩展 uni-app 管理能力的依据。
+
+本次文档核对仅检查源码、配置和既有记录，不启动服务、不执行 Maven、不重新运行业务验收。
 
 ### 9.2 风险表（必须与对应服务同时落地）
 
@@ -313,11 +316,11 @@
 | **超卖 / 库存不一致** | `stock-service` | Redis Lua 原子预扣；Seata 全局回滚；**库存流水 + 定时对账**作为 TC 故障时的最后防线。**已落地**（2026-10-19）：Redis Lua 预扣可降级、DB 行锁 + 版本号乐观锁条件更新、`stock_flow` 唯一键幂等、`StockReconcileTask` 定时对账 |
 | 分布式事务不可收敛 | `order × stock` | 用 Seata AT 的全局回滚做主路径；全局锁 + `undo_log` 保证一致性；禁止"先建单后扣库存无补偿"的写法。**已落地**（2026-10-19）：`createOrder` 标 `@GlobalTransactional`，订单与明细落库后调用 `StockServiceClient.deduct`，扣减失败即整体回滚 |
 | Seata TC 单点 | `seata-server` | 本地单 TC 即可；TC 不可用时事务挂起 → 必须靠对账修复，因此对账不能省 |
-| ES 与 MySQL 数据漂移 | `search-service` | 以 MySQL 为唯一事实来源；提供内部全量重建接口，索引随时可丢弃重建 |
+| ES 与 MySQL 数据漂移 | `search-service` | 以 MySQL 为事实源；单菜品增量、窗口刷新、影子索引构建后原子切换别名、定期对账均已有源码；仍需验证乱序、锁失效、重建期间写入及残留索引治理 |
 | 消息重复 / 丢失 | RocketMQ 消费方 | 消费端幂等（用业务唯一键）+ 消费失败重试 + 死信队列 |
 | **评论内容与元数据跨库不一致** | `comment-service`（MongoDB × MySQL） | 固定写入顺序（先内容后元数据）+ 定时对账清理孤儿文档（见 6.7） |
 | **菜品评分跨服务不一致** | `comment × product` | RocketMQ 事件 + 消费端幂等 + 定时对账（见 6.7） |
-| WebSocket 穿网关 | `notification-service` | 网关需支持 WS 路由；握手阶段校验 JWT（WebFlux 过滤链与 Servlet 不同，需单独配置） |
+| WebSocket 穿网关 | `notification-service` | 已补 Nginx/Gateway WS 路由；JWT 认证 HTTP 换取 Redis 一次性票据，经 WebSocket 子协议提交，消费票据后绑定用户；不把长期 Token 放 URL。需继续验证过期、注销、跨用户及跨实例分发 |
 | 服务数膨胀、本地起不动 | 全部 | 用 `docker compose` 分档启动；本地开发只启动当前链路所需服务；端口按 8.1 统一登记 |
 
 ### 9.3 上限说明
@@ -339,7 +342,7 @@
    并按 6.4 明确它是"用 Seata"还是"走最终一致"；
 10. 回填本文档第 3 节总表与第 13 节变更记录。
 
-## 11. 待决策事项
+## 11. 既有决策与新增待定事项
 
 | # | 事项 | 结论 / 影响 |
 |---|---|---|
@@ -350,9 +353,12 @@
 | 5 | 餐厅命名 | ✅ **已定**：统一用**餐厅**（表名 `restaurants`）；原单体的"食堂 / `canteen`"只作为历史对照，不再出现在新代码中 |
 | 6 | ES 索引同步方式 | ✅ **已定**：**RocketMQ 消息驱动**（见 6.1）；Canal / 定时全量不再作为首选 |
 
-> **本节已全部收敛**（2026-10-13）。后续新增待决策项在此追加。
+| 7 | 统计服务端口与指标 | ⬜ 待实施前确认：9108 已被 Seata 控制台占用；订单数、营业额、销量等须明确状态、时间范围及权限口径 |
+| 8 | 核心资源整体迁移 TCC | ⬜ 未决定整体迁移；当前只落地取消通知 TCC，库存仍采用 AT |
 
-## 12. 已确认的口径（2026-10-13 用户裁定）
+前 6 项保留原有已确认方案；新增事项按当前进度单独列为待定，不再笼统写成“全部收敛”。
+
+## 12. 已确认的口径（含后续用户修订）
 
 | 事项 | 裁定 |
 |---|---|
@@ -360,10 +366,15 @@
 | 业务端点角色 | 立刻改：`SYSTEM_ADMIN` **不得**再拥有推进订单状态、改商品目录的权限（但**必须与数据范围校验同时上线**，否则是拿一个洞换另一个洞） |
 | 账户/档口归属的**授予权** | 归 **餐厅经理（本餐厅）** 与 **总经理（全部餐厅）**；**SYSTEM_ADMIN 不再拥有数据范围分配权** |
 | 余额支付密码 | 必须有，且是**独立于登录密码**的支付密码 |
-| 引导配置 | 对齐 `2026-10-12-admin-bootstrap-design.md`（显式开关 + 手机号 + 密码 12~64 位） |
+| 引导配置 | 保留显式引导开关与密码策略；历史手机号口径已被后续用户号/邮箱方案覆盖，本系统不使用手机号登录 |
 | 方法名与路径改名 | 一并执行（`updateStatusByAdmin` → `advanceOrderStatus` 等，见设计文档第 7 节） |
+| 用户端边界（2026-10-30） | uni-app 仅普通学生端；商家及其他管理角色使用独立 Vue 管理端，现有调试入口待后续清理 |
+| 评价（2026-10-30） | 店铺和逐菜分别评分，文字/图片/标签选填，可仅评分；已评价项只读，未评价项可补充 |
+| 完成订单（2026-10-30） | 商家不能直接推进已完成，凭顾客持有的唯一活跃取餐码核销；请求只需 pickupCode |
 
 ## 13. 变更记录
+
+以下为当日历史记录；其中“未迁移、待实现”等措辞描述当时状态，当前结论以第 1、3、6、9 节为准。
 
 | 日期 | 变更 |
 |---|---|
@@ -376,8 +387,7 @@
 | 2026-10-17 | 按用户安排优先构建 `cart-service`；新增 9103 服务骨架、JWT/Redis 与网关路由配置，MySQL 备份仍保留为后续步骤；详细计划见 [CART_MODULE_PLAN.md](CART_MODULE_PLAN.md) |
 | 2026-10-17 | 用户确认简化购物车：**Redis 为唯一业务存储**，保留 AOF 和数据卷；取消 MySQL 备份与游客合并，仅登录顾客使用。覆盖此前双存储规划（第 11 节待决策 #3 同步修订） |
 | 2026-10-17 | 新增 `order-api` 只读购买事实契约（`OrderCartSnapshotVO` / `OrderPurchasedItemVO` / `OrderServiceClient`），供购物车核实下单结果；`cart-service` 提供订单成功后的按提交快照清理接口，保留并发修改项；调用方显式串联，无跨服务事务与自动补偿 |
-| 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |
-
-
+| 2026-10-19 | **`stock-service` 落地（阶段 B 第 1 个），Seata AT 首次投产**：新增 `stock_db`（`stock` / `stock_flow` / `undo_log`）与 `order_db.undo_log`；Seata Server 2.5.0 以 `file` 存储模式跑在 9109（控制台 9108）并注册到现有 Nacos（`SEATA_GROUP` / cluster `default`），事务分组统一 `order-system-tx-group`；新增契约模块 `stock-api`（`StockServiceClient` + 降级工厂），`order-service` 引入 `spring-cloud-starter-alibaba-seata` 并在 `createOrder` 上加 `@GlobalTransactional`，落单后跨服务扣减库存；库存侧三重防线 = Redis Lua 原子预扣（可降级）+ DB 行锁与版本号乐观锁条件更新 + `stock_flow` 唯一键 `(biz_type, biz_ref, stock_id)` 幂等，另有 `StockReconcileTask` 定时对账兜底（快照漂移自动回写、流水累计与主表差值只告警不改数）；内部接口 `POST /internal/stocks/deduct\|restore`、`GET /internal/stocks/{windowId}/{productId}` 业务失败返回 HTTP 200 + 失败业务码，防止调用方 Feign 降级把「库存不足」吞成「服务不可用」；网关只注册 `stock-service-docs`（`/api/stocks/v3/api-docs`），**不注册 `/api/stocks/**` 业务路由**（该服务当前对外只有 `/internal/**`）；已确认**取消订单暂不回补库存**，留作后续任务 |
 | 2026-10-28 | 评论服务首期源码已补：发布与查询、评分汇总、MongoDB 内容先写及孤儿对账、MySQL outbox、商品侧版本幂等评分投影。未执行迁移或启动服务，部署和验证边界见 [评论服务](COMMENT_SERVICE.md)。 |
 | 2026-10-28 | 搜索服务首期源码已补：商品目录事务 outbox、RocketMQ 窗口刷新事件、商品内部菜单快照、ES 菜品搜索与全量重建、Nacos 路由和本地 ES profile。product_db V9 已执行；未运行 Maven、未启动容器/服务，消息和搜索运行态仍待验收，详见 [搜索服务](SEARCH_SERVICE.md)。 |
+| 2026-10-30 | 对照当前源码、Compose、迁移及已记录验证更新进度：现有 12 服务/21 子模块/8 个 MySQL 业务库；评论、搜索、通知首期及学生端已实现，统计与聊天仍为规划。纠正余额支付并未采用 MQ 事务消息、AT 与取消通知 TCC 并存、店铺评价单独存 MySQL、仅评分与作者当前头像、活跃取餐码唯一迁移、Nginx 入口和 9108 端口冲突；保留源码完成与运行验收的区别。本次仅更新文档，未运行 Maven 或启动服务。 |
