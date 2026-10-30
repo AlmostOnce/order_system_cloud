@@ -936,3 +936,21 @@ Nginx 将用户端的 `unpackage/dist/build/nginx-web` 目录只读挂载为站�
 | is_deleted | tinyint | 逻辑删除标记：0正常，1已删除 |
 | created_at | datetime | 记录创建时间 |
 | updated_at | datetime | 记录最后更新时间 |
+
+### 用户端通知接入
+
+消息 tab 复用通知服务的列表、已读及未读数量接口。应用在登录和回到前台时维持一条 WebSocket 连接，使用服务端签发的一次性票据；收到变更信号后重新查询数据。消息页离开时只取消列表订阅，应用进入后台才断开连接；退出登录清除角标和会话，切换账号丢弃旧响应。连接中断按退避策略重连，未读数量每30秒校准。
+
+订单服务默认 ranking-mq 配置启用订单状态通知和取消通知 TCC；状态 outbox 经 RocketMQ 持久化到通知服务，取消事件只在 TCC Confirm 中写入 outbox。NOTIFICATION_ORDER_EVENTS_ENABLED 和 NOTIFICATION_CANCEL_TCC_ENABLED 可以覆盖开关。通知服务默认允许本地 Nginx 8088 和开发服务器5173的WebSocket来源，部署时通过 NOTIFICATION_WEBSOCKET_ALLOWED_ORIGINS 设置实际域名。数据库需具备 notifications、order_notification_outbox 和 order_notification_tcc 三张表。
+
+接入代码已完成前端隔离会话检查；真实下单、支付、取消与MQ到页面的完整验收需要启动对应服务。
+
+### 业务时间约定
+
+当前业务 DATETIME 使用 UTC+8 本地时间。MySQL 启动配置 default-time-zone=+08:00，各 MySQL 服务的 Druid connection-init-sqls 显式设置会话 time_zone，避免 Java LocalDateTime 与 SQL CURRENT_TIMESTAMP 相差8小时。JVM 部署时也应使用 Asia/Shanghai 时区；JDBC serverTimezone 和 Jackson 时区配置不能代替 MySQL 会话设置。修改全局时区不改变既有连接会话，服务连接池和数据库工具需重新连接。历史数据曾混合正确本地时间与UTC时间，不能对全部时间字段统一加8小时，应依据写入来源和业务事件单独修复。
+
+### 取餐码核销
+
+商家状态接口仅允许已支付到制作中、制作中到待取货，禁止直接提交 COMPLETED。顾客付款后在订单详情读取本人专用 GET /api/orders/{orderId}/pickup-code 接口；服务端首次读取时生成并持久化六位安全随机取餐码，兼容既有已支付订单，不随普通订单列表、详情或实体序列化返回。待支付、已取消、已完成不能重新获取取餐码。
+
+商家核销接口 POST /api/orders/pickup/verify 只需提交字符串 pickupCode（六位数字，保留前导零），无需订单号。后端校验 STALL_MANAGER/RESTAURANT_MANAGER 角色和窗口范围，仅待取货可核销；每商家账号每分钟最多30次尝试，错误及越权凭据也计数。order_db 的 V4 迁移以 active_pickup_code 生成列和唯一索引保证已支付、制作中、待取货订单的取餐码唯一；碰撞时重新生成，完成或取消后自动释放。状态、版本与取餐码一起做条件更新，成功清空取餐码并改为已完成，完成通知 outbox 与订单在同一事务提交，重复或并发核销不会重复发通知。商家正式界面属于独立 Vue 管理端；uni-app 中的旧核销页仅为待清理调试入口。
