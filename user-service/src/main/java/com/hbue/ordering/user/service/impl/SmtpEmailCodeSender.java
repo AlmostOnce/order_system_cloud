@@ -24,15 +24,19 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
     }
 
     @Override
-    public void send(String email, String code) {
+    public void send(String email, String code) { sendMessage(email, code, false); }
+
+    @Override public void sendPasswordReset(String email, String code) { sendMessage(email, code, true); }
+
+    private void sendMessage(String email, String code, boolean reset) {
         if (username.isBlank() || password.isBlank()) {
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");
         }
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(username);
         message.setTo(email);
-        message.setSubject("校园食堂邮箱验证码");
-        message.setText("您的邮箱验证码是：" + code + "。验证码 10 分钟内有效，请勿向他人透露。");
+        message.setSubject(reset ? "校园食堂找回登录密码" : "校园食堂邮箱验证码");
+        message.setText((reset ? "您正在找回登录密码，验证码是：" : "您的邮箱验证码是：") + code + "。验证码10分钟内有效，请勿向他人透露。如非本人操作，请忽略此邮件。");
         try {
             mail.send(message);
         } catch (MailException exception) {

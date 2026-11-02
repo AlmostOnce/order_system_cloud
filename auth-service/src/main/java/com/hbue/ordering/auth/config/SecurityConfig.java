@@ -77,6 +77,9 @@ public class SecurityConfig {
                         // 登录、注册、刷新与图片验证码接口允许匿名访问。
                         .requestMatchers(
                                 "/auth/captcha",
+                                "/auth/password-reset/code",
+                                "/auth/password-reset/verify",
+                                "/auth/password-reset/confirm",
                                 "/auth/login",
                                 "/auth/register",
                                 "/auth/refresh"

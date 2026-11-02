@@ -122,7 +122,8 @@ public class GatewaySecurityConfig {
                         // 图片内容与文件服务保持一致：仅匿名 GET，写操作与元数据仍需登录。
                         .pathMatchers(HttpMethod.GET, "/api/files/*/content").permitAll()
                         // 图片验证码接口允许匿名访问，登录前必须先拿到验证码。
-                        .pathMatchers("/api/auth/captcha")
+                        .pathMatchers("/api/auth/captcha", "/api/auth/password-reset/code",
+                                "/api/auth/password-reset/verify", "/api/auth/password-reset/confirm")
                         .permitAll()
 
                         // 登录接口允许匿名访问。

@@ -26,7 +26,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailVerificationService implements EmailVerification {
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
+    static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
         local current = redis.call('GET', KEYS[1])
         if not current then return 0 end
         local digest, attempts = string.match(current, '^([a-f0-9]+):(%d+)$')
@@ -37,12 +37,12 @@ public class EmailVerificationService implements EmailVerification {
         else redis.call('SET', KEYS[1], digest .. ':' .. attempts, 'KEEPTTL') end
         return 0
         """, Long.class);
-    private static final DefaultRedisScript<Long> REMOVE_IF_SAME = new DefaultRedisScript<>("""
+    static final DefaultRedisScript<Long> REMOVE_IF_SAME = new DefaultRedisScript<>("""
         local current = redis.call('GET', KEYS[1])
         if current and string.sub(current, 1, 64) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
         return 0
         """, Long.class);
-    private static final DefaultRedisScript<Long> CONSUME_MATCHING_TICKET = new DefaultRedisScript<>("""
+    static final DefaultRedisScript<Long> CONSUME_MATCHING_TICKET = new DefaultRedisScript<>("""
         local current = redis.call('GET', KEYS[1])
         if current and current == ARGV[1] then return redis.call('DEL', KEYS[1]) end
         return 0

@@ -39,6 +39,7 @@ def command(*args):
 key = 'email:test:' + uuid.uuid4().hex
 consume = script('CONSUME')
 remove = script('REMOVE_IF_SAME')
+matching = script('CONSUME_MATCHING_TICKET')
 correct = 'a' * 64
 wrong = 'b' * 64
 try:
@@ -59,6 +60,16 @@ try:
     assert sum(results) == 1
     command('SET', key, correct + ':0', 'EX', 60)
     assert command('EVAL', remove, 1, key, correct) == 1
-    print('Redis 邮箱验证码：失败计数、TTL、并发一次消费和条件删除验证通过')
+    grant = '9\n2\nuser@example.com'
+    command('SET', key, grant, 'EX', 60)
+    assert command('GET', key) == grant
+    assert 0 < command('TTL', key) <= 60
+    assert command('EVAL', matching, 1, key, 'wrong-grant') == 0
+    assert command('GET', key) == grant
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(lambda _: command('EVAL', matching, 1, key, grant), range(16)))
+    assert sum(results) == 1
+    assert command('GET', key) is None
+    print('Redis 邮箱凭据：失败计数、TTL、验证码及重置授权并发一次消费、条件删除验证通过')
 finally:
     command('DEL', key)
