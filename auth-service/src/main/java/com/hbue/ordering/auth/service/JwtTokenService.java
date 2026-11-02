@@ -76,7 +76,10 @@ public class JwtTokenService {
             String userUuid,
             String username,
             String roleCode
-    ) {
+    ) { return createAccessToken(userUuid, username, roleCode, 0); }
+
+    public String createAccessToken(String userUuid, String username, String roleCode, long credentialVersion) {
+        if(credentialVersion<0)throw new IllegalArgumentException("凭据版本无效");
         if (userUuid == null || !userUuid.matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")) {
             throw new IllegalArgumentException("用户 UUID 不合法，拒绝签发令牌");
         }
@@ -97,6 +100,7 @@ public class JwtTokenService {
                 .claim("username", username)
                 .claim("roles", List.of(roleCode))
                 .claim("token_type", "access")
+                .claim("credential_version", credentialVersion)
                 .issuedAt(issuedAt)
                 .expiresAt(
                         issuedAt.plusSeconds(ACCESS_TOKEN_TTL_SECONDS)

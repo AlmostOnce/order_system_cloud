@@ -29,6 +29,8 @@ public interface RefreshTokenService {
             String roleCode
     );
 
+    String createRefreshToken(Long userId, String username, String roleCode, long credentialVersion);
+
     /**
      * 根据 Refresh Token 获取用户信息。
      *

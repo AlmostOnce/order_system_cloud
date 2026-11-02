@@ -247,12 +247,12 @@ class AuthServiceImplTest {
         when(jwtTokenService.createAccessToken(
                 "12345678-1234-4234-8234-123456789abc",
                 "测试用户",
-                "CUSTOMER"
+                "CUSTOMER", 0L
         )).thenReturn("new-access-token");
         when(refreshTokenService.createRefreshToken(
                 5L,
                 "测试用户",
-                "CUSTOMER"
+                "CUSTOMER", 0L
         )).thenReturn("new-refresh-token");
         when(refreshTokenService.consumeRefreshToken("old-refresh-token"))
                 .thenReturn(true);
@@ -331,12 +331,12 @@ class AuthServiceImplTest {
         when(jwtTokenService.createAccessToken(
                 "12345678-1234-4234-8234-123456789abc",
                 "测试用户",
-                "CUSTOMER"
+                "CUSTOMER", 0L
         )).thenReturn("new-access-token");
         when(refreshTokenService.createRefreshToken(
                 5L,
                 "测试用户",
-                "CUSTOMER"
+                "CUSTOMER", 0L
         )).thenReturn("orphan-refresh-token");
         when(refreshTokenService.consumeRefreshToken("old-refresh-token"))
                 .thenReturn(false);
@@ -571,4 +571,18 @@ class AuthServiceImplTest {
         verifyNoInteractions(userServiceClient);
         verifyNoInteractions(loginAttemptService);
     }
+    @Test
+    void oldRefreshTokenCannotMintNewSessionAfterRecovery() {
+        var users=mock(UserServiceClient.class);var refresh=mock(RefreshTokenService.class);
+        var lock=mock(RefreshTokenLockService.class);var jwt=mock(JwtTokenService.class);
+        when(lock.acquire("old-token")).thenReturn(mock(RefreshTokenLockService.LockHandle.class));
+        when(refresh.getRefreshTokenInfo("old-token")).thenReturn(new RefreshTokenInfo(9L,"同学","CUSTOMER",0));
+        when(users.getUserById(9L)).thenReturn(ApiResponse.success(com.hbue.ordering.user.api.vo.UserBasicVO.builder()
+                .userId(9L).userUuid("12345678-1234-4234-8234-123456789abc").credentialVersion(1L).build()));
+        var auth=new AuthServiceImpl(users,mock(LoginAttemptService.class),mock(CaptchaService.class),jwt,refresh,mock(AccessTokenBlacklistService.class),lock);
+        var request=new RefreshTokenRequest();request.setRefreshToken("old-token");
+        assertThrows(BusinessException.class,()->auth.refreshAccessToken(request));
+        verify(refresh).deleteRefreshToken("old-token");verifyNoInteractions(jwt);
+    }
+
 }

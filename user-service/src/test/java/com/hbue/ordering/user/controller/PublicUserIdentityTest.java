@@ -26,6 +26,7 @@ class PublicUserIdentityTest {
         PublicUserIdentityLookup lookup = mock(PublicUserIdentityLookup.class);
         when(provider.getIfAvailable()).thenReturn(lookup);
         when(lookup.findInternalId(UUID)).thenReturn(7L);
+        when(lookup.findCredentialVersion(UUID)).thenReturn(0L);
         var identity = new JwtUserIdentity(provider, "http://unused", "internal-test");
         Jwt original = Jwt.withTokenValue("signed-original").header("alg", "RS256").subject(UUID)
                 .claim("username", "用户").claim("roles", List.of("CUSTOMER"))
@@ -46,6 +47,22 @@ class PublicUserIdentityTest {
         Jwt old = Jwt.withTokenValue("old").header("alg", "RS256").subject("7").build();
         assertThrows(JwtException.class, () -> identity.toInternalPrincipal(old));
         verifyNoInteractions(provider);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rejectsAccessTokenIssuedBeforePasswordRecovery() {
+        ObjectProvider<PublicUserIdentityLookup> provider=mock(ObjectProvider.class);
+        PublicUserIdentityLookup lookup=mock(PublicUserIdentityLookup.class);
+        when(provider.getIfAvailable()).thenReturn(lookup);
+        when(lookup.findCredentialVersion(UUID)).thenReturn(1L);
+        var identities=new JwtUserIdentity(provider,"http://unused","internal-test");
+        Jwt old=Jwt.withTokenValue("old-signed").header("alg","RS256").subject(UUID).build();
+        assertThrows(JwtException.class,()->identities.toInternalPrincipal(old));
+        verify(lookup,never()).findInternalId(UUID);
+        when(lookup.findInternalId(UUID)).thenReturn(7L);
+        Jwt fresh=Jwt.withTokenValue("fresh-signed").header("alg","RS256").subject(UUID).claim("credential_version",1L).build();
+        assertEquals("7",identities.toInternalPrincipal(fresh).getSubject());
     }
 
     @Test

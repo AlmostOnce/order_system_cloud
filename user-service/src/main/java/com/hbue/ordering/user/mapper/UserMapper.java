@@ -19,6 +19,27 @@ import java.math.BigDecimal;
  */
 @Mapper
 public interface UserMapper extends BaseMapper<UserDO> {
+    @Select("SELECT user_id,email,credential_version FROM users WHERE email=#{email} AND status=1 AND deleted_at IS NULL")
+    UserDO selectRecoveryByEmail(@Param("email") String email);
+
+    @Select("""
+        SELECT user_id,email,password_hash,credential_version FROM users
+        WHERE user_id=#{id} AND status=1 AND deleted_at IS NULL FOR UPDATE
+        """)
+    UserDO selectPasswordRecoveryForUpdate(@Param("id") Long id);
+
+    @Select("SELECT credential_version FROM users WHERE user_uuid=#{uuid} AND status=1 AND deleted_at IS NULL")
+    Long selectCredentialVersion(@Param("uuid") String uuid);
+
+    @Update("""
+        UPDATE users SET password_hash=#{hash}, credential_version=credential_version+1,
+            version=version+1, updated_at=NOW()
+        WHERE user_id=#{id} AND email=#{email} AND credential_version=#{credentialVersion}
+            AND status=1 AND deleted_at IS NULL
+        """)
+    int resetLoginPassword(@Param("id") Long id, @Param("email") String email,
+            @Param("credentialVersion") long credentialVersion, @Param("hash") String hash);
+
     /** 内部头像批量查询，仅投影用户标识和文件键。 */
     @Select("""
         <script>SELECT user_id, avatar_file_key FROM users
@@ -52,7 +73,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /** 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。 */
     @Select("""
-        SELECT user_id, user_uuid, user_no, balance, pay_password_hash, status, deleted_at
+        SELECT user_id, user_uuid, user_no, credential_version, balance, pay_password_hash, status, deleted_at
         FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
         """)
     UserDO selectBalanceForUpdate(@Param("userId") Long userId);
@@ -70,7 +91,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     /** 本人资料的字段白名单，不查询密码和支付凭据。 */
     @Select("""
-        SELECT user_id, user_uuid, user_no, username, role_code, email, avatar_file_key, created_at, status
+        SELECT user_id, user_uuid, user_no, credential_version, username, role_code, email, avatar_file_key, created_at, status
         FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
         """)
     UserDO selectOwnProfile(@Param("userId") Long userId);
@@ -85,7 +106,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             username,
             role_code,
             email,
@@ -121,7 +142,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             username,
             role_code,
             email,
@@ -149,7 +170,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             username,
             role_code,
             email,
@@ -173,7 +194,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             username,
             role_code,
             email,
@@ -197,7 +218,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             username,
             role_code,
             email,
@@ -219,7 +240,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
     SELECT
         user_id,
-        user_uuid, user_no,
+        user_uuid, user_no, credential_version,
         username,
         role_code,
         password_hash,
@@ -245,7 +266,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             balance,
             pay_password_hash,
             status,
@@ -267,7 +288,7 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("""
         SELECT
             user_id,
-            user_uuid, user_no,
+            user_uuid, user_no, credential_version,
             password_hash,
             pay_password_hash,
             status,

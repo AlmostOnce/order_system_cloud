@@ -8,5 +8,6 @@ import org.springframework.stereotype.Component;
 public class UserUuidLookup implements PublicUserIdentityLookup {
     private final UserMapper mapper;
     public UserUuidLookup(UserMapper mapper) { this.mapper = mapper; }
+    @Override public Long findCredentialVersion(String userUuid) { return mapper.selectCredentialVersion(userUuid); }
     @Override public Long findInternalId(String userUuid) { return mapper.selectIdByUuid(userUuid); }
 }

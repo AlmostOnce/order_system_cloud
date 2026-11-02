@@ -672,6 +672,7 @@ public class UserServiceImpl
         // 只返回用户 ID、用户名和角色编码。
         return UserBasicVO.builder()
                 .userId(userDO.getUserId())
+                .credentialVersion(userDO.getCredentialVersion())
                 .userUuid(userDO.getUserUuid())
                 .userNo(userDO.getUserNo())
                 .username(userDO.getUsername())

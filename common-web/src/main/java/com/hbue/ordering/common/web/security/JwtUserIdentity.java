@@ -37,8 +37,7 @@ public class JwtUserIdentity {
         if (uuid == null || !PUBLIC_UUID.matcher(uuid).matches()) {
             throw new JwtException("身份令牌版本已更新，请重新登录");
         }
-        PublicUserIdentityLookup local = localLookup.getIfAvailable();
-        Long userId = local != null ? local.findInternalId(uuid) : remoteLookup(uuid);
+        Long userId = resolveCurrentIdentity(uuid, credentialVersion(verified));
         if (userId == null || userId <= 0) throw new JwtException("用户不存在或已停用");
         var claims = new HashMap<>(verified.getClaims());
         // 这是服务端认证主体视图，不重签或修改传给客户端的原始令牌。
@@ -47,10 +46,28 @@ public class JwtUserIdentity {
         return new Jwt(verified.getTokenValue(), verified.getIssuedAt(), verified.getExpiresAt(), verified.getHeaders(), claims);
     }
 
-    private Long remoteLookup(String uuid) {
+    public static long credentialVersion(Jwt jwt) {
+        Object value=jwt.getClaims().get("credential_version");
+        if(value==null)return 0;
+        if(!(value instanceof Number number) || number.longValue()<0 || number.doubleValue()!=number.longValue())
+            throw new JwtException("登录凭据版本无效");
+        return number.longValue();
+    }
+
+    public Long resolveCurrentIdentity(String uuid, long credentialVersion) {
+        if(uuid==null || !PUBLIC_UUID.matcher(uuid).matches() || credentialVersion<0)
+            throw new JwtException("身份令牌无效");
+        PublicUserIdentityLookup local=localLookup.getIfAvailable();
+        if(local==null)return remoteLookup(uuid,credentialVersion);
+        Long current=local.findCredentialVersion(uuid);
+        if(current==null || current!=credentialVersion)throw new JwtException("登录密码已重置，请重新登录");
+        return local.findInternalId(uuid);
+    }
+
+    private Long remoteLookup(String uuid, long credentialVersion) {
         if (internalToken == null || internalToken.isBlank()) throw new JwtException("身份解析内部凭据未配置");
         try {
-            JsonNode response = userClient.get().uri("/internal/users/identities/{uuid}", uuid)
+            JsonNode response = userClient.get().uri("/internal/users/identities/{uuid}?credentialVersion={version}", uuid, credentialVersion)
                     .header("X-Internal-Token", internalToken).retrieve().body(JsonNode.class);
             if (response == null || !"COMMON_000".equals(response.path("code").asText())
                     || !response.path("data").isIntegralNumber()) throw new JwtException("无法确认用户身份");

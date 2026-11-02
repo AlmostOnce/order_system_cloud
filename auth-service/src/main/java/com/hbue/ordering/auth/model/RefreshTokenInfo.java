@@ -16,6 +16,8 @@ public class RefreshTokenInfo {
      * 用户 ID。
      */
     private final Long userId;
+    private final long credentialVersion;
+    public long getCredentialVersion() { return credentialVersion; }
 
     /**
      * 用户名。
@@ -38,7 +40,10 @@ public class RefreshTokenInfo {
             Long userId,
             String username,
             String roleCode
-    ) {
+    ) { this(userId,username,roleCode,0); }
+
+    public RefreshTokenInfo(Long userId, String username, String roleCode, long credentialVersion) {
+        this.credentialVersion=credentialVersion;
         this.userId = userId;
         this.username = username;
         this.roleCode = roleCode;

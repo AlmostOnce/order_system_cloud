@@ -190,14 +190,16 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtTokenService.createAccessToken(
                 userBasicVO.getUserUuid(),
                 userBasicVO.getUsername(),
-                userBasicVO.getRoleCode()
+                userBasicVO.getRoleCode(),
+                userBasicVO.getCredentialVersion()
         );
 
         // 将 Refresh Token 保存到 Redis，供后续换取新的访问 Token。
         String refreshToken = refreshTokenService.createRefreshToken(
                 userBasicVO.getUserId(),
                 userBasicVO.getUsername(),
-                userBasicVO.getRoleCode()
+                userBasicVO.getRoleCode(),
+                userBasicVO.getCredentialVersion()
         );
 
         // 返回登录 Token。
@@ -267,18 +269,24 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "用户身份不可用，请重新登录");
         }
         UserBasicVO currentIdentity = identityResponse.getData();
+        if(refreshTokenInfo.getCredentialVersion()!=currentIdentity.getCredentialVersion()) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"登录密码已重置，请重新登录");
+        }
         // 使用用户信息签发新的访问 Token。
         String accessToken = jwtTokenService.createAccessToken(
                 currentIdentity.getUserUuid(),
                 currentIdentity.getUsername(),
-                currentIdentity.getRoleCode()
+                currentIdentity.getRoleCode(),
+                currentIdentity.getCredentialVersion()
         );
 
         // 创建新的 Refresh Token，实行刷新令牌轮换。
         String newRefreshToken = refreshTokenService.createRefreshToken(
                 refreshTokenInfo.getUserId(),
                 currentIdentity.getUsername(),
-                currentIdentity.getRoleCode()
+                currentIdentity.getRoleCode(),
+                currentIdentity.getCredentialVersion()
         );
 
         try {

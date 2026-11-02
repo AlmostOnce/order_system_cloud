@@ -23,6 +23,10 @@ import java.time.LocalDateTime;
 @TableName("users")
 public class UserDO {
 
+    /** 登录凭据版本，密码恢复时递增，使旧会话失效。 */
+    @TableField("credential_version")
+    private Long credentialVersion = 0L;
+
     /**
      * 用户 ID。
      */

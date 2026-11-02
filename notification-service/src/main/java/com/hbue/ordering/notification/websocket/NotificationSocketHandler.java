@@ -22,8 +22,9 @@ public class NotificationSocketHandler extends TextWebSocketHandler implements S
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final StringRedisTemplate redis;
     private final String blacklistPrefix;
-    public NotificationSocketHandler(StringRedisTemplate redis, @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String prefix) {
-        this.redis = redis; this.blacklistPrefix = prefix;
+    private final com.hbue.ordering.common.web.security.JwtUserIdentity users;
+    public NotificationSocketHandler(StringRedisTemplate redis, @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String prefix, com.hbue.ordering.common.web.security.JwtUserIdentity users) {
+        this.redis = redis; this.blacklistPrefix = prefix; this.users=users;
     }
     @Override public List<String> getSubProtocols() { return List.of("notification.v1"); }
     @Override public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -53,7 +54,8 @@ public class NotificationSocketHandler extends TextWebSocketHandler implements S
     }
     private boolean valid(NotificationTicketService.SessionIdentity identity) {
         if (identity.expiresAt() <= Instant.now().getEpochSecond()) return false;
-        try { return Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + identity.tokenId())); }
+        try { return Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + identity.tokenId()))
+                && Long.valueOf(identity.userId()).equals(users.resolveCurrentIdentity(identity.userUuid(),identity.credentialVersion())); }
         catch (RuntimeException error) { return false; }
     }
     private void close(WebSocketSession session) {

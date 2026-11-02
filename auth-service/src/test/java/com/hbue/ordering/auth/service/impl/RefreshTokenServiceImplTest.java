@@ -60,6 +60,7 @@ class RefreshTokenServiceImplTest {
         expectedValues.put("userId", "5");
         expectedValues.put("username", "测试用户");
         expectedValues.put("roleCode", "CUSTOMER");
+        expectedValues.put("credential_version", "0");
 
         // 确认用户信息写入封装组件，且过期时间沿用原配置。
         verify(redisOperationsService)

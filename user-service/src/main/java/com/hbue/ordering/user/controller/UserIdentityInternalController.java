@@ -18,9 +18,12 @@ public class UserIdentityInternalController {
 
     @GetMapping("/identities/{userUuid}")
     public ApiResponse<Long> resolve(@RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @PathVariable("userUuid") String userUuid) {
+            @PathVariable("userUuid") String userUuid,
+            @RequestParam(value="credentialVersion", required=false) Long credentialVersion) {
         verifier.verify(token);
         if (!JwtUserIdentity.PUBLIC_UUID.matcher(userUuid).matches()) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用户标识格式不正确");
+        if (credentialVersion != null && (credentialVersion < 0 || !credentialVersion.equals(lookup.findCredentialVersion(userUuid))))
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录密码已重置，请重新登录");
         Long id = lookup.findInternalId(userUuid);
         if (id == null) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或已停用");
         return ApiResponse.success(id);

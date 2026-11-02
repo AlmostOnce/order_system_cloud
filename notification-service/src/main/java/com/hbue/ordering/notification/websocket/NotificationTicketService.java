@@ -18,9 +18,13 @@ public class NotificationTicketService {
         if (jwt.getId() == null || jwt.getExpiresAt() == null) throw new IllegalArgumentException("令牌信息不完整");
         long userId = Long.parseLong(jwt.getSubject());
         if (userId <= 0 || jwt.getId().contains("|")) throw new IllegalArgumentException("令牌信息不正确");
+        String uuid=jwt.getClaimAsString("user_uuid");
+        if(uuid==null||!com.hbue.ordering.common.web.security.JwtUserIdentity.PUBLIC_UUID.matcher(uuid).matches())
+            throw new IllegalArgumentException("用户身份不完整");
+        long credentialVersion=com.hbue.ordering.common.web.security.JwtUserIdentity.credentialVersion(jwt);
         byte[] bytes = new byte[32]; random.nextBytes(bytes);
         String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        redis.opsForValue().set(PREFIX + ticket, userId + "|" + jwt.getId() + "|" + jwt.getExpiresAt().getEpochSecond(), Duration.ofSeconds(30));
+        redis.opsForValue().set(PREFIX + ticket, userId + "|" + jwt.getId() + "|" + jwt.getExpiresAt().getEpochSecond()+"|"+uuid+"|"+credentialVersion, Duration.ofSeconds(30));
         return ticket;
     }
     public SessionIdentity consume(String ticket) {
@@ -28,12 +32,12 @@ public class NotificationTicketService {
         String value = redis.opsForValue().getAndDelete(PREFIX + ticket);
         if (value == null) return null;
         String[] fields = value.split("\\|", -1);
-        if (fields.length != 3) return null;
+        if (fields.length != 5) return null;
         try {
             long userId = Long.parseLong(fields[0]); long expires = Long.parseLong(fields[2]);
             if (userId <= 0 || fields[1].isBlank() || expires <= java.time.Instant.now().getEpochSecond()) return null;
-            return new SessionIdentity(userId, fields[1], expires);
+            return new SessionIdentity(userId, fields[1], expires, fields[3], Long.parseLong(fields[4]));
         } catch (NumberFormatException ignored) { return null; }
     }
-    public record SessionIdentity(long userId, String tokenId, long expiresAt) {}
+    public record SessionIdentity(long userId, String tokenId, long expiresAt, String userUuid, long credentialVersion) {}
 }
