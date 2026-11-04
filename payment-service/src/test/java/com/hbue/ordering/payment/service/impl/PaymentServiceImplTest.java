@@ -77,11 +77,13 @@ class PaymentServiceImplTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock private com.hbue.ordering.payment.service.PaymentOrderGateService paymentGate;
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
         when(paymentChannel.channelCode()).thenReturn("MOCK");
+        org.mockito.Mockito.lenient().when(orderInternalClient.getOrder(ORDER_ID)).thenReturn(ApiResponse.success(order("待支付",USER_ID)));
         PaymentChannelRegistry channelRegistry = new PaymentChannelRegistry(
                 List.of(paymentChannel, new BalancePaymentChannel())
         );
@@ -93,9 +95,9 @@ class PaymentServiceImplTest {
                 objectMapper,
                 INTERNAL_SCOPE_TOKEN
         );
-        ReflectionTestUtils.setField(
-                paymentService, "baseMapper", paymentMapper
-        );
+        ReflectionTestUtils.setField(paymentService,"paymentGate",paymentGate);
+        org.mockito.Mockito.lenient().when(paymentGate.whileOpen(any(),any())).thenAnswer(call->((java.util.function.Supplier<?>)call.getArgument(1)).get());
+        ReflectionTestUtils.setField(paymentService,"baseMapper",paymentMapper);
     }
 
     // ---------- 创建支付单 ----------
@@ -396,7 +398,7 @@ class PaymentServiceImplTest {
         );
 
         assertEquals(CommonErrorCode.SUCCESS.code(), response.getCode());
-        verify(orderInternalClient, never()).markPaid(any());
+        verify(orderInternalClient).markPaid(ORDER_ID);
     }
 
     @Test
@@ -567,6 +569,7 @@ class PaymentServiceImplTest {
     private OrderInternalDTO order(String status, Long userId) {
         OrderInternalDTO order = new OrderInternalDTO();
         order.setOrderId(ORDER_ID);
+        order.setPaymentExpiresAt(System.currentTimeMillis()+900000);
         order.setOrderNo("ORD202610120001AABBCCDD");
         order.setUserId(userId);
         order.setTotalAmount(ORDER_AMOUNT);
@@ -643,5 +646,26 @@ class PaymentServiceImplTest {
                 ))
                 .build();
         return FeignException.errorStatus("order-service", response);
+    }
+
+    @Test void expiryRejectsEvenExistingActivePaymentBeforeDeduction() {
+        var expired=order("待支付",USER_ID);expired.setPaymentExpiresAt(System.currentTimeMillis()-1);stubOrder(expired);
+        assertThrows(BusinessException.class,()->paymentService.createPayment(USER_ID,createRequest("BALANCE")));
+        verify(userBalanceInternalClient,never()).deduct(any(),anyString(),any());
+    }
+    @Test void successfulPaymentRetryRepairsOrderWithoutAnotherDeduction() {
+        stubOrder(order("待支付",USER_ID));
+        when(paymentMapper.selectSuccessByOrderId(ORDER_ID)).thenReturn(payment("SUCCESS"));
+        paymentService.createPayment(USER_ID,createRequest("BALANCE"));
+        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(userBalanceInternalClient,never()).deduct(any(),anyString(),any());
+    }
+    @Test void closeConsultsLedgerAndRecoversMissingSuccessFact() {
+        PaymentDO pending=payment("CREATED");pending.setChannelCode("BALANCE");
+        when(paymentMapper.selectAllByOrderId(ORDER_ID)).thenReturn(List.of(pending));
+        when(userBalanceInternalClient.close(eq(USER_ID),eq(INTERNAL_SCOPE_TOKEN),any())).thenReturn(ApiResponse.success("PAID"));
+        assertEquals("PAID",paymentService.closeUnpaidOrder(ORDER_ID));
+        verify(paymentGate).beginClose(ORDER_ID);
+        verify(paymentMapper,never()).closeIfCreated(anyString());
     }
 }

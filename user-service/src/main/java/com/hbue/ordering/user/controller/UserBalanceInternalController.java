@@ -70,4 +70,12 @@ public class UserBalanceInternalController {
                 userBalanceService.deduct(userId, command)
         );
     }
+
+    @PostMapping("/{userId}/balance/close")
+    public ApiResponse<String> close(@PathVariable("userId") Long userId,
+            @RequestHeader(value="X-Internal-Token",required=false) String token,
+            @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command) {
+        internalScopeTokenVerifier.verify(token);
+        return ApiResponse.success(userBalanceService.closeSettlement(userId,command));
+    }
 }

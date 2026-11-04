@@ -42,4 +42,9 @@ public interface UserBalanceInternalClient {
             @RequestHeader("X-Internal-Token") String internalToken,
             @RequestBody UserBalanceDeductCommand command
     );
+
+    @PostMapping("/internal/users/{userId}/balance/close")
+    ApiResponse<String> close(@PathVariable("userId") Long userId,
+            @RequestHeader("X-Internal-Token") String token,
+            @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command);
 }

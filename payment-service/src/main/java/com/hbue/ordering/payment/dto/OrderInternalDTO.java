@@ -14,6 +14,9 @@ import lombok.Data;
 @Data
 public class OrderInternalDTO {
 
+    private Long paymentExpiresAt;
+    private Long serverTime;
+
     /** 订单 ID。 */
     private Long orderId;
 

@@ -30,7 +30,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -64,6 +63,10 @@ public class PaymentServiceImpl
         implements PaymentService {
 
     /** 日志记录器。 */
+    private com.hbue.ordering.payment.service.PaymentOrderGateService paymentGate;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPaymentGate(com.hbue.ordering.payment.service.PaymentOrderGateService gate) { this.paymentGate=gate; }
+
     private static final Logger log = LoggerFactory.getLogger(
             PaymentServiceImpl.class
     );
@@ -148,51 +151,39 @@ public class PaymentServiceImpl
      * @return 支付单创建结果
      */
     @Override
-    public PaymentCreateVO createPayment(
-            Long userId,
-            PaymentCreateRequest request
-    ) {
-        PaymentChannel channel = channelRegistry.require(
-                resolveChannelCode(request)
-        );
-        Long orderId = request.getOrderId();
-        // 订单服务是订单归属、订单状态和应付金额的唯一事实来源，不能采用客户端传入金额。
-        OrderInternalDTO order = queryOrderInternal(orderId, userId);
-
-        // 已有进行中支付单时幂等返回，避免重复创建。
-        PaymentDO activePayment = baseMapper.selectActiveByOrderId(orderId);
-        if (activePayment != null) {
-            return renderExistingPayment(activePayment, channel, request);
-        }
-
-        if (!ORDER_STATUS_PENDING_PAYMENT.equals(order.getStatus())) {
-            throw new BusinessException(
-                    CommonErrorCode.CONFLICT,
-                    "订单当前状态不允许发起支付"
-            );
-        }
-
-        PaymentDO paymentDO = buildPayment(order, channel);
-        try {
-            save(paymentDO);
-        } catch (DuplicateKeyException exception) {
-            // 唯一索引 uk_payments_order_active 兜底并发创建；回查并发赢家。
-            // 只有确认已有活动支付单后才按幂等成功处理，否则保留数据库异常以便排查。
-            PaymentDO concurrentPayment =
-                    baseMapper.selectActiveByOrderId(orderId);
-            if (concurrentPayment == null) {
-                throw exception;
+    public PaymentCreateVO createPayment(Long userId, PaymentCreateRequest request) {
+        PaymentChannel channel=channelRegistry.require(resolveChannelCode(request));
+        Long orderId=request.getOrderId();
+        OrderInternalDTO order=queryOrderInternal(orderId,userId);
+        PaymentDO settled=baseMapper.selectSuccessByOrderId(orderId);
+        if(settled!=null) { advanceOrderPaid(settled); return PaymentCreateVO.from(settled,null); }
+        PaymentDO payment=paymentGate.whileOpen(orderId,()->{
+            PaymentDO concurrentSuccess=baseMapper.selectSuccessByOrderId(orderId);
+            if(concurrentSuccess!=null)return concurrentSuccess;
+            // 创建与关闭意图共用支付库锁；远程扣款在提交该短事务后执行。
+            if(!ORDER_STATUS_PENDING_PAYMENT.equals(order.getStatus()))
+                throw new BusinessException(CommonErrorCode.CONFLICT,"订单当前状态不允许发起支付");
+            if(order.getPaymentExpiresAt()==null || System.currentTimeMillis()>=order.getPaymentExpiresAt())
+                throw new BusinessException(CommonErrorCode.CONFLICT,"订单已超过支付期限");
+            PaymentDO existing=baseMapper.selectActiveByOrderId(orderId);
+            if(existing!=null) {
+                if(!channel.channelCode().equals(existing.getChannelCode()))
+                    throw new BusinessException(CommonErrorCode.CONFLICT,"请使用原支付渠道完成支付");
+                return existing;
             }
-            return renderExistingPayment(concurrentPayment, channel, request);
-        }
-
-        if (BalancePaymentChannel.CHANNEL_CODE.equals(channel.channelCode())) {
-            return settleWithBalance(paymentDO, channel, request.getPayPassword());
-        }
-        return PaymentCreateVO.from(
-                paymentDO,
-                channel.createPayment(paymentDO)
-        );
+            PaymentDO created=buildPayment(order,channel);
+            try {save(created);return created;}
+            catch(DuplicateKeyException collision) {
+                PaymentDO winner=baseMapper.selectActiveByOrderId(orderId);
+                if(winner==null)throw collision;
+                if(!channel.channelCode().equals(winner.getChannelCode()))throw new BusinessException(CommonErrorCode.CONFLICT,"请使用原支付渠道");
+                return winner;
+            }
+        });
+        if("SUCCESS".equals(payment.getStatus())) {advanceOrderPaid(payment);return PaymentCreateVO.from(payment,null);}
+        if(BalancePaymentChannel.CHANNEL_CODE.equals(payment.getChannelCode()))
+            return settleWithBalance(payment,channel,request.getPayPassword());
+        return PaymentCreateVO.from(payment,channel.createPayment(payment));
     }
 
     /**
@@ -206,28 +197,6 @@ public class PaymentServiceImpl
         return channelCode == null || channelCode.isBlank()
                 ? DEFAULT_CHANNEL_CODE
                 : channelCode;
-    }
-
-    /**
-     * 渲染已有进行中支付单的创建结果。
-     *
-     * <p>余额渠道无收银台凭证，且同一支付单号的扣款在 user-service 侧幂等，
-     * 因此重放时安全重试一次结算；其余渠道重新生成收银台凭证。</p>
-     *
-     * @param payment 已有支付单
-     * @param channel 请求渠道实现
-     * @param request 创建支付单请求
-     * @return 支付单创建结果
-     */
-    private PaymentCreateVO renderExistingPayment(
-            PaymentDO payment,
-            PaymentChannel channel,
-            PaymentCreateRequest request
-    ) {
-        if (BalancePaymentChannel.CHANNEL_CODE.equals(payment.getChannelCode())) {
-            return settleWithBalance(payment, channel, request.getPayPassword());
-        }
-        return PaymentCreateVO.from(payment, channel.createPayment(payment));
     }
 
     /**
@@ -261,17 +230,16 @@ public class PaymentServiceImpl
         );
         if (updated == 1) {
             // 仅条件更新的唯一赢家推进订单，避免并发重试重复触发跨服务状态变更。
-            advanceOrderPaid(paymentDO);
+
             log.info("余额支付成功，paymentNo={}，orderId={}，金额={}",
                     paymentDO.getPaymentNo(),
                     paymentDO.getOrderId(),
                     paymentDO.getAmount());
         }
 
-        return PaymentCreateVO.from(
-                baseMapper.selectByPaymentNo(paymentDO.getPaymentNo()),
-                null
-        );
+        PaymentDO latest=baseMapper.selectByPaymentNo(paymentDO.getPaymentNo());
+        if(latest!=null && "SUCCESS".equals(latest.getStatus())) advanceOrderPaid(latest);
+        return PaymentCreateVO.from(latest,null);
     }
 
     /**
@@ -402,7 +370,6 @@ public class PaymentServiceImpl
      * @return 统一响应
      */
     @Override
-    @Transactional
     public ApiResponse<Void> handleNotify(
             ChannelNotifyRequest request,
             String signature
@@ -471,12 +438,23 @@ public class PaymentServiceImpl
             );
         }
 
+        if(!"CREATED".equals(paymentDO.getStatus())) return handleDuplicatedNotify(paymentDO);
+        if("MOCK".equals(paymentDO.getChannelCode())) {
+            OrderInternalDTO order=queryOrderInternal(paymentDO.getOrderId(),paymentDO.getUserId());
+            if(order.getPaymentExpiresAt()==null || System.currentTimeMillis()>=order.getPaymentExpiresAt()) {
+                // 无真实外部扣款的演示渠道可直接拒绝迟到成功，真实渠道必须实现关单/退款协议。
+                return ApiResponse.failure(CommonErrorCode.CONFLICT,"支付通知已超过订单支付期限");
+            }
+        }
         // 幂等核心：仅 CREATED 可标记成功，并发回调只产生一个赢家。
-        int updated = baseMapper.markSuccessIfCreated(
-                paymentDO.getPaymentNo(),
-                paidAmount,
-                request.getChannelTradeNo()
-        );
+        int updated;
+        try {
+            updated=paymentGate.whileOpen(paymentDO.getOrderId(),()->baseMapper.markSuccessIfCreated(
+                    paymentDO.getPaymentNo(),paidAmount,request.getChannelTradeNo()));
+        } catch(BusinessException closed) {
+            if(CommonErrorCode.CONFLICT.code().equals(closed.getErrorCode().code())) return handleDuplicatedNotify(paymentDO);
+            throw closed;
+        }
         if (updated == 0) {
             // 条件更新未命中意味着支付单已被并发回调或其它流程推进到终态，回读后判定幂等结果。
             return handleDuplicatedNotify(paymentDO);
@@ -505,7 +483,8 @@ public class PaymentServiceImpl
                 latestPayment.getStatus()
         );
         if (latestStatus == PaymentStatus.SUCCESS) {
-            // 重复通知：订单推进已由首个赢家完成，直接幂等返回。
+            advanceOrderPaid(latestPayment);
+            // 成功事实存在时重试推进，修复之前丢失的确认。
             log.info("重复的支付成功通知，paymentNo={}", paymentDO.getPaymentNo());
             return ApiResponse.success(null);
         }
@@ -749,5 +728,33 @@ public class PaymentServiceImpl
                 outcome
         );
         return channelTradeNo;
+    }
+
+    @Override
+    public String closeUnpaidOrder(Long orderId) {
+        // 此方法只关闭支付，不调用订单服务，避免关单与订单Seata分支发生反向等待。
+        paymentGate.beginClose(orderId);
+        boolean paid=false;
+        for(PaymentDO payment:baseMapper.selectAllByOrderId(orderId)) {
+            if("SUCCESS".equals(payment.getStatus())) { paid=true;continue; }
+            if(BalancePaymentChannel.CHANNEL_CODE.equals(payment.getChannelCode())) {
+                var response=userBalanceInternalClient.close(payment.getUserId(),internalScopeToken,
+                        new com.hbue.ordering.user.api.dto.BalanceCloseCommand(BALANCE_BIZ_TYPE,payment.getPaymentNo(),payment.getAmount()));
+                if(response==null || !SUCCESS_CODE.equals(response.getCode()) || response.getData()==null)
+                    throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"无法确认余额结算结果");
+                if("PAID".equals(response.getData())) {
+                    if(!"CREATED".equals(payment.getStatus()))
+                        throw new BusinessException(CommonErrorCode.CONFLICT,"支付流水与支付单终态冲突，请核查");
+                    baseMapper.markSuccessIfCreated(payment.getPaymentNo(),payment.getAmount(),"BAL-RECOVER-"+payment.getPaymentNo());
+                    paid=true;continue;
+                }
+                if(!"CLOSED".equals(response.getData()))
+                    throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"未知余额结算结果");
+            } else if(!"MOCK".equals(payment.getChannelCode())) {
+                throw new BusinessException(CommonErrorCode.CONFLICT,"当前渠道尚未实现安全关单");
+            }
+            baseMapper.closeIfCreated(payment.getPaymentNo());
+        }
+        return paid?"PAID":"CLOSED";
     }
 }

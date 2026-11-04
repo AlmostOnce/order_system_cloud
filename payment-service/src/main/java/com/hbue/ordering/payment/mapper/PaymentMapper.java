@@ -133,4 +133,11 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
             @Param("paymentNo") String paymentNo,
             @Param("failReason") String failReason
     );
+
+    @Select("SELECT * FROM payments WHERE order_id=#{id} ORDER BY payment_id")
+    java.util.List<PaymentDO> selectAllByOrderId(@Param("id") Long id);
+    @Update("UPDATE payments SET status='CLOSED',updated_at=CURRENT_TIMESTAMP WHERE payment_no=#{no} AND status='CREATED'")
+    int closeIfCreated(@Param("no") String no);
+    @Select("SELECT * FROM payments WHERE order_id=#{id} AND status='SUCCESS' ORDER BY payment_id LIMIT 1")
+    PaymentDO selectSuccessByOrderId(@Param("id") Long id);
 }

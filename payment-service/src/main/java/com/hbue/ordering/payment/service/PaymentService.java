@@ -20,6 +20,8 @@ import com.hbue.ordering.common.response.ApiResponse;
  * @date 2026-10-12
  */
 public interface PaymentService extends IService<PaymentDO> {
+    String closeUnpaidOrder(Long orderId);
+
 
     /**
      * 为待支付订单创建支付单。
