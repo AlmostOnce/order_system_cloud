@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 
@@ -101,6 +102,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      * @throws BusinessException 身份凭据错误、账户不可用或密码不满足业务约束时抛出
      */
     @Override
+    @Transactional
     public void setPayPassword(Long userId, PayPasswordSetRequest request) {
         if (userId == null) {
             throw new BusinessException(
@@ -116,7 +118,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
             );
         }
 
-        UserDO user = requireEnabledUser(userMapper.selectPasswordsById(userId));
+        UserDO user = requireEnabledUser(userMapper.selectPayPasswordRecoveryForUpdate(userId));
         String newPayPassword = request.getNewPayPassword();
         String existingHash = user.getPayPasswordHash();
 

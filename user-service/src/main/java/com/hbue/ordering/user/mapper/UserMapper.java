@@ -343,4 +343,9 @@ public interface UserMapper extends BaseMapper<UserDO> {
             @Param("userId") Long userId,
             @Param("payPasswordHash") String payPasswordHash
     );
+    @Select("SELECT user_id,email,password_hash,pay_password_hash,credential_version,status,deleted_at FROM users WHERE user_id=#{id}")
+    UserDO selectPayPasswordRecovery(@Param("id") Long id);
+
+    @Select("SELECT user_id,email,password_hash,pay_password_hash,credential_version,status,deleted_at FROM users WHERE user_id=#{id} FOR UPDATE")
+    UserDO selectPayPasswordRecoveryForUpdate(@Param("id") Long id);
 }
