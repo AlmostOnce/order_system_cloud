@@ -66,6 +66,9 @@ public class OrderDO {
   /** 订单创建时间。 */
   private LocalDateTime createdAt;
 
+  /** 创建时固定的支付截止时间，使用数据库UTC+8时间。 */
+  private LocalDateTime expiresAt;
+
   /** 订单最近一次更新时间。 */
   private LocalDateTime updatedAt;
 }

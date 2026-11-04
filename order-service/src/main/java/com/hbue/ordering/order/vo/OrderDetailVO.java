@@ -28,6 +28,10 @@ import java.util.Objects;
 @ToString
 public class OrderDetailVO {
 
+    /** 服务端毫秒时间戳；客户端仅用于显示，支付许可由服务端判定。 */
+    private Long paymentExpiresAt;
+    private Long serverTime;
+
     /** 订单主键。 */
     private Long orderId;
 
@@ -137,6 +141,8 @@ public class OrderDetailVO {
 
         return OrderDetailVO.builder()
                 .orderId(order.getOrderId())
+                .paymentExpiresAt(com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(order))
+                .serverTime(System.currentTimeMillis())
                 .orderNo(order.getOrderNo())
                 .userId(order.getUserId())
                 .username(userBasicVO == null ? null : userBasicVO.getUsername())

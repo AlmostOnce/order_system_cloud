@@ -140,6 +140,7 @@ class OrderMarkOrderPaidTest {
      */
     private OrderDO order(String status, Integer version) {
         OrderDO order = new OrderDO();
+        order.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
         order.setOrderId(ORDER_ID);
         order.setOrderNo("ORD202610120001AABBCCDD");
         order.setUserId(17L);

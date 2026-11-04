@@ -69,6 +69,9 @@ public interface OrderService extends IService<OrderDO> {
      */
     OrderStatusVO cancelOrder(Long userId, Long orderId);
 
+    /** 系统到期取消，服务端复核期限；不记录为顾客操作。 */
+    OrderStatusVO cancelExpiredOrder(Long orderId);
+
     /**
      * 商家按合法履约顺序推进订单状态。
      *

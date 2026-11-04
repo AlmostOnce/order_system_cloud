@@ -21,6 +21,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @EnableFeignClients(
         basePackages = {
                 "com.hbue.ordering.user.api.client",
+                "com.hbue.ordering.order.feign",
                 "com.hbue.ordering.product.api.client",
                 "com.hbue.ordering.stock.api.client"
         },

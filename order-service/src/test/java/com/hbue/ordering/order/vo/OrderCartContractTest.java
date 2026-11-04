@@ -23,6 +23,7 @@ class OrderCartContractTest {
     @Test
     void shouldReadRealOrderDetailThroughCartContract() throws Exception {
         OrderDO order = new OrderDO();
+        order.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
         order.setOrderId(123L);
         order.setUserId(5L);
         order.setWindowId(9007199254740993L);

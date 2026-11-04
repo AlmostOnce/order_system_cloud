@@ -20,6 +20,10 @@ import java.math.BigDecimal;
 @Builder
 public class OrderInternalVO {
 
+    /** 服务端毫秒时间戳；客户端仅用于显示，支付许可由服务端判定。 */
+    private Long paymentExpiresAt;
+    private Long serverTime;
+
     /** 订单 ID。 */
     private Long orderId;
 
@@ -44,6 +48,8 @@ public class OrderInternalVO {
     public static OrderInternalVO from(OrderDO orderDO) {
         return OrderInternalVO.builder()
                 .orderId(orderDO.getOrderId())
+                .paymentExpiresAt(com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(orderDO))
+                .serverTime(System.currentTimeMillis())
                 .orderNo(orderDO.getOrderNo())
                 .userId(orderDO.getUserId())
                 .totalAmount(orderDO.getTotalAmount())

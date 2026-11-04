@@ -73,6 +73,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         notificationOutbox.record(OrderNotificationEvent.of(orderId, current.getVersion(), current.getUserId(), targetStatus));
     }
 
+    private final com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox;
+
     /** 订单表 Mapper。 */
     private final OrderMapper orderMapper;
 
@@ -94,8 +96,10 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
     public OrderPersistenceServiceImpl(
             OrderMapper orderMapper,
             OrderItemMapper orderItemMapper,
-            SalesOutboxWriter salesOutbox
+            SalesOutboxWriter salesOutbox,
+            com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox
     ) {
+        this.timeoutOutbox=timeoutOutbox;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.salesOutbox = salesOutbox;
@@ -108,6 +112,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             OrderDO order,
             List<OrderItemDO> items
     ) {
+        if(order.getCreatedAt()==null)order.setCreatedAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")));
+        if(order.getExpiresAt()==null)order.setExpiresAt(order.getCreatedAt().plusMinutes(15));
         // 先插入订单主记录以取得数据库生成的主键；事务保证后续失败时主记录也回滚。
         if (orderMapper.insert(order) != 1) {
             throw new BusinessException(
@@ -127,6 +133,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             }
         }
 
+        timeoutOutbox.record(com.hbue.ordering.order.dto.OrderTimeoutEvent.of(order.getOrderId(),
+                com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(order)));
         return order;
     }
 

@@ -204,6 +204,7 @@ class OrderServiceImplTest {
     @Test
     void shouldRejectDifferentRequestForSameKey() {
         OrderDO existingOrder = new OrderDO();
+        existingOrder.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
         existingOrder.setOrderId(600L);
         existingOrder.setRequestHash("different-hash");
         when(orderMapper.selectByUserIdAndIdempotencyKey(
@@ -254,6 +255,7 @@ class OrderServiceImplTest {
         OrderCreateRequest request = createRequest(null, item(101L, 1));
         AtomicInteger lookupCount = new AtomicInteger();
         OrderDO winnerOrder = new OrderDO();
+        winnerOrder.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
         winnerOrder.setOrderId(707L);
         winnerOrder.setUserId(USER_ID);
         winnerOrder.setWindowId(3L);

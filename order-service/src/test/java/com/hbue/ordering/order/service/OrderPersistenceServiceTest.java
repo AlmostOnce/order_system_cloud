@@ -46,6 +46,9 @@ class OrderPersistenceServiceTest {
     @Mock
     private OrderNotificationOutboxWriter notificationOutbox;
 
+    @Mock
+    private OrderTimeoutOutboxService timeoutOutbox;
+
     @Test
     void shouldSaveOrderBeforeAllItemsAndAssignOrderId() {
         when(orderMapper.insert(any(OrderDO.class))).thenAnswer(invocation -> {
@@ -56,7 +59,7 @@ class OrderPersistenceServiceTest {
         when(orderItemMapper.insert(any(OrderItemDO.class))).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox
         );
         List<OrderItemDO> items = List.of(new OrderItemDO(), new OrderItemDO());
 
@@ -79,7 +82,7 @@ class OrderPersistenceServiceTest {
         when(orderMapper.insert(any(OrderDO.class))).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox
         );
 
         BusinessException exception = assertThrows(
@@ -107,7 +110,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -139,7 +142,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -164,7 +167,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void onlyWinningPaidTransitionWritesOutbox() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
         when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1, 0);
         assertTrue(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
         assertFalse(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
@@ -173,7 +176,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void outboxFailurePropagatesSoPaymentStateTransactionRollsBack() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
         when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1);
         org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(salesOutbox).recordPaid(81L);
         assertThrows(IllegalStateException.class, () -> persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
@@ -181,7 +184,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void writesNotificationOnlyForWinningNonCancelTransition() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
         ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
         var current = new OrderDO(); current.setOrderId(81L); current.setUserId(7L); current.setVersion(4); current.setStatus("制作中");
@@ -194,7 +197,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void pickupCompletionConsumesCodeAndNotifiesOnlyWinningTransition() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
         ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
         var completed = new OrderDO(); completed.setOrderId(81L); completed.setUserId(7L);

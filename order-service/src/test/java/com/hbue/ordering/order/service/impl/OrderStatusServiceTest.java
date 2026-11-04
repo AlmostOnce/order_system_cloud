@@ -74,6 +74,7 @@ class OrderStatusServiceTest {
     @Mock
     private StockServiceClient stockServiceClient;
 
+    @Mock private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
     private OrderServiceImpl orderService;
 
     /**
@@ -92,6 +93,8 @@ class OrderStatusServiceTest {
                 "test-internal-token"
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
+        orderService.setPaymentClose(paymentClose);
+        org.mockito.Mockito.lenient().when(paymentClose.close(ORDER_ID,"test-internal-token")).thenReturn(ApiResponse.success("CLOSED"));
     }
 
     /**
@@ -406,6 +409,7 @@ class OrderStatusServiceTest {
      */
     private OrderDO order(Long userId, String status, Integer version) {
         OrderDO orderDO = new OrderDO();
+        orderDO.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
         orderDO.setOrderId(ORDER_ID);
         orderDO.setOrderNo("TEST-701");
         orderDO.setUserId(userId);
@@ -413,5 +417,20 @@ class OrderStatusServiceTest {
         orderDO.setStatus(status);
         orderDO.setVersion(version);
         return orderDO;
+    }
+
+    @Test void automaticExpiryUsesSystemOperatorAndExistingRestoreProtocol() {
+        var expired=order(CUSTOMER_ID,"待支付",4);
+        expired.setExpiresAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).minusSeconds(1));
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(expired);
+        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID,"待支付",4,"已取消")).thenReturn(true);
+        var item=new OrderItemDO();item.setProductId(101L);item.setQuantity(2);
+        when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of(item));
+        when(stockServiceClient.restore(eq("test-internal-token"),any())).thenReturn(ApiResponse.success(null));
+        assertEquals("已取消",orderService.cancelExpiredOrder(ORDER_ID).getStatus());
+        var request=ArgumentCaptor.forClass(StockRestoreRequest.class);
+        verify(stockServiceClient).restore(eq("test-internal-token"),request.capture());
+        org.junit.jupiter.api.Assertions.assertNull(request.getValue().getOperatorId());
+        assertEquals("订单十五分钟未支付自动取消",request.getValue().getRemark());
     }
 }

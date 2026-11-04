@@ -8,8 +8,12 @@ server:
 
 spring:
   profiles:
-    # 本机已部署 RocketMQ；未显式指定 profile 时启用销量事件收发。
-    default: ranking-mq
+    # 本机已完成超时关单迁移与MQ配置；默认启用销量、通知及订单超时收发。
+    default: order-timeout
+    group:
+      order-timeout:
+        - ranking-mq
+        - order-timeout-mq
   data:
     redis:
       # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。

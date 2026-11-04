@@ -107,6 +107,10 @@ public class OrderServiceImpl
     /** 服务间内部接口共享密钥，调用库存服务时通过请求头传递。 */
     private final String internalScopeToken;
 
+    private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
+    @Autowired
+    void setPaymentClose(com.hbue.ordering.order.feign.PaymentCloseClient client) { this.paymentClose=client; }
+
     @Value("${notification.cancel-tcc.enabled:false}")
     private boolean cancellationNotificationEnabled;
     private ObjectProvider<CancellationNotificationTcc> cancellationNotification;
@@ -364,6 +368,21 @@ public class OrderServiceImpl
     @Override
     @GlobalTransactional(name = "cancel-order-restore-stock", rollbackFor = Exception.class)
     public OrderStatusVO cancelOrder(Long userId, Long orderId) {
+        return cancelPendingOrder(userId,orderId,false);
+    }
+
+    @Override
+    @GlobalTransactional(name="expire-order-restore-stock",rollbackFor=Exception.class)
+    public OrderStatusVO cancelExpiredOrder(Long orderId) {
+        OrderDO current=getOrderForStatusChange(orderId);
+        if(getCurrentStatus(current)!=OrderStatus.PENDING_PAYMENT)
+            return OrderStatusVO.builder().orderId(orderId).status(current.getStatus()).build();
+        if(System.currentTimeMillis()<com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(current))
+            throw new BusinessException(CommonErrorCode.CONFLICT,"订单尚未到支付截止时间");
+        return cancelPendingOrder(current.getUserId(),orderId,true);
+    }
+
+    private OrderStatusVO cancelPendingOrder(Long userId,Long orderId,boolean automatic) {
         // 先确认订单归属；随后状态机校验确保已支付或履约中的订单不能由顾客取消。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         if (userId == null || !userId.equals(orderDO.getUserId())) {
@@ -385,6 +404,18 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
+        ApiResponse<String> closure=paymentClose.close(orderId,internalScopeToken);
+        if(closure==null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode()))
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"暂时无法确认支付关闭结果，请稍后重试");
+        if("PAID".equals(closure.getData())) return markOrderPaid(orderId);
+        if(!"CLOSED".equals(closure.getData()))
+            throw new BusinessException(CommonErrorCode.CONFLICT,"支付结果待确认，不能取消订单");
+        // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
+        orderDO=getOrderForStatusChange(orderId);
+        if(getCurrentStatus(orderDO)==OrderStatus.CANCELLED)
+            return OrderStatusVO.builder().orderId(orderId).status(OrderStatus.CANCELLED.getLabel()).build();
+        if(getCurrentStatus(orderDO)!=OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
+
         // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
         // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
         OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
@@ -402,7 +433,8 @@ public class OrderServiceImpl
             response = stockServiceClient.restore(internalScopeToken,
                     StockRestoreRequest.builder()
                             .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
-                            .items(stockItems).operatorId(userId).remark("顾客取消待支付订单").build());
+                            .items(stockItems).operatorId(automatic?null:userId)
+                            .remark(automatic?"订单十五分钟未支付自动取消":"顾客取消待支付订单").build());
         } catch (RuntimeException exception) {
             log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
@@ -507,7 +539,8 @@ public class OrderServiceImpl
         OrderDO orderDO = getOrderForStatusChange(orderId);
         OrderStatus currentStatus = getCurrentStatus(orderDO);
 
-        if (currentStatus == OrderStatus.PAID) {
+        if (currentStatus == OrderStatus.PAID || currentStatus == OrderStatus.PREPARING
+                || currentStatus == OrderStatus.WAITING_FOR_PICKUP || currentStatus == OrderStatus.COMPLETED) {
             // 重复的支付成功通知按幂等成功处理。
             return OrderStatusVO.builder()
                     .orderId(orderId)
@@ -803,7 +836,7 @@ public class OrderServiceImpl
             BigDecimal totalAmount
     ) {
         // 订单号包含时间和随机后缀；并发幂等仍依赖用户 ID 与幂等键的数据库唯一约束。
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
         String time = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         String random = UUID.randomUUID()
                 .toString()
@@ -822,6 +855,7 @@ public class OrderServiceImpl
         order.setStatus(INITIAL_ORDER_STATUS);
         order.setVersion(0);
         order.setCreatedAt(now);
+        order.setExpiresAt(now.plusMinutes(15));
         order.setUpdatedAt(now);
         return order;
     }

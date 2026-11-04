@@ -1,0 +1,49 @@
+# 激活前完成三库迁移、新等级和Topic配置，并确保旧支付实例已停止。
+order:
+  payment-timeout:
+    enabled: true
+spring:
+  cloud:
+    function:
+      definition: salesRankingPaid;orderPaymentTimeout;orderTimeoutDeadLetter
+    stream:
+      output-bindings: salesPaid-out-0;orderTimeout-out-0
+      bindings:
+        orderTimeout-out-0:
+          destination: order-payment-timeout-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+        orderPaymentTimeout-in-0:
+          destination: order-payment-timeout-v1
+          group: order-payment-timeout-v1
+          content-type: application/json
+          error-handler-definition: orderTimeoutRetryError
+          consumer:
+            max-attempts: 1
+        orderTimeoutDeadLetter-in-0:
+          destination: '%DLQ%order-payment-timeout-v1'
+          group: order-timeout-dlq-observer-v1
+          content-type: application/json
+          error-handler-definition: orderTimeoutRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        bindings:
+          orderTimeout-out-0:
+            producer:
+              group: order-timeout-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000
+          orderPaymentTimeout-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
+          orderTimeoutDeadLetter-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
