@@ -56,7 +56,7 @@ public class CaptchaServiceImpl implements CaptchaService {
      * 去掉容易混淆的 0/O/1/I 等字符，降低用户看错而误判的概率。
      */
     private static final String CHARACTER_POOL =
-            "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+            "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     /**
      * 验证码字符的颜色候选，均为深色以保证在浅色背景上可读。
