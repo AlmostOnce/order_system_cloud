@@ -1,5 +1,6 @@
 package com.hbue.ordering.product.controller;
 
+import com.hbue.ordering.product.vo.ProductImageVO;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.service.ProductMenuService;
 import com.hbue.ordering.product.vo.RestaurantSummaryVO;
@@ -7,6 +8,8 @@ import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +31,14 @@ import java.util.List;
 @RequestMapping("/products")
 @PreAuthorize("hasRole('CUSTOMER')")
 public class ProductMenuController {
+
+    /** 最多50道菜一次查询，避免榜单逐项请求完整菜单。 */
+    @GetMapping("/images")
+    public ApiResponse<List<ProductImageVO>> productImages(
+            @RequestParam("productIds")
+            @Size(min = 1, max = 50) List<@Positive Long> productIds) {
+        return ApiResponse.success(productMenuService.getProductImages(productIds));
+    }
 
     /** 窗口菜单查询服务。 */
     private final ProductMenuService productMenuService;

@@ -1,5 +1,6 @@
 package com.hbue.ordering.product.service.impl;
 
+import com.hbue.ordering.product.vo.ProductImageVO;
 import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -100,6 +101,19 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         this.menuCacheService = menuCacheService;
         this.bloomFilterManager = bloomFilterManager;
         this.distributedLockService = distributedLockService;
+    }
+
+    /** 批量读取顾客可见菜品图片，限制一次最多50项。 */
+    @Override
+    public List<ProductImageVO> getProductImages(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty() || productIds.size() > 50
+                || productIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "请提交1至50个有效菜品编号");
+        }
+        return productMapper.selectPublicImageProducts(productIds.stream().distinct().toList()).stream()
+                .map(product -> new ProductImageVO(product.getProductId(),
+                        product.getWindowId(), FileReferences.url(product.getImageFileKey())))
+                .toList();
     }
 
     /**

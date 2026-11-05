@@ -261,6 +261,29 @@ class ProductMenuServiceImplTest {
         verify(menuCacheService).saveWindowMenuAbsent(3L);
     }
 
+    @Test
+    void shouldRejectInvalidImageBatchBeforeQuery() {
+        var service = service();
+        assertThrows(BusinessException.class, () -> service.getProductImages(null));
+        assertThrows(BusinessException.class, () -> service.getProductImages(List.of()));
+        assertThrows(BusinessException.class, () -> service.getProductImages(List.of(0L)));
+        assertThrows(BusinessException.class, () -> service.getProductImages(java.util.Collections.nCopies(51, 1L)));
+        verify(productMapper, never()).selectPublicImageProducts(any());
+    }
+
+    @Test
+    void shouldReadImageBatchOnceAndDeduplicateIds() {
+        var product = new ProductDO();
+        product.setProductId(7L);
+        product.setWindowId(2L);
+        when(productMapper.selectPublicImageProducts(List.of(7L))).thenReturn(List.of(product));
+        var images = service().getProductImages(List.of(7L, 7L));
+        assertEquals(1, images.size());
+        assertEquals(7L, images.getFirst().productId());
+        assertEquals(2L, images.getFirst().windowId());
+        verify(productMapper).selectPublicImageProducts(List.of(7L));
+    }
+
     private ProductMenuServiceImpl service() {
         return new ProductMenuServiceImpl(
                 diningWindowMapper,

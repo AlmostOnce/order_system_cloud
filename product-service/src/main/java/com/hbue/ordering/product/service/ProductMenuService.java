@@ -1,5 +1,6 @@
 package com.hbue.ordering.product.service;
 
+import com.hbue.ordering.product.vo.ProductImageVO;
 import com.hbue.ordering.product.vo.RestaurantSummaryVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
@@ -23,6 +24,9 @@ public interface ProductMenuService {
      * @return 启用餐厅列表
      */
     List<RestaurantSummaryVO> listActiveRestaurants();
+
+    /** 批量读取最多50道当前可售菜品的图片，缺失项由界面使用默认图。 */
+    List<ProductImageVO> getProductImages(List<Long> productIds);
 
     /**
      * 查询所有启用窗口的摘要。
