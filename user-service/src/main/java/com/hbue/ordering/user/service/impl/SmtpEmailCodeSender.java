@@ -30,6 +30,8 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
 
     @Override public void sendPayPasswordReset(String email, String code) { sendMessage(email, code, "找回支付密码"); }
 
+    @Override public void sendOwnershipVerification(String email,String code) {sendMessage(email,code,"验证邮箱所有权");}
+
     private void sendMessage(String email, String code, String purpose) {
         if (username.isBlank() || password.isBlank()) {
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");

@@ -4,4 +4,5 @@ package com.hbue.ordering.common.web.security;
 public interface PublicUserIdentityLookup {
     Long findInternalId(String userUuid);
     Long findCredentialVersion(String userUuid);
+    Boolean isEmailVerified(String userUuid);
 }

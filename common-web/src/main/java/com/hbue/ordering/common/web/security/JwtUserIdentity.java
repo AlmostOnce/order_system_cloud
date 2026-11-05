@@ -59,6 +59,7 @@ public class JwtUserIdentity {
             throw new JwtException("身份令牌无效");
         PublicUserIdentityLookup local=localLookup.getIfAvailable();
         if(local==null)return remoteLookup(uuid,credentialVersion);
+        if(!Boolean.TRUE.equals(local.isEmailVerified(uuid)))throw new JwtException("邮箱尚未验证，请重新登录完成邮箱验证");
         Long current=local.findCredentialVersion(uuid);
         if(current==null || current!=credentialVersion)throw new JwtException("登录密码已重置，请重新登录");
         return local.findInternalId(uuid);

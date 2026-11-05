@@ -24,6 +24,8 @@ public class UserIdentityInternalController {
         if (!JwtUserIdentity.PUBLIC_UUID.matcher(userUuid).matches()) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用户标识格式不正确");
         if (credentialVersion != null && (credentialVersion < 0 || !credentialVersion.equals(lookup.findCredentialVersion(userUuid))))
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录密码已重置，请重新登录");
+        if(!Boolean.TRUE.equals(lookup.isEmailVerified(userUuid)))
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"邮箱尚未验证，请重新登录完成邮箱验证");
         Long id = lookup.findInternalId(userUuid);
         if (id == null) throw new BusinessException(CommonErrorCode.NOT_FOUND, "用户不存在或已停用");
         return ApiResponse.success(id);

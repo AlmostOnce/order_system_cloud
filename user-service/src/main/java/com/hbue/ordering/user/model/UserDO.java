@@ -62,6 +62,9 @@ public class UserDO {
     @TableField("email")
     private String email;
 
+    /** 当前绑定邮箱实际验证成功时间；历史账号为null。 */
+    private LocalDateTime emailVerifiedAt;
+
     /**
      * 账户余额。
      */

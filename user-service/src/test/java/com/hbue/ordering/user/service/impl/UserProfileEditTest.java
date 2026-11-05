@@ -19,7 +19,7 @@ class UserProfileEditTest {
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
     private final com.hbue.ordering.user.service.EmailVerification codes = mock(com.hbue.ordering.user.service.EmailVerification.class);
     private final UserServiceImpl service = new UserServiceImpl(passwords,
-            mock(UserDataScopeService.class), mock(ManagementAuditLogger.class), codes);
+            mock(UserDataScopeService.class), mock(ManagementAuditLogger.class), codes, org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
     private final UserDO current = new UserDO();
 
     UserProfileEditTest() {

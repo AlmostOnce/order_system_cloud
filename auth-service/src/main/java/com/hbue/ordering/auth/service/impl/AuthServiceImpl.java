@@ -37,9 +37,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    /**
-     * 当前类的日志对象。
-     */
+    private final com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership;
+
+    /** 当前类的日志对象。 */
     private static final Logger log =
             LoggerFactory.getLogger(AuthServiceImpl.class);
 
@@ -96,8 +96,10 @@ public class AuthServiceImpl implements AuthService {
             JwtTokenService jwtTokenService,
             RefreshTokenService refreshTokenService,
             AccessTokenBlacklistService accessTokenBlacklistService,
-            RefreshTokenLockService refreshTokenLockService
+            RefreshTokenLockService refreshTokenLockService,
+            com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership
     ) {
+        this.emailOwnership=emailOwnership;
         this.userServiceClient = userServiceClient;
         this.loginAttemptService = loginAttemptService;
         this.captchaService = captchaService;
@@ -186,6 +188,13 @@ public class AuthServiceImpl implements AuthService {
         // 凭据校验成功后清除历史失败和锁定状态，新的失败窗口从零开始。
         loginAttemptService.recordSuccess(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
 
+        if(!userBasicVO.isEmailVerified()) {
+            var challenge=emailOwnership.challenge(userBasicVO);
+            return LoginVO.builder().emailVerificationRequired(true)
+                    .emailVerificationToken(challenge.authorizationToken()).emailVerificationExpiresIn(challenge.expiresIn())
+                    .roleCode(challenge.roleCode()).build();
+        }
+
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(
                 userBasicVO.getUserUuid(),
@@ -269,6 +278,10 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "用户身份不可用，请重新登录");
         }
         UserBasicVO currentIdentity = identityResponse.getData();
+        if(!currentIdentity.isEmailVerified()) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"邮箱尚未验证，请重新登录完成邮箱验证");
+        }
         if(refreshTokenInfo.getCredentialVersion()!=currentIdentity.getCredentialVersion()) {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"登录密码已重置，请重新登录");
@@ -408,6 +421,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 设置注册密码。
         command.setPassword(request.getPassword());
+        command.setEmailVerificationToken(request.getEmailVerificationToken());
 
         // 调用用户服务完成注册。
         ApiResponse<UserBasicVO> response =

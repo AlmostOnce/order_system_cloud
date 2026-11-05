@@ -44,6 +44,8 @@ public class UserServiceImpl
         extends ServiceImpl<UserMapper, UserDO>
         implements UserService {
 
+    private final com.hbue.ordering.user.service.EmailOwnershipService emailOwnership;
+
     private static final SecureRandom USER_NUMBER_RANDOM = new SecureRandom();
 
     /**
@@ -115,8 +117,10 @@ public class UserServiceImpl
             PasswordEncoder passwordEncoder,
             UserDataScopeService userDataScopeService,
             ManagementAuditLogger auditLogger,
-            EmailVerification emailVerificationService
+            EmailVerification emailVerificationService,
+            com.hbue.ordering.user.service.EmailOwnershipService emailOwnership
     ) {
+        this.emailOwnership=emailOwnership;
         this.passwordEncoder = passwordEncoder;
         this.userDataScopeService = userDataScopeService;
         this.auditLogger = auditLogger;
@@ -251,7 +255,13 @@ public class UserServiceImpl
      * @throws BusinessException 昵称或邮箱重复时抛出；并发重复由数据库唯一约束兜底
      */
     @Override
+    @Transactional
     public UserBasicVO register(UserRegisterCommand command) {
+        if(command==null || command.getUsername()==null || command.getUsername().trim().length()<2 || command.getUsername().trim().length()>64
+                || command.getPassword()==null || command.getPassword().isBlank() || command.getPassword().length()<6 || command.getPassword().length()>64
+                || command.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length>72)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST,"昵称或密码格式不正确");
+        command.setUsername(command.getUsername().trim());
         if (command.getEmail() == null || command.getEmail().isBlank() || command.getEmail().length() > 254) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "邮箱不能为空或超出长度限制");
         }
@@ -269,12 +279,14 @@ public class UserServiceImpl
             );
         }
 
+        emailOwnership.consumeRegistration(command.getEmail(),command.getEmailVerificationToken());
         // 组装用户持久化对象。
         UserDO userDO = new UserDO();
         userDO.setUserUuid(java.util.UUID.randomUUID().toString());
         userDO.setUserNo(generateUserNo());
         userDO.setUsername(command.getUsername());
         userDO.setEmail(command.getEmail().trim().toLowerCase(java.util.Locale.ROOT));
+        userDO.setEmailVerifiedAt(LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")));
         userDO.setRoleCode(DEFAULT_ROLE_CODE);
         userDO.setBalance(DEFAULT_BALANCE);
 
@@ -673,6 +685,7 @@ public class UserServiceImpl
         return UserBasicVO.builder()
                 .userId(userDO.getUserId())
                 .credentialVersion(userDO.getCredentialVersion())
+                .emailVerified(userDO.getEmailVerifiedAt()!=null)
                 .userUuid(userDO.getUserUuid())
                 .userNo(userDO.getUserNo())
                 .username(userDO.getUsername())

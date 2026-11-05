@@ -72,7 +72,7 @@ public class AuthController {
     ) {
         // 生成验证码时以来源 IP 做分钟级限流。
         CaptchaVO captchaVO = captchaService.generate(
-                resolveClientIp(httpRequest)
+                com.hbue.ordering.auth.util.ClientIpResolver.resolve(httpRequest)
         );
 
         // 返回验证码图片与标识。
@@ -155,31 +155,4 @@ public class AuthController {
         return ApiResponse.success(com.hbue.ordering.user.api.vo.UserPublicVO.from(userBasicVO));
     }
 
-    /**
-     * 解析请求来源 IP，用于验证码生成限流。
-     *
-     * <p>请求经网关转发后 RemoteAddr 是网关地址，因此优先读取
-     * X-Forwarded-For 的第一段；该头缺失时退回 X-Real-IP，最后使用
-     * RemoteAddr。取值只用于限流计数，不参与任何授权判断。</p>
-     *
-     * @param httpRequest 当前 HTTP 请求
-     * @return 来源 IP，无法获取时返回空串
-     */
-    private String resolveClientIp(HttpServletRequest httpRequest) {
-        // 代理链上第一个地址是客户端真实来源。
-        String forwardedFor = httpRequest.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            // 多级代理时按逗号分隔，取第一段。
-            return forwardedFor.split(",")[0].strip();
-        }
-
-        // 部分代理只设置 X-Real-IP。
-        String realIp = httpRequest.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.strip();
-        }
-
-        // 直连场景下使用连接地址。
-        return httpRequest.getRemoteAddr();
-    }
 }

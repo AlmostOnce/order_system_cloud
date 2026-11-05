@@ -82,6 +82,8 @@ public class SecurityConfig {
                                 "/auth/password-reset/confirm",
                                 "/auth/login",
                                 "/auth/register",
+                                "/auth/registration/code", "/auth/registration/verify",
+                                "/auth/email-enrollment/code", "/auth/email-enrollment/confirm",
                                 "/auth/refresh"
                         ).permitAll()
 

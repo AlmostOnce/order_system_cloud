@@ -38,5 +38,11 @@ public class RegisterRequest {
      */
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 64, message = "密码长度必须在 6 到 64 个字符之间")
+    @lombok.ToString.Exclude
     private String password;
+
+    @NotBlank(message="请先验证注册邮箱")
+    @jakarta.validation.constraints.Pattern(regexp="[a-f0-9]{64}",message="邮箱验证凭据无效")
+    @lombok.ToString.Exclude
+    private String emailVerificationToken;
 }

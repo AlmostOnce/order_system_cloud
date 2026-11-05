@@ -28,6 +28,8 @@ public class UserBasicVO {
     /** 内部会话校验版本，不含凭据。 */
     private long credentialVersion;
 
+    private boolean emailVerified;
+
     /** 用户对外 UUID，仅服务间基础视图同时保留内部主键。 */
     private String userUuid;
 
@@ -44,9 +46,12 @@ public class UserBasicVO {
      */
     private String roleCode;
     public UserBasicVO(Long userId, String userUuid, String userNo, String username, String roleCode) {
-        this(userId, 0L, userUuid, userNo, username, roleCode);
+        this(userId, 0L, false, userUuid, userNo, username, roleCode);
     }
     public UserBasicVO(Long userId, String username, String roleCode) {
-        this(userId, 0L, null, null, username, roleCode);
+        this(userId, 0L, false, null, null, username, roleCode);
+    }
+    public UserBasicVO(Long userId,long version,String uuid,String userNo,String username,String role) {
+        this(userId,version,false,uuid,userNo,username,role);
     }
 }

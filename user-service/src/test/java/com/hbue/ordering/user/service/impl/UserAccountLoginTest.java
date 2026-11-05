@@ -20,9 +20,10 @@ import static org.mockito.Mockito.*;
 class UserAccountLoginTest {
     private final UserMapper mapper = mock(UserMapper.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
+    private final com.hbue.ordering.user.service.EmailOwnershipService ownership=mock(com.hbue.ordering.user.service.EmailOwnershipService.class);
     private final UserServiceImpl service = new UserServiceImpl(passwords,
             mock(UserDataScopeService.class), mock(ManagementAuditLogger.class),
-            mock(com.hbue.ordering.user.service.EmailVerification.class));
+            mock(com.hbue.ordering.user.service.EmailVerification.class), ownership);
 
     UserAccountLoginTest() {
         ReflectionTestUtils.setField(service, "baseMapper", mapper);
@@ -48,6 +49,7 @@ class UserAccountLoginTest {
     @Test
     void shouldRegisterEmailAndAssignIndependentNumber() {
         UserRegisterCommand command = new UserRegisterCommand();
+        command.setEmailVerificationToken("a".repeat(64));
         command.setUsername("校园用户"); command.setEmail(" USER@Example.com "); command.setPassword("password");
         when(passwords.encode("password")).thenReturn("hash");
         when(mapper.insert(any(UserDO.class))).thenReturn(1);
@@ -57,5 +59,15 @@ class UserAccountLoginTest {
         verify(mapper).insert(saved.capture());
         assertEquals("user@example.com", saved.getValue().getEmail());
         assertEquals("hash", saved.getValue().getPasswordHash());
+        assertNotNull(saved.getValue().getEmailVerifiedAt());
+        assertTrue(result.isEmailVerified());
+    }
+
+    @Test void invalidRegistrationProofCannotCreateAccountOrHashPassword() {
+        var command=new UserRegisterCommand();command.setUsername("校园用户");command.setEmail("user@example.com");command.setPassword("password");command.setEmailVerificationToken("a".repeat(64));
+        doThrow(new BusinessException(com.hbue.ordering.common.core.error.CommonErrorCode.BAD_REQUEST,"验证凭据无效"))
+                .when(ownership).consumeRegistration("user@example.com","a".repeat(64));
+        assertThrows(BusinessException.class,()->service.register(command));
+        verify(mapper,never()).insert(any(UserDO.class));verifyNoInteractions(passwords);
     }
 }

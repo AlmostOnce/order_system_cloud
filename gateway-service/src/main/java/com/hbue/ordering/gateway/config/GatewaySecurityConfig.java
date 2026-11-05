@@ -131,7 +131,7 @@ public class GatewaySecurityConfig {
                         .permitAll()
 
                         // 注册接口允许匿名访问。
-                        .pathMatchers("/api/auth/register")
+                        .pathMatchers("/api/auth/register", "/api/auth/registration/code", "/api/auth/registration/verify", "/api/auth/email-enrollment/code", "/api/auth/email-enrollment/confirm")
                         .permitAll()
 
                         // 刷新 Token 接口允许匿名访问。

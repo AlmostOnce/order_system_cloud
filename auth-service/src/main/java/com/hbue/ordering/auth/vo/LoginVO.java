@@ -15,6 +15,12 @@ import lombok.Getter;
 @Getter
 @Builder
 public class LoginVO {
+    /** 为true时仅允许补验，不包含Access/Refresh Token。 */
+    private boolean emailVerificationRequired;
+    private String emailVerificationToken;
+    private Long emailVerificationExpiresIn;
+    private String roleCode;
+
 
     /**
      * 访问 Token。

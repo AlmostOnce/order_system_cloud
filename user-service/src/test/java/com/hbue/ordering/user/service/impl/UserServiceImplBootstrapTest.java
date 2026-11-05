@@ -56,7 +56,7 @@ class UserServiceImplBootstrapTest {
                 userDataScopeService,
                 auditLogger,
                 org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
-        );
+        , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }
 
