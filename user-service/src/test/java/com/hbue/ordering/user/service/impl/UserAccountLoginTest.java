@@ -48,6 +48,8 @@ class UserAccountLoginTest {
 
     @Test
     void shouldRegisterEmailAndAssignIndependentNumber() {
+        // Mockito对Long默认返回0，必须明确模拟数据库“用户号未占用”的null结果。
+        when(mapper.selectIdByUserNo(anyString())).thenReturn(null);
         UserRegisterCommand command = new UserRegisterCommand();
         command.setEmailVerificationToken("a".repeat(64));
         command.setUsername("校园用户"); command.setEmail(" USER@Example.com "); command.setPassword("password");

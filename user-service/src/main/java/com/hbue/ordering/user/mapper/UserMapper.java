@@ -78,6 +78,13 @@ public interface UserMapper extends BaseMapper<UserDO> {
         """)
     UserDO selectBalanceForUpdate(@Param("userId") Long userId);
 
+    /**
+     * 退款重试锁定原账户，包括已停用或软删除账户，用于确认已提交的历史入账事实。
+     * 此查询不授权新增入账；Service在幂等命中后才返回，否则仍拒绝停用/已删除账户。
+     */
+    @Select("SELECT user_id,balance,status,deleted_at FROM users WHERE user_id=#{userId} FOR UPDATE")
+    UserDO selectRefundAccountForUpdate(@Param("userId") Long userId);
+
     /** 充值与消费共用同一余额行；原子累加，不覆盖并发扣款结果。 */
     @Update("""
         UPDATE users SET balance = balance + #{amount}, version = version + 1, updated_at = NOW()

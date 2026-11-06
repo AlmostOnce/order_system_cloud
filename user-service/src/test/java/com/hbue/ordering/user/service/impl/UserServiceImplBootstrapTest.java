@@ -62,6 +62,8 @@ class UserServiceImplBootstrapTest {
 
     @Test
     void shouldCreateSystemAdminWhenAccountAbsent() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("admin")).thenReturn(null);
         when(userMapper.selectByEmail("100000001@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("admin_password_dev_2026"))
@@ -90,6 +92,8 @@ class UserServiceImplBootstrapTest {
 
     @Test
     void shouldCreateGeneralManagerAndGrantPlatformScope() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("manager")).thenReturn(null);
         when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("manager_password_dev_2026"))
@@ -192,6 +196,8 @@ class UserServiceImplBootstrapTest {
 
     @Test
     void shouldReturnFalseWhenConcurrentCreationConflicts() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("manager")).thenReturn(null);
         when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(userMapper.insert(any(UserDO.class)))
