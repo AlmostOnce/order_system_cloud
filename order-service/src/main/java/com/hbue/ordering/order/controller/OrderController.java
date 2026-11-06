@@ -4,9 +4,9 @@ package com.hbue.ordering.order.controller;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderStatusUpdateRequest;
-import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -15,7 +15,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -57,33 +56,25 @@ public class OrderController {
     }
 
     /**
-     * 查询当前用户的订单列表。
-     *
-     * @param jwt 当前登录用户 JWT
-     * @return 当前用户的订单列表
+     * 查询本人订单游标页。状态筛选交给Service及数据库，不再返回当前用户全部历史记录。
+     * @param jwt 已认证身份，不接受请求参数指定其他顾客
+     * @param status 五组筛选编码，默认all
+     * @param cursor 上一页返回的nextCursor，首屏不传
+     * @param limit 每页条数，默认20，上限50
+     * @return 当前页摘要、下一页游标与是否还有更多
      */
     @GetMapping("/list")
-    public ApiResponse<List<OrderDetailVO>> list(
-            @AuthenticationPrincipal Jwt jwt
+    public ApiResponse<OrderPageVO> list(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name="status", defaultValue="all") String status,
+            @RequestParam(name="cursor", required=false) String cursor,
+            @RequestParam(name="limit", defaultValue="20") int limit
     ) {
-        // 从 JWT 的 sub 声明中获取当前用户 ID。
         Long userId = Long.valueOf(jwt.getSubject());
-
-        // 只查询当前用户自己的订单。
-        List<OrderDO> orders =
-                orderService.listByUserId(userId);
-
-        // 创建订单视图对象列表。
-        List<OrderDetailVO> orderVOList =
-                new ArrayList<>();
-
-        // 使用普通循环完成对象转换。
-        for (OrderDO orderDO : orders) {
-            orderVOList.add(OrderDetailVO.from(orderDO));
-        }
-
-        // 返回当前用户的订单列表。
-        return ApiResponse.success(windowNames.enrich(orderVOList));
+        var page = orderService.pageByUserId(userId, status, cursor, limit);
+        // 先分页再批量补名称：一页最多50个窗口，复用现有批量接口，禁止每笔订单单独远程请求。
+        return ApiResponse.success(new OrderPageVO(
+                windowNames.enrich(page.items()), page.nextCursor(), page.hasMore()));
     }
 
     /**

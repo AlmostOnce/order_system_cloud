@@ -5,10 +5,10 @@ import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 
-import java.util.List;
 
 /**
  * 订单业务服务契约。
@@ -106,11 +106,12 @@ public interface OrderService extends IService<OrderDO> {
 
 
     /**
-     * 查询当前用户的订单列表。
-     *
-     * @param userId 当前登录用户 ID
-     * @return 当前用户的订单列表
-     * @apiNote 调用方必须传入从已验证身份取得的用户 ID；本方法按该 ID 限定查询结果。
+     * 分页查询当前用户的订单摘要，筛选在数据库内完成；每次最多返回50条，不统计全部记录数。
+     * @param userId 从认证上下文取得的用户编号
+     * @param status all、pending、active、completed或cancelled，未知值拒绝
+     * @param cursor 本人订单主键的十进制字符串，首屏为空；不接受他人游标
+     * @param limit 每页1至50条，Controller默认20条
+     * @return 包含items、nextCursor、hasMore的订单页；店铺名称由调用方按页批量补全
      */
-    List<OrderDO> listByUserId(Long userId);
+    OrderPageVO pageByUserId(Long userId, String status, String cursor, int limit);
 }

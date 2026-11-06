@@ -33,32 +33,48 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
         WHERE order_id = #{orderId} AND user_id = #{userId}
           AND status IN ('已支付','制作中','待取货')
           AND (pickup_code IS NULL OR pickup_code = '')
+          AND EXISTS(SELECT 1 FROM order_items i WHERE i.order_id=orders.order_id AND i.quantity>i.refund_approved_quantity)
         """)
     int assignPickupCodeIfMissing(@Param("orderId") Long orderId, @Param("userId") Long userId, @Param("code") String code);
 
     @Update("""
-        UPDATE orders SET status = '已完成', pickup_code = NULL,
+        UPDATE orders SET status = '已完成', pickup_code = NULL, completed_at = COALESCE(completed_at,CURRENT_TIMESTAMP),
             updated_at = CURRENT_TIMESTAMP, version = version + 1
         WHERE order_id = #{orderId} AND status = '待取货'
           AND version = #{version} AND pickup_code = #{code}
+          AND EXISTS(SELECT 1 FROM order_items i WHERE i.order_id=orders.order_id AND i.quantity>i.refund_approved_quantity)
         """)
     int completeWithPickupCode(@Param("orderId") Long orderId, @Param("version") Integer version, @Param("code") String code);
 
     /**
-     * 查询指定用户的订单。
-     *
-     * @param userId 用户 ID
-     * @return 用户订单列表
+     * 按本人范围、状态组和主键游标查询订单头，单次读取上限由Service限定为limit+1。
+     * order_id创建后不再变化，严格小于游标使顶部新建订单不会挤动后续分页；不使用深OFFSET。
+     * @param userId 已认证用户内部编号，始终进入WHERE，不能用客户端传入的用户替代
+     * @param statuses 服务端白名单映射的中文状态；null表示全部，禁止传空列表
+     * @param beforeId 本人已验证的订单游标；null表示最新一页
+     * @param size Service已限制的取数上限，包含用于判断hasMore的额外一条
+     * @return 按订单编号倒序排列的有界结果，不加载订单明细
      */
     @Select("""
-        SELECT *
-        FROM orders
-        WHERE user_id = #{userId}
-        ORDER BY created_at DESC
+        <script>
+        SELECT * FROM orders WHERE user_id = #{userId}
+        <if test="statuses != null">
+          AND status IN
+          <foreach collection="statuses" item="status" open="(" separator="," close=")">#{status}</foreach>
+        </if>
+        <if test="beforeId != null">AND order_id &lt; #{beforeId}</if>
+        ORDER BY order_id DESC LIMIT #{size}
+        </script>
         """)
-    List<OrderDO> selectByUserId(
-            @Param("userId") Long userId
-    );
+    List<OrderDO> selectUserPage(@Param("userId") Long userId, @Param("statuses") List<String> statuses,
+            @Param("beforeId") Long beforeId, @Param("size") int size);
+
+    /**
+     * 校验游标订单是否属于本人；不存在与他人订单都返回false，不暴露其他顾客的信息。
+     * 此处不要求游标仍匹配旧状态，避免订单状态正常流转后阻断本人继续向后翻页。
+     */
+    @Select("SELECT EXISTS(SELECT 1 FROM orders WHERE user_id=#{userId} AND order_id=#{orderId})")
+    boolean existsForUserOrder(@Param("userId") Long userId, @Param("orderId") Long orderId);
 
     /**
      * 按用户和幂等键查询已创建的订单。
@@ -96,6 +112,8 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
             WHERE order_id = #{orderId}
               AND status = #{expectedStatus}
               AND version = #{expectedVersion}
+              AND (#{targetStatus} NOT IN ('制作中','待取货') OR EXISTS(
+                  SELECT 1 FROM order_items i WHERE i.order_id=orders.order_id AND i.quantity>i.refund_approved_quantity))
             """)
     int updateStatusIfVersionMatches(
             @Param("orderId") Long orderId,
@@ -103,4 +121,18 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
             @Param("expectedVersion") Integer expectedVersion,
             @Param("targetStatus") String targetStatus
     );
+
+    /** 与接单/核销共用订单行及版本，申请按获取锁后的真实状态决定是否直接退款。 */
+    @Select("SELECT * FROM orders WHERE order_id=#{id} FOR UPDATE")
+    OrderDO lockRefundOrder(@Param("id") Long id);
+    /** 退款占用或释放菜品后递增版本，使之前读取旧内容的接单请求竞争失败。 */
+    @Update("UPDATE orders SET version=version+1 WHERE order_id=#{id}")
+    int bumpRefundVersion(@Param("id") Long id);
+    /** 所有份数已实际退款才结束未完成订单；已完成保留核销及评价历史，不能被改回未履约。 */
+    @Update("""
+        UPDATE orders SET status='已退款',pickup_code=NULL,version=version+1,updated_at=CURRENT_TIMESTAMP
+        WHERE order_id=#{id} AND status IN ('已支付','制作中','待取货')
+          AND NOT EXISTS(SELECT 1 FROM order_items i WHERE i.order_id=orders.order_id AND i.quantity>i.refunded_quantity)
+        """)
+    int finishRefundedOrder(@Param("id") Long id);
 }

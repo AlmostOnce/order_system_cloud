@@ -17,6 +17,7 @@ import com.hbue.ordering.order.notification.CancellationNotificationTcc;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
@@ -539,7 +540,7 @@ public class OrderServiceImpl
         OrderDO orderDO = getOrderForStatusChange(orderId);
         OrderStatus currentStatus = getCurrentStatus(orderDO);
 
-        if (currentStatus == OrderStatus.PAID || currentStatus == OrderStatus.PREPARING
+        if (currentStatus == OrderStatus.REFUNDED || currentStatus == OrderStatus.PAID || currentStatus == OrderStatus.PREPARING
                 || currentStatus == OrderStatus.WAITING_FOR_PICKUP || currentStatus == OrderStatus.COMPLETED) {
             // 重复的支付成功通知按幂等成功处理。
             return OrderStatusVO.builder()
@@ -943,14 +944,43 @@ public class OrderServiceImpl
     }
 
     /**
-     * 查询当前用户的订单列表。
-     *
-     * @param userId 当前用户 ID
-     * @return 订单列表
+     * 分页读取本人订单。先校验身份、筛选、大小及游标，再执行一次有界主表查询。
+     * 查询不加载明细、不逐笔请求用户或店铺，不在服务内保留全部历史订单。
      */
     @Override
-    public List<OrderDO> listByUserId(Long userId) {
-        // 查询条件限定为当前用户 ID，避免列表接口跨用户暴露订单。
-        return baseMapper.selectByUserId(userId);
+    public OrderPageVO pageByUserId(Long userId, String status, String cursor, int limit) {
+        if (userId == null || userId <= 0 || limit < 1 || limit > 50 || status == null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单分页参数不正确");
+        }
+        // 状态分组由服务端固定映射，不拼接客户端SQL，不把未知状态降级成全量查询。
+        List<String> statuses = switch (status) {
+            case "all" -> null;
+            case "pending" -> List.of(OrderStatus.PENDING_PAYMENT.getLabel());
+            case "active" -> List.of(OrderStatus.PAID.getLabel(), OrderStatus.PREPARING.getLabel(), OrderStatus.WAITING_FOR_PICKUP.getLabel());
+            case "completed" -> List.of(OrderStatus.COMPLETED.getLabel(),OrderStatus.REFUNDED.getLabel());
+            case "cancelled" -> List.of(OrderStatus.CANCELLED.getLabel());
+            default -> throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单筛选状态不正确");
+        };
+        Long beforeId = null;
+        if (cursor != null) {
+            // 字符串游标避免客户端额外数值计算；格式、Long溢出及归属均在查询前检查。
+            if (!cursor.matches("[1-9][0-9]{0,18}")) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            try {
+                beforeId = Long.valueOf(cursor);
+            } catch (NumberFormatException error) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            if (!baseMapper.existsForUserOrder(userId, beforeId)) {
+                throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单游标不存在");
+            }
+        }
+        // 多取一条判断下一页；只转换limit条摘要，不把探测记录作为本页内容返回。
+        List<OrderDO> rows = baseMapper.selectUserPage(userId, statuses, beforeId, limit + 1);
+        boolean hasMore = rows.size() > limit;
+        List<OrderDetailVO> items = rows.stream().limit(limit).map(OrderDetailVO::from).toList();
+        String nextCursor = hasMore ? Long.toString(items.getLast().getOrderId()) : null;
+        return new OrderPageVO(items, nextCursor, hasMore);
     }
 }
