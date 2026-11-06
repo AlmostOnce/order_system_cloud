@@ -233,4 +233,11 @@ public class RedisOperationsService {
         // 返回 Redis 对 Key 删除操作的结果。
         return stringRedisTemplate.delete(key);
     }
+    /**
+     * 发布可补查的在线变更提示，统一封装Redis Pub/Sub入口；不用于持久化消息正文。
+     * @param channel 服务端固定主题，业务不能直接采用客户端指定的任意主题
+     * @param payload 轻量资源引用或接收人标识，不包含访问令牌与聊天正文
+     * @return Redis接收到的在线订阅者数量，不代表客户端已收到或已阅读；离线恢复依赖业务数据库
+     */
+    public Long publish(String channel, String payload) { return stringRedisTemplate.convertAndSend(channel, payload); }
 }

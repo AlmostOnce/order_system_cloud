@@ -1,6 +1,6 @@
 # 支付后联系商家：业务与实施方案
 
-> 状态：方案草案，尚未实现。按任务逐步执行；仅明确授权时提交、推送或迁移。本文更新2026-10-28订单沟通计划，不代表旧计划中的待定规则已获批准。
+> 状态（2026-11-06）：后端与学生端源码已实现，正在静态检查及前端逻辑验证；未执行数据库迁移、启用开关、发布网关配置或运行后端构建。商家管理端按用户要求暂不实现。
 
 **目标：** 顾客支付订单后，从订单详情进入与该窗口商家的实时文字会话；离线消息可查询，断线可恢复。
 
@@ -28,18 +28,18 @@
 4. 用户已补充明确：系统订单通知与商家会话全部放在现有通知中心，不另建聊天中心或Tab。订单详情按钮只是直达对应会话的快捷入口。
 5. 点击“联系商家”就是创建会话的触发动作：服务端校验支付状态和归属后创建并返回会话；已经存在则返回原会话。支付成功不自动创建，发送第一条消息也不是创建前提。
 
-### 建议首期采用，实施前确认
+### 首期采用规则（2026-11-06用户已确认）
 
 | 项目 | 建议规则 |
 | --- | --- |
 | 会话粒度 | 一笔订单一个会话，多次进入复用；一个店铺有多笔订单时分会话，展示订单号与菜品摘要 |
 | 可发消息状态 | 已支付、制作中、待取货；待支付与已取消不能创建会话 |
-| 订单已完成 | 建议完成后24小时内可继续发消息，之后只读；这是待确认建议，不直接写死 |
+| 订单已完成 | 完成后24小时内可继续发消息，之后只读 |
 | 消息类型 | 首期纯文字，1至500个字符；图片、语音、撤回不在首期 |
 | 商家参与者 | 当前绑定该窗口的店主共同处理，保存实际发送人；店主被撤权后不能继续收取、查询或发送 |
 | 历史保留 | 首期不自动删除历史；正式部署前再确定保留与清理规则 |
 | 未读语义 | 顾客个人已读；商家按实际操作人分别已读，不让一位店主阅读替其他人全部清零 |
-| 频率限制 | 建议每个用户每秒最多2次、每分钟最多30次发送；按账号跨连接限制，重试先做幂等判断 |
+| 频率限制 | 每个用户每秒最多2次、每分钟最多30次发送；按账号跨连接限制，重试先做幂等判断 |
 
 订单页短暂显示支付成功而订单尚未推进时，展示“正在同步订单状态”，确认服务端订单为已支付后才开放聊天；不接受客户端传“我已支付”作为证明。状态或授权服务不可用时暂停写入，Toast提示重试，不默认放行。
 
@@ -65,10 +65,10 @@
 
 | 表 | 主要字段与约束 |
 | --- | --- |
-| chat_conversations | 内部主键、公开conversation_uuid、order_id、window_id、customer_id、last_seq、last_message_id、last_message_at、created_at；order_id与公开UUID分别唯一 |
+| chat_conversations | 内部主键、公开conversation_uuid、order_id、window_id、customer_id、last_seq、last_content、last_message_at、created_at；order_id与公开UUID分别唯一 |
 | chat_messages | 内部主键、公开message_uuid、conversation_id、seq、sender_id、sender_side、client_message_id、content、created_at；(conversation_id,seq)唯一；(conversation_id,sender_id,client_message_id)唯一 |
 | chat_read_state | conversation_id、user_id、last_read_seq、updated_at；(conversation_id,user_id)唯一，阅读进度只增不减 |
-| chat_event_outbox | 事件UUID、会话引用、消息引用、投递状态、次数、下次尝试时间、创建时间；与消息同事务写入，避免入库后进程退出而完全没有提示 |
+| chat_event_outbox | 事件UUID、会话UUID引用、投递时间、次数、下次尝试时间、创建时间；与消息同事务写入，避免入库后进程退出而完全没有提示 |
 
 公开接口不返回内部用户/消息/会话主键；身份使用用户UUID，会话和消息使用公开UUID。seq仅为会话内顺序与阅读水位，不是公开用户账号。正文不放Redis，也不写普通请求日志。
 
@@ -90,7 +90,7 @@
 {"type":"chat.send","requestId":"本次请求UUID","conversationUuid":"会话UUID","clientMessageId":"客户端消息UUID","content":"请问还需要多久？"}
 ```
 
-服务端入库后返回 chat.ack，包含requestId、clientMessageId、messageUuid、seq、createdAt；对收发双方在线设备发布 chat.message，字段包括会话UUID、消息UUID、seq、发送方公开身份、正文及服务端时间。两种事件可能乱序或重复，客户端以messageUuid去重，并用clientMessageId替换发送中占位。
+服务端本地事务提交后返回 chat.ack，包含requestId、conversationUuid和完整message对象；message含clientMessageId、messageUuid、seq与createdAt。在线设备只收到chat.changed与conversationUuid，再由HTTP授权补拉正文，避免广播正文及维护第二套正文合并协议。ACK与补查可能乱序，客户端以messageUuid去重，并用clientMessageId替换本人发送中占位。
 
 失败返回 chat.error，携带requestId、稳定错误码和可展示提示，不回显令牌或内部异常。帧大小、文本长度、JSON结构和未知事件类型都在服务端校验。发送ACK代表已持久化，不代表对方在线、收到或已读。
 
@@ -98,7 +98,7 @@
 
 消息和outbox同事务提交 → 后台发布轻量消息引用 → Redis Pub/Sub分发到各实例 → 目标实例复核接收者权限后发送WebSocket。复用并扩展现有通知转发基础，Redis操作通过common-redis封装；重试和轮询属于outbox投递，不扫描全部聊天正文。
 
-Redis Pub/Sub不保存离线消息，离线订阅者会漏掉提示。因此它只承担实时转发，持久记录、游标补拉和未读查询负责恢复。outbox投递成功也不代表所有客户端已收到。Redis恢复时重新订阅并广播一次轻量补查信号；客户端重连、回前台和进入会话时主动补查，恢复不依赖重发所有历史正文。
+Redis Pub/Sub不保存离线消息，离线订阅者会漏掉提示。因此它只承担实时转发，持久记录、游标补拉和未读查询负责恢复。outbox投递成功也不代表所有客户端已收到。客户端重连时触发补查，可见聊天页每30秒兜底查询；客户端重连、回前台和进入会话时主动补查，恢复不依赖重发所有历史正文。
 
 首期不要求每条聊天再经过RocketMQ：订单状态通知继续沿用现有MQ链路，聊天在通知服务内完成本地事务与实时推送，不引入Seata全局事务。若后续新增独立审核、客服或离线推送消费者，再评估由outbox发布MQ事件。
 
@@ -134,23 +134,23 @@ Redis Pub/Sub不保存离线消息，离线订阅者会漏掉提示。因此它�
 
 ### 阶段1：确认规则和后端数据
 
-- [ ] 确认本方案第二节待定规则与Vue管理端仓库。
-- [ ] 建立订单聊天上下文契约，核对订单API与窗口授权来源；优先复用现有内部客户端。
-- [ ] 编写notification_db迁移与回滚说明，新增DO/Mapper/DTO/VO/Service分层，不运行Maven或擅自执行迁移。
-- [ ] 完成会话创建、授权、幂等消息持久化、seq分配、outbox与分页/已读查询。
+- [x] 确认24小时、纯文字、多店主独立已读；管理端仓库按用户要求暂不处理，仅实现学生端。
+- [x] 建立订单聊天上下文契约，核对订单API与窗口授权来源；优先复用现有内部客户端。
+- [x] 编写notification_db迁移与回滚说明，新增DO/Mapper/DTO/VO/Service分层，不运行Maven或擅自执行迁移。
+- [x] 完成会话创建、授权、幂等消息持久化、seq分配、outbox与分页/已读查询。
 - [ ] 检查并覆盖并发创建、幂等冲突、事务回滚、他人订单、越权店主、未支付及终态边界。
 
 ### 阶段2：实时链路
 
-- [ ] 扩展现有Socket协议与认证上下文，保持订单通知兼容；补common-redis类型化转发及outbox投递。
+- [x] 扩展现有Socket协议与认证上下文，保持订单通知兼容；补common-redis类型化转发及outbox投递。
 - [ ] 验证重复帧、ACK丢失、断网重试、序号缺口、多设备和多实例；消息只存一条。
 - [ ] 验证过期票据、注销、改密、撤权、Redis故障、慢连接和恶意超长帧。
 - [ ] 校验Nginx/Gateway配置，不建立第二条冗余连接，不让聊天刷新所有订单。
 
 ### 阶段3：学生端
 
-- [ ] 支付后订单入口、商家会话列表、聊天页与独立API封装，复用全局通知连接分发。
-- [ ] 合并系统通知/聊天红点，逐会话维护阅读水位，不覆盖订单通知未读数。
+- [x] 支付后订单入口、商家会话列表、聊天页与独立API封装，复用全局通知连接分发。
+- [x] 合并系统通知/聊天红点，逐会话维护阅读水位，不覆盖订单通知未读数。
 - [ ] 真机验收小屏、键盘遮挡、按钮文字居中、向上翻页、长文本、切后台重连、弱网与账号隔离。
 - [ ] 发送失败Toast与原消息重试；原生不兼容样式检查，确认弹窗复用现有组件。
 
@@ -160,9 +160,19 @@ Redis Pub/Sub不保存离线消息，离线订阅者会漏掉提示。因此它�
 - [ ] 使用真实顾客与对应店主双端验证：支付后聊天、离线补拉、已读、重复发送、店主换绑及完成后规则。
 - [ ] 记录启用开关、部署顺序、数据库备份与关闭聊天回滚方式；关闭入口不删除消息，不影响下单支付和原订单通知。
 
-每阶段完成后更新勾选。当前仅形成方案，不迁移、不改业务源码、不启用、不提交或推送；后续若未明确授权Maven，只做后端静态检查，并如实列出未执行验证。
+勾选仅代表源码实现，不代表运行验收。待执行项保持未勾选：数据库迁移、启用聊天、发布网关路由、后端构建和测试、Android真机及真实双端联调。本次未提交或推送。允许修改必要依赖声明，仍禁止擅自运行Maven。
 
 ## 九、技术依据
 
 - Redis官方Pub/Sub说明：https://redis.io/docs/latest/develop/use-cases/pub-sub/ 。仅承担在线事件提示，不承担离线消息持久化与补拉。
 - Spring官方ConcurrentWebSocketSessionDecorator说明：https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/socket/handler/ConcurrentWebSocketSessionDecorator.html 。连接发送需串行保护及缓冲/时间限制，沿用项目现有实现。
+
+## 十、启用与关闭顺序（2026-11-06）
+
+1. 备份notification_db并审阅V2__create_order_chat.sql；人工执行后检查四张表。当前尚未执行。
+2. 将docs/nacos/gateway-service.yaml的/chat路由同步到现有网关配置，复用原notifications/ws升级链路；当前尚未发布。
+3. 订单服务需加载chat-context接口，通知服务需加载新增客户端与Mapper；notification.chat.enabled默认false，迁移完成后再显式设为true。当前未构建或重启。
+4. 学生端源码包含订单入口、消息列表与聊天页；未发布到Nginx，未真机验证。商家Vue页面不在本次实现范围。
+5. 关闭时设notification.chat.enabled=false并发布对应服务配置；保留会话与消息，不自动删除表。学生端仍可使用原系统订单通知。
+
+已编写Java业务测试但未运行。学生端Node检查采用接口与Socket模拟，不能代替真实网络、事务回滚或多实例验证。所有本模块代码同步补充详细中文注释，规则已写入前后端AGENTS.md。
