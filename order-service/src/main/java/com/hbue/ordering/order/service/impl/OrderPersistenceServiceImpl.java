@@ -50,6 +50,10 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         OrderStatus status = OrderStatus.findByLabel(current.getStatus());
         if (status != OrderStatus.PAID && status != OrderStatus.PREPARING && status != OrderStatus.WAITING_FOR_PICKUP)
             throw new BusinessException(CommonErrorCode.CONFLICT, "当前订单不能获取取餐码");
+        // 全部份数已经批准退款时，旧码也不能继续展示；真正核销还受SQL条件及版本保护。
+        if (orderItemMapper.selectByOrderId(orderId).stream().noneMatch(item ->
+                item.getQuantity() > (item.getRefundApprovedQuantity() == null ? 0 : item.getRefundApprovedQuantity())))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "全部菜品已进入退款，无需取餐");
         if (current.getPickupCode() == null || !current.getPickupCode().matches("[0-9]{6}"))
             throw new BusinessException(CommonErrorCode.CONFLICT, "取餐码暂不可用，请联系窗口处理");
         return current.getPickupCode();

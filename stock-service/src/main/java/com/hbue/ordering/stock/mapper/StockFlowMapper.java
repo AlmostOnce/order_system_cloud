@@ -43,4 +43,17 @@ public interface StockFlowMapper extends BaseMapper<StockFlowDO> {
      */
     @Select("SELECT COALESCE(SUM(change_qty), 0) FROM stock_flow WHERE stock_id = #{stockId}")
     int sumChangeQty(@Param("stockId") Long stockId);
+
+    /** 调用方先锁stock行，再求原订单剩余可回补数量，覆盖整单取消和多笔退款的累计值。 */
+    @Select("""
+        SELECT COALESCE(-SUM(CASE WHEN biz_type='ORDER_DEDUCT' AND biz_ref=#{orderNo} THEN change_qty ELSE 0 END),0)
+             - COALESCE(SUM(CASE WHEN (biz_type='ORDER_RESTORE' AND biz_ref=#{orderNo})
+                         OR (biz_type='REFUND_RESTORE' AND original_biz_ref=#{orderNo}) THEN change_qty ELSE 0 END),0)
+        FROM stock_flow WHERE stock_id=#{stockId}
+        """)
+    int refundableQuantity(@Param("stockId") Long stockId,@Param("orderNo") String orderNo);
+
+    /** 使用退款号和库存行定位幂等流水，原订单号及数量仍须与重试请求逐项核对。 */
+    @Select("SELECT * FROM stock_flow WHERE biz_type='REFUND_RESTORE' AND biz_ref=#{refundNo} AND stock_id=#{stockId}")
+    com.hbue.ordering.stock.model.StockFlowDO selectRefund(@Param("refundNo") String refundNo,@Param("stockId") Long stockId);
 }

@@ -47,4 +47,10 @@ public interface UserBalanceInternalClient {
     ApiResponse<String> close(@PathVariable("userId") Long userId,
             @RequestHeader("X-Internal-Token") String token,
             @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command);
+
+    /** 退回实际扣款余额：原支付事实与累计退款上限由用户服务同库事务再次校验。 */
+    @PostMapping("/internal/users/{userId}/balance/refund")
+    ApiResponse<String> refund(@PathVariable("userId") Long userId,
+            @RequestHeader("X-Internal-Token") String token,
+            @RequestBody com.hbue.ordering.user.api.dto.BalanceRefundCommand command);
 }

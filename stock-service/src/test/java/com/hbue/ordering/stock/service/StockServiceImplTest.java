@@ -275,6 +275,8 @@ class StockServiceImplTest {
                 .thenReturn(0);
         when(stockFlowMapper.countByBiz(eq(StockFlowTypes.ORDER_DEDUCT), anyString(), anyLong()))
                 .thenReturn(1);
+        // 部分退款后旧整单回补也必须遵守原扣减的剩余额度。
+        when(stockFlowMapper.refundableQuantity(STOCK_ID, ORDER_NO)).thenReturn(2);
         when(stockMapper.restoreQuantity(STOCK_ID, 2)).thenReturn(1);
 
         stockService.restore(buildRestoreRequest(2));

@@ -49,6 +49,13 @@ public class OrderItemDO {
     /** 购买数量。 */
     private Integer quantity;
 
+    /** 有效申请占用数量（含已退款），关闭申请才释放，未批准申请不暂停制作。 */
+    private Integer refundReservedQuantity;
+    /** 已批准数量（含执行中/成功），不再属于可履约数量。 */
+    private Integer refundApprovedQuantity;
+    /** 完成资金及所需库存步骤的退款数量。 */
+    private Integer refundedQuantity;
+
     /** 当前明细行金额快照。 */
     @TableField("line_amount")
     private BigDecimal lineAmount;

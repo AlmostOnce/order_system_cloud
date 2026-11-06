@@ -71,4 +71,7 @@ public class OrderDO {
 
   /** 订单最近一次更新时间。 */
   private LocalDateTime updatedAt;
+
+  /** 首次核销完成时间，退款活动不能延长售后72小时申请期限。 */
+  private LocalDateTime completedAt;
 }

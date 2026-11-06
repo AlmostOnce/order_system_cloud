@@ -95,6 +95,7 @@ public class PaymentSecurityConfig {
                         ).permitAll()
                         // 渠道回调入口无用户 JWT，安全由 HMAC 验签保证。
                         .requestMatchers("/internal/payments/notify").permitAll()
+                        .requestMatchers("/internal/payments/orders/*/refund-fact", "/internal/payments/orders/*/refund").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST,"/internal/payments/orders/*/close").permitAll()
                         // 模拟收银台仅 dev 环境启用且不经 Gateway 暴露。
                         .requestMatchers("/mock/**").permitAll()

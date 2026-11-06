@@ -175,8 +175,8 @@ class PaymentServiceImplTest {
 
     @Test
     void shouldRejectCreateWhenOrderNotPendingPayment() {
+        // 非待支付订单在访问支付表前即拒绝，不设置不会调用的活跃支付查询桩。
         stubOrder(order("已取消", USER_ID));
-        when(paymentMapper.selectActiveByOrderId(ORDER_ID)).thenReturn(null);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> paymentService.createPayment(

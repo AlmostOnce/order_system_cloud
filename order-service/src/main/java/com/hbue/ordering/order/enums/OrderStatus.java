@@ -28,7 +28,10 @@ public enum OrderStatus {
     COMPLETED("已完成"),
 
     /** 顾客取消了尚未支付的订单。 */
-    CANCELLED("已取消");
+    CANCELLED("已取消"),
+
+    /** 未完成订单的菜品全部退款成功，不再允许接单、制作或取餐。 */
+    REFUNDED("已退款");
 
     /** 数据库及现有接口使用的中文状态值。 */
     private final String label;
@@ -68,7 +71,7 @@ public enum OrderStatus {
             case PAID -> targetStatus == PREPARING;
             case PREPARING -> targetStatus == WAITING_FOR_PICKUP;
             case WAITING_FOR_PICKUP -> targetStatus == COMPLETED;
-            case COMPLETED, CANCELLED -> false;
+            case COMPLETED, CANCELLED, REFUNDED -> false;
         };
     }
 

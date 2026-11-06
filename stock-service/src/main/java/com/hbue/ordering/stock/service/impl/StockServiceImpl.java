@@ -299,6 +299,10 @@ public class StockServiceImpl implements StockService {
             return;
         }
 
+        // 与部分退款共用原扣减余额，旧整单入口也不能把已经回补的份数再加一次。
+        if (stockFlowMapper.refundableQuantity(stock.getStockId(), request.getBizRef()) < quantity) {
+            throw new BusinessException(StockErrorCode.STOCK_CONFLICT, "回补超过原订单剩余扣减数量");
+        }
         int affected = stockMapper.restoreQuantity(stock.getStockId(), quantity);
         if (affected != 1) {
             throw new BusinessException(
