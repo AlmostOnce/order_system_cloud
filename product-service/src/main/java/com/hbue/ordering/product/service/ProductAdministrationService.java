@@ -23,6 +23,9 @@ import java.util.List;
 public interface ProductAdministrationService {
     /** 仅更新图片，不覆盖其他目录字段；沿用当前管理范围与缓存规则。 */
     WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String fileKey);
+
+    /** 完整替换最多5张店铺图片；按经营权限与文件归属校验，第一张为封面，空数组清空。 */
+    WindowAdminVO updateWindowImages(Long operatorId, Long windowId, List<String> fileKeys);
     ProductAdminVO updateProductImage(Long operatorId, Long productId, String fileKey);
 
 

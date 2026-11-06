@@ -4,7 +4,11 @@ server:
 
 spring:
   profiles:
-    include: search-mq
+    # 搜索变更发布与评分读模型消费同时启用；否则评价已发布但商品评分表始终为空。
+    # 两个profile分别配置输出和输入绑定，共用同一RocketMQ NameServer。
+    include:
+      - search-mq
+      - comment-mq
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:

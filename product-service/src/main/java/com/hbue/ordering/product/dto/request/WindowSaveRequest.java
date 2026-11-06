@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
+import java.util.List;
 
 /**
  * 新建或更新档口的接口请求 DTO。
@@ -51,6 +52,10 @@ public class WindowSaveRequest {
     /** 窗口图片文件键；省略保留，空串清除。 */
     @Pattern(regexp = "(?:[a-fA-F0-9]{32})?")
     private String imageFileKey;
+
+    /** 完整有序图片列表；省略保留，空数组清空，不能和旧imageFileKey同时提交。 */
+    @Size(max = 5, message = "店铺最多设置5张图片")
+    private List<@NotBlank @Pattern(regexp = "[a-fA-F0-9]{32}") String> imageFileKeys;
 
     /** 窗口状态：1 启用，0 停用。 */
     @NotNull

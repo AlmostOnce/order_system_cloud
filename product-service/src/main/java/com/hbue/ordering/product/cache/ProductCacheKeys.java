@@ -24,8 +24,8 @@ public final class ProductCacheKeys {
     /** 菜品布隆过滤器名称。 */
     public static final String PRODUCT_BLOOM_FILTER = "product:bloom:product";
 
-    /** 窗口菜单缓存键前缀；v2 增加窗口简介，避免命中旧结构缓存。 */
-    private static final String WINDOW_MENU_PREFIX = "product:menu:window:v2:";
+    /** 窗口菜单缓存键前缀；v3增加有序图片列表，避免旧缓存缺字段导致多图不显示。 */
+    private static final String WINDOW_MENU_PREFIX = "product:menu:window:v3:";
 
     /** 窗口菜单空值标记缓存键前缀。 */
     private static final String WINDOW_MENU_NULL_PREFIX = "product:null:menu:window:";

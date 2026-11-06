@@ -18,6 +18,7 @@ import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
+import com.hbue.ordering.product.service.WindowImageGallery;
 import com.hbue.ordering.product.vo.MenuProductVO;
 import com.hbue.ordering.product.vo.ProductCategoryMenuVO;
 import com.hbue.ordering.product.vo.RestaurantSummaryVO;
@@ -366,7 +367,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             ));
         }
 
-        return new WindowMenuVO(
+        WindowMenuVO menu = new WindowMenuVO(
                 window.getWindowId(),
                 window.getWindowCode(),
                 window.getWindowName(),
@@ -376,6 +377,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 uncategorizedProducts,
                 FileReferences.url(window.getImageFileKey())
         );
+        // 一次读取窗口行即可得到完整有序图片，不为每张图片跨服务查询或访问文件数据库。
+        menu.setImageUrls(WindowImageGallery.read(window).stream().map(FileReferences::url).toList());
+        return menu;
     }
 
     /**

@@ -21,6 +21,7 @@ import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.service.ProductAdministrationService;
+import com.hbue.ordering.product.service.WindowImageGallery;
 import com.hbue.ordering.product.vo.ProductAdminVO;
 import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;
@@ -107,14 +108,50 @@ public class ProductAdministrationServiceImpl
     public WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String fileKey) {
         validateId(windowId, "窗口");
         dataScopeService.checkWindowAccess(operatorId, windowId);
-        requireWindow(windowId);
-        int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
-                .eq("window_id", windowId).set("image_file_key", images.requireImageKey(fileKey, operatorId, "WINDOW_IMAGE", windowId)));
-        if (updated != 1) throw notFound("窗口不存在");
+        DiningWindowDO window = requireWindow(windowId);
+        List<String> existing = WindowImageGallery.read(window);
+        List<String> keys = WindowImageGallery.resolve(WindowImageGallery.withCover(fileKey, existing),
+                existing, operatorId, windowId, images);
+        saveWindowImages(windowId, keys);
         searchOutbox.recordWindow(windowId);
         evictActiveWindowsAfterCommit();
         evictWindowMenuAfterCommit(windowId);
         return toWindowVO(requireWindow(windowId));
+    }
+
+    /** 整体替换图片数组，单条UPDATE同步封面；并发请求采用最后写入值，不存在逐张追加越限。 */
+    @Override
+    @Transactional
+    public WindowAdminVO updateWindowImages(Long operatorId, Long windowId, List<String> fileKeys) {
+        validateId(windowId, "窗口");
+        dataScopeService.checkWindowAccess(operatorId, windowId);
+        DiningWindowDO existing = requireWindow(windowId);
+        List<String> keys = WindowImageGallery.resolve(fileKeys, WindowImageGallery.read(existing), operatorId, windowId, images);
+        saveWindowImages(windowId, keys);
+        searchOutbox.recordWindow(windowId);
+        evictActiveWindowsAfterCommit();
+        evictWindowMenuAfterCommit(windowId);
+        return toWindowVO(requireWindow(windowId));
+    }
+
+    /** 图片与封面在同一条SQL更新，失败时整笔事务回滚，不删除文件服务中可能仍被使用的文件。 */
+    private void saveWindowImages(Long windowId, List<String> keys) {
+        int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
+                .eq("window_id", windowId)
+                .set("image_file_key", keys.isEmpty() ? null : keys.get(0))
+                .set("image_file_keys", WindowImageGallery.json(keys)));
+        if (updated != 1) throw notFound("窗口不存在");
+    }
+
+    /** 新旧请求字段互斥；不传图片字段保留全部，传新列表则完整替换。 */
+    private List<String> requestedWindowImages(WindowSaveRequest request, DiningWindowDO existing, Long operatorId, Long windowId) {
+        List<String> old = existing == null ? List.of() : WindowImageGallery.read(existing);
+        if (request.getImageFileKeys() != null && request.getImageFileKey() != null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "请勿同时提交单图和图片列表");
+        }
+        List<String> requested = request.getImageFileKeys() != null ? request.getImageFileKeys()
+                : WindowImageGallery.withCover(request.getImageFileKey(), old);
+        return WindowImageGallery.resolve(requested, old, operatorId, windowId, images);
     }
 
     @Override
@@ -172,7 +209,9 @@ public class ProductAdministrationServiceImpl
         window.setDescription(request.getDescription());
         window.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
         window.setLocation(request.getLocation());
-        window.setImageFileKey(images.resolveUpdateKey(request.getImageFileKey(), null, operatorId, "WINDOW_IMAGE", null));
+        List<String> keys = requestedWindowImages(request, null, operatorId, null);
+        window.setImageFileKey(keys.isEmpty() ? null : keys.get(0));
+        window.setImageFileKeys(WindowImageGallery.json(keys));
         window.setStatus(request.getStatus());
         window.setIsOpen(request.getIsOpen());
         try {
@@ -208,6 +247,9 @@ public class ProductAdministrationServiceImpl
                 request.getRestaurantId()
         );
         DiningWindowDO existingWindow = requireWindow(windowId);
+        List<String> keys = requestedWindowImages(request, existingWindow, operatorId, windowId);
+        // 省略图片字段的普通资料更新不能把较早读取的图片写回，避免覆盖并发完成的图片保存。
+        boolean changesImages = request.getImageFileKeys() != null || request.getImageFileKey() != null;
 
         UpdateWrapper<DiningWindowDO> update = new UpdateWrapper<>();
         update.eq("window_id", windowId)
@@ -217,8 +259,8 @@ public class ProductAdministrationServiceImpl
                 .set(request.getDescription() != null, "description", request.getDescription())
                 .set(request.getSortOrder() != null, "sort_order", request.getSortOrder())
                 .set("location", request.getLocation())
-                .set(request.getImageFileKey() != null, "image_file_key", images.resolveUpdateKey(
-                        request.getImageFileKey(), existingWindow.getImageFileKey(), operatorId, "WINDOW_IMAGE", windowId))
+                .set(changesImages, "image_file_key", keys.isEmpty() ? null : keys.get(0))
+                .set(changesImages, "image_file_keys", WindowImageGallery.json(keys))
                 .set("status", request.getStatus())
                 .set("is_open", request.getIsOpen());
         try {
@@ -730,7 +772,7 @@ public class ProductAdministrationServiceImpl
      * @return 窗口管理视图
      */
     private WindowAdminVO toWindowVO(DiningWindowDO window) {
-        return new WindowAdminVO(
+        WindowAdminVO result = new WindowAdminVO(
                 window.getWindowId(),
                 window.getRestaurantId(),
                 window.getWindowCode(),
@@ -744,6 +786,10 @@ public class ProductAdministrationServiceImpl
                 window.getCreatedAt(),
                 window.getUpdatedAt()
         );
+        List<String> keys = WindowImageGallery.read(window);
+        result.setImageFileKeys(keys);
+        result.setImageUrls(keys.stream().map(FileReferences::url).toList());
+        return result;
     }
 
     /**

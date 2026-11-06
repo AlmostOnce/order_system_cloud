@@ -1,7 +1,7 @@
 package com.hbue.ordering.product.vo;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import java.util.List;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -17,7 +17,6 @@ import java.time.LocalDateTime;
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class WindowAdminVO {
 
     /** 窗口 ID。 */
@@ -43,6 +42,22 @@ public class WindowAdminVO {
 
     /** 窗口图片地址。 */
     private String imageUrl;
+
+    /** 管理端编辑及排序所需的文件键，不能用展示URL回填保存接口。 */
+    private List<String> imageFileKeys;
+
+    /** 与文件键一一对应的展示地址，最多5张。 */
+    private List<String> imageUrls;
+
+    /** 保留现有管理列表构造契约；图片列表由Service按同一窗口数据补齐。 */
+    public WindowAdminVO(Long windowId, Long restaurantId, String windowCode, String windowName,
+            String description, Integer sortOrder, String location, String imageUrl, Integer status,
+            Integer isOpen, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.windowId = windowId; this.restaurantId = restaurantId; this.windowCode = windowCode;
+        this.windowName = windowName; this.description = description; this.sortOrder = sortOrder;
+        this.location = location; this.imageUrl = imageUrl; this.status = status; this.isOpen = isOpen;
+        this.createdAt = createdAt; this.updatedAt = updatedAt;
+    }
 
     /** 窗口状态：1 启用，0 停用。 */
     private Integer status;

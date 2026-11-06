@@ -1,6 +1,5 @@
 package com.hbue.ordering.product.vo;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -17,7 +16,6 @@ import java.util.List;
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class WindowMenuVO {
 
     /** 窗口 ID。 */
@@ -43,6 +41,17 @@ public class WindowMenuVO {
 
     /** 窗口封面地址。 */
     private String imageUrl;
+
+    /** 有序展示地址列表；第一张是封面，最多5张，空列表由客户端展示默认图。 */
+    private List<String> imageUrls;
+
+    /** 保留原菜单构造契约；实际目录查询在构造后补齐多图列表。 */
+    public WindowMenuVO(Long windowId, String windowCode, String windowName, String description,
+            String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts, String imageUrl) {
+        this.windowId = windowId; this.windowCode = windowCode; this.windowName = windowName;
+        this.description = description; this.location = location; this.categories = categories;
+        this.uncategorizedProducts = uncategorizedProducts; this.imageUrl = imageUrl;
+    }
 
     public WindowMenuVO(Long windowId, String windowCode, String windowName, String description,
             String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts) {
