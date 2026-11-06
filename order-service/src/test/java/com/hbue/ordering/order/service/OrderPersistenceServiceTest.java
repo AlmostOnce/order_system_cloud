@@ -211,21 +211,39 @@ class OrderPersistenceServiceTest {
 
     @Test
     void sharedOrderResponsesNeverExposePickupCode() throws Exception {
+        // 详情契约需要真实创建时间才能计算支付期限，安全字段测试也必须提供完整最小订单。
         var order = new OrderDO(); order.setOrderId(81L); order.setPickupCode("012345");
-        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        order.setCreatedAt(java.time.LocalDateTime.of(2026,11,6,10,0));
+        // 与Spring Boot实际序列化保持一致，注册Java时间模块。
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
         assertFalse(json.writeValueAsString(order).contains("012345"));
         assertFalse(json.writeValueAsString(com.hbue.ordering.order.vo.OrderDetailVO.from(order)).contains("012345"));
         assertFalse(order.toString().contains("012345"));
     }
     @Test
     void pickupCodeCollisionRetriesWithoutReplacingAnotherOrdersCode() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
         var order = new OrderDO(); order.setOrderId(81L); order.setUserId(7L);
         order.setStatus("待取货"); order.setPickupCode("012345");
         when(orderMapper.assignPickupCodeIfMissing(eq(81L), eq(7L), anyString()))
                 .thenThrow(new org.springframework.dao.DuplicateKeyException("collision")).thenReturn(1);
         when(orderMapper.selectById(81L)).thenReturn(order);
+        var item = new OrderItemDO(); item.setQuantity(1); item.setRefundApprovedQuantity(0);
+        when(orderItemMapper.selectByOrderId(81L)).thenReturn(List.of(item));
         assertEquals("012345", persistence.ensurePickupCode(81L, 7L));
         verify(orderMapper, times(2)).assignPickupCodeIfMissing(eq(81L), eq(7L), anyString());
+    }
+
+    /** 全部份数获批退款时，即使旧取餐码仍未清理也不能继续返回。 */
+    @Test void approvedRefundHidesPreviouslyIssuedPickupCode() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var order = new OrderDO(); order.setOrderId(81L); order.setUserId(7L);
+        order.setStatus("待取货"); order.setPickupCode("012345");
+        var item = new OrderItemDO(); item.setQuantity(1); item.setRefundApprovedQuantity(1);
+        when(orderMapper.selectById(81L)).thenReturn(order);
+        when(orderItemMapper.selectByOrderId(81L)).thenReturn(List.of(item));
+        assertThrows(com.hbue.ordering.common.core.exception.BusinessException.class,
+                () -> persistence.ensurePickupCode(81L,7L));
     }
 
 }

@@ -40,7 +40,8 @@ class OrderCartContractTest {
         ApiResponse<OrderCartSnapshotVO> response = mapper.readValue(json, new TypeReference<>() { });
         assertEquals("COMMON_000", response.getCode());
         assertEquals(123L, response.getData().orderId());
-        assertEquals(5L, response.getData().userId());
+        // 对外详情早已隐藏内部用户主键，购物车投影同样不能重新依赖该字段。
+        org.junit.jupiter.api.Assertions.assertFalse(mapper.readTree(json).get("data").has("userId"));
         assertEquals(9007199254740993L, response.getData().windowId());
         assertEquals(9007199254740995L, response.getData().items().getFirst().productId());
         assertEquals(2, response.getData().items().getFirst().quantity());

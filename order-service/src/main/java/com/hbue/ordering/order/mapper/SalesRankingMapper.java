@@ -9,12 +9,12 @@ import java.util.List;
 
 @Mapper
 public interface SalesRankingMapper {
-    /** 一个 SQL 一致性快照同时取销量和已计入订单 ID，重建后旧消息不会再次累加。 */
+    /** 已支付累计口径包含后续退款订单，避免重建与实时累加不一致。一个 SQL 一致性快照同时取销量和已计入订单 ID，重建后旧消息不会再次累加。 */
     @Select("""
         SELECT o.order_id, i.item_id, i.product_id, o.window_id,
                i.product_name_snapshot AS product_name, i.quantity
         FROM orders o JOIN order_items i ON i.order_id = o.order_id
-        WHERE o.status IN ('已支付', '制作中', '待取货', '已完成')
+        WHERE o.status IN ('已支付', '制作中', '待取货', '已完成', '已退款')
         ORDER BY i.item_id
         """)
     @Options(timeout = 15)
@@ -25,7 +25,7 @@ public interface SalesRankingMapper {
                i.product_name_snapshot AS product_name, i.quantity
         FROM orders o JOIN order_items i ON i.order_id = o.order_id
         WHERE o.order_id = #{orderId}
-          AND o.status IN ('已支付', '制作中', '待取货', '已完成')
+          AND o.status IN ('已支付', '制作中', '待取货', '已完成', '已退款')
         ORDER BY i.item_id
         """)
     @Options(timeout = 5)
