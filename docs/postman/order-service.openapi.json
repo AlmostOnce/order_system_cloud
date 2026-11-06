@@ -231,12 +231,54 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseListOrderDetailVO"
+                  "$ref": "#/components/schemas/ApiResponseOrderPageVO"
                 }
               }
             }
           }
-        }
+        },
+        "summary": "本人订单分页与状态筛选",
+        "description": "按已认证用户隔离；订单编号倒序游标分页，首屏不传cursor。响应已由服务端筛选，不再返回全量数组。",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "进行中包含已支付、制作中、待取货",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "active",
+                "completed",
+                "cancelled"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "上一页nextCursor，必须属于本人；首屏省略",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ]
       }
     },
     "/internal/orders/{orderId}": {
@@ -272,6 +314,259 @@
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseOrderInternalVO"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "applyOrderRefund",
+        "description": "仅CUSTOMER本人；未接单直接批准，已接单转待商家；金额不由客户端填写。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundVO"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundApplyRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "listOrderRefunds",
+        "description": "本人订单退款记录倒序游标分页，20条。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundPageVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/refunds/{refundId}/appeal": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "appealOrderRefund",
+        "description": "仅本人商家拒绝申请可升级经理。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "refundId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/refunds/{refundId}/withdraw": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "withdrawOrderRefund",
+        "description": "仅本人未批准申请可撤回；已到商家截止期限不再撤回。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "refundId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/refunds/manage": {
+      "get": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "listManagedRefunds",
+        "description": "店主看PENDING；经理看APPEALED。非平台总经理必须指定授权窗口。",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundPageVO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/refunds/{refundId}/decision": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "decideOrderRefund",
+        "description": "店主审批PENDING，经理审批APPEALED，后端校验数据范围；已完成不能回库。",
+        "parameters": [
+          {
+            "name": "refundId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRefundVO"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundDecisionRequest"
               }
             }
           }
@@ -412,6 +707,26 @@
           },
           "lineAmount": {
             "type": "number"
+          },
+          "itemId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "订单明细主键"
+          },
+          "refundableQuantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "尚可申请份数"
+          },
+          "fulfillableQuantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "尚未获批退款的履约份数"
+          },
+          "refundedQuantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "已确认退款份数"
           }
         }
       },
@@ -474,23 +789,6 @@
           }
         }
       },
-      "ApiResponseListOrderDetailVO": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrderDetailVO"
-            }
-          }
-        }
-      },
       "ApiResponseOrderInternalVO": {
         "type": "object",
         "properties": {
@@ -524,6 +822,203 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "ApiResponseOrderPageVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/OrderPageVO"
+          }
+        }
+      },
+      "OrderPageVO": {
+        "type": "object",
+        "required": [
+          "items",
+          "hasMore"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/OrderDetailVO"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "有更多时为本页末条订单编号，否则为空"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RefundVO": {
+        "type": "object",
+        "properties": {
+          "refundId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "itemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "refundNo": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "REJECTED",
+              "APPEALED",
+              "APPROVED",
+              "PROCESSING",
+              "SUCCESS",
+              "CLOSED"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "decisionReason": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "本次份数",
+            "minimum": 1
+          },
+          "amount": {
+            "type": "number",
+            "description": "服务端按实付计算的退款金额",
+            "minimum": 0.01
+          },
+          "restock": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RefundPageVO": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/RefundVO"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RefundApplyRequest": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "quantity",
+          "reason"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "RefundDecisionRequest": {
+        "type": "object",
+        "required": [
+          "approve",
+          "restock",
+          "reason"
+        ],
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "restock": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "ApiResponseRefundVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RefundVO"
+          }
+        }
+      },
+      "ApiResponseRefundPageVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RefundPageVO"
           }
         }
       }
