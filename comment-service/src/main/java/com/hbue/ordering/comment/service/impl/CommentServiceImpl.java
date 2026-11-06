@@ -55,7 +55,7 @@ public class CommentServiceImpl implements CommentService {
                 .map(file -> images.requireImageKey(file,userId,"COMMENT_IMAGE",null)).toList();
         String id=UUID.randomUUID().toString();
         String author=authorName==null||authorName.isBlank()?"校园用户":authorName.substring(0,Math.min(64,authorName.length()));
-        var row=new CommentRowDO(id,userId,author,body.orderId(),body.productId(),window,body.score(),key,hash,LocalDateTime.now());
+        var row=new CommentRowDO(id,userId,author,body.orderId(),body.productId(),window,body.score(),key,hash,LocalDateTime.now(),!fileKeys.isEmpty());
         contents.insert(new CommentContentDO(id,body.content(),fileKeys,body.tags(),Instant.now(),false));
         try {
             writer.commit(row);
@@ -77,10 +77,15 @@ public class CommentServiceImpl implements CommentService {
         return found.stream().map(row -> view(row, bodies.get(row.commentId()), avatars.getOrDefault(userId, ""))).toList();
     }
     public CommentVO detail(String id) { requireUuid(id); return view(requireRow(id)); }
-    public CommentPageVO page(Long userId, Long productId, String before, int limit) {
+    public CommentPageVO page(Long userId, Long productId, String before, int limit, Integer score, Boolean hasImages) {
+        // 筛选只接受产品定义的一星/五星；其余评分仍可发布，并在“全部”中查看。
+        if (score != null && score != 1 && score != 5) throw bad("筛选分数仅支持1星或5星");
         if (limit<1||limit>50||(productId!=null&&productId<=0)) throw bad("分页参数不正确");
         if (before!=null) requireUuid(before);
-        var found=rows.page(userId,productId,before,limit+1);
+        // 未回填记录不能被默认为无图，避免旧代码运行期间漏掉带图历史评价。
+        if (Boolean.TRUE.equals(hasImages) && rows.hasUnknownImages(userId, productId))
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"评价图片信息待同步，请稍后重试");
+        var found=rows.page(userId,productId,before,limit+1,score,Boolean.TRUE.equals(hasImages) ? true : null);
         boolean more=found.size()>limit;
         var visible=found.stream().limit(limit).toList();
         Map<String,CommentContentDO> contents=new HashMap<>();
@@ -118,4 +123,9 @@ public class CommentServiceImpl implements CommentService {
         if(id==null||!id.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))throw bad("请求标识格式不正确");
     }
     private static BusinessException bad(String message) {return new BusinessException(CommonErrorCode.BAD_REQUEST,message);}
+    /** 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。 */
+    public com.hbue.ordering.comment.vo.ReviewSummaryVO summary(Long productId) {
+        if (productId == null || productId <= 0) throw bad("评价对象编号不正确");
+        return rows.reviewSummary(productId);
+    }
 }

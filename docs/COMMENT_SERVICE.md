@@ -2,7 +2,7 @@
 
 ## 范围与状态
 
-2026-10-28 新增 comment-service（端口9105）和 comment-api 共享评分契约。首期提供已完成订单的菜品评价、本人/菜品分页、评价详情、评分汇总及商品侧异步评分投影。每笔订单的每道菜限评一次，评分1至5，正文1至1000字符，最多6张图片、5个最多20字符的标签。暂不含评论修改删除、商家回复、点赞、审核后台及前端入口。
+2026-10-28 新增 comment-service（端口9105）和 comment-api 共享评分契约。首期提供已完成订单的菜品评价、本人/菜品分页、评价详情、评分汇总及商品侧异步评分投影。每笔订单的每道菜限评一次，评分1至5，正文1至1000字符，每份评价最多3张图片、5个最多20字符的标签。暂不含评论修改删除、商家回复、点赞、审核后台及前端入口。
 
 初始实现阶段只修改源码、必要依赖声明和部署配置；Java测试源码已补，未构建或端到端联调。后续MongoDB部署结果见下方，MySQL迁移、Nacos路由发布和业务服务启停仍未执行，也未运行Maven。
 
@@ -90,3 +90,53 @@ MongoDB 内容模型源码已改为 imageFileKeys，公开响应 images 继续�
 ### 2026-10-28 图片数据库迁移已执行
 
 用户进一步授权执行第二步后，确认9092/9093/9105均停止监听，已完成 MySQL 四表图片 fileKey 迁移及 Mongo 评论图片迁移。MySQL逐行核对及迁移后只读预检通过，旧URL列已移除，已有头像引用保留。Mongo当前无评论文档。备份及详细结果见 docs/database/migrations/IMAGE_FILE_KEYS.md。此记录替代上文“图片迁移暂未执行”的旧状态；三个业务服务保持停止，未构建或启动。
+
+
+## 2026-11-06 评价图片限制
+
+店铺整体评价和每道菜评价分别最多3张图片，数量互不占用。学生端保留系统相册逐张添加，显示已选数量，满3张隐藏添加入口；移除后可继续添加。提交校验、待确认记录解析和后端两类创建DTO同步限制为3张。历史已发布图片不截断、不迁移。单张上限为5MB，前端选择器、文件服务multipart配置及存储业务校验均已具备；请求总大小6MB，因为每次只上传一张。
+
+前端评论回归新增店铺/菜品各自3张边界及移除后补传检查，执行通过；Vapor模板/原生规则检查通过。后端新增0/3/4张Bean Validation回归源码，当前请求未授权Maven，未运行Java测试或重启服务；运行中的评论服务需加载新代码后生效。
+
+
+## 2026-11-06 评论展示、分类分页和全量概览
+
+学生端展示菜品图片、店铺及位置。四个原生筛选标签只写“全部、好评、差评、有图”；好评仅5分，差评仅1分，不提供中评标签。二至四分历史评价继续出现在全部；有图不限分数。不修改发布评分的1～5分规则。
+
+### 查询接口（网关入口均加/api）
+
+| GET路径 | 范围 |
+| --- | --- |
+| /comments/products/{productId} | 当前菜品 |
+| /comments/me | 当前登录学生的菜品评价 |
+| /comments/window-reviews/windows/{windowId} | 当前店铺 |
+| /comments/window-reviews/me | 当前登录学生的店铺评价 |
+
+以上保留cursor、limit（默认20、最大50），新增可选score（仅1或5，省略为全部）及hasImages=true（仅有图）。例如好评请求/comments/products/7?limit=20&score=5；有图请求/comments/products/7?limit=20&hasImages=true。下一页携带同一筛选条件及nextCursor。控制器从JWT获取本人范围，不接收客户端任意用户ID。错误分数拒绝；跨对象/用户/筛选的游标不能用来跳过其他范围的记录。
+
+新增GET /comments/products/{productId}/summary和GET /comments/window-reviews/windows/{windowId}/summary，ApiResponse.data字段为：
+
+```json
+{"reviewCount":10,"averageScore":4.2,"positiveCount":6,"negativeCount":1,"imageCount":3}
+```
+
+统计覆盖该对象全部可见评价，与当前筛选/分页无关；有图评价可同时属于好评或差评，不能把三类相加当总数。无评价时averageScore为null、数量均为0。两条评分比例以全部评价数量为分母，二至四分不并入好评或差评。不通过当前页凑统计、不伪造关键词/好评率。
+
+### 图片投影与迁移
+
+菜品图片引用仍由Mongo正文持有，MySQL comments.has_images只做筛选投影：新发布时随元数据/评分/Outbox本地事务写入；历史数据由tools/migrate-review-image-filter.py对照Mongo回填。NULL表示未知，不能当成0。存在未知标记时summary.imageCount为null，有图查询明确返回暂不可用；不会悄悄漏掉旧评价。店铺图片在MySQL，has_images由JSON数组自动生成，新旧代码写入都能保持一致。
+
+开发库V3评分索引、V4图片标记及索引已备份后执行，重复执行和原数量/评分核验通过。V4工具默认只读预检，--apply备份后迁移/回填；不删除正文、图片或历史评分。旧代码运行期间新增的未知记录，需在加载新代码后再运行回填工具。
+
+34项真实Mapper临时表SQL检查以及前端回归/原生模板检查通过。后端测试源码已补，未运行Maven或重启；接口完整联调与Android带图场景待评论服务加载新代码后验收。
+
+
+### 2026-11-06 评分MQ启用排查与执行
+
+确认商品库读模型为0条，而评论权威汇总有2条；评分Outbox有2条待发送，最高重试177次。mqadmin查询确认product-rating-changed-v1主题无路由，商品默认profile仅search-mq，评分消费未默认启用。
+
+已在现有Broker补建product-rating-changed-v1主题，4个读队列、4个写队列；路由已核验。商品application.yml默认include同时包含search-mq和comment-mq，保留搜索发布。只提前最新待发送快照的next_attempt_at，不改published_at，已由运行中的评论服务实际同步发送成功；Outbox现为总2、待发送0、已发送2。未直接填充商品读模型。
+
+本次未运行Maven或重启服务。当前商品进程还未加载消费profile，读模型恢复的最终验收需商品服务重新加载配置后核对；重启按AGENTS.md待明确授权。原重试调度元数据备份位于C:/Users/DELL/.codex/diagnostics/20261106-rating-mq/outbox-before-retry.tsv。
+
+用户自行启动商品服务后复核：product_db.product_rating_stats已从0恢复为2条，评分消息已被实际消费，读模型恢复。Codex未运行Maven或重启服务。

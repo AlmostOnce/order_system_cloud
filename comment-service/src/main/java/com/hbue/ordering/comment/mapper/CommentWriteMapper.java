@@ -7,9 +7,10 @@ import org.apache.ibatis.annotations.*;
 public interface CommentWriteMapper {
     record RatingSnapshot(long revision, long reviewCount, long scoreTotal) {}
     record OutboxRow(String id, String payload) {}
+    /** 有图标记与元数据、评分、Outbox在同一事务写入，不依赖异步修补新评价。 */
     @Insert("""
-        INSERT INTO comments(comment_id,user_id,author_name,order_id,product_id,window_id,score,request_key,request_hash,created_at)
-        VALUES(#{row.commentId},#{row.userId},#{row.authorName},#{row.orderId},#{row.productId},#{row.windowId},#{row.score},#{row.requestKey},#{row.requestHash},#{row.createdAt})
+        INSERT INTO comments(comment_id,user_id,author_name,order_id,product_id,window_id,score,request_key,request_hash,created_at,has_images)
+        VALUES(#{row.commentId},#{row.userId},#{row.authorName},#{row.orderId},#{row.productId},#{row.windowId},#{row.score},#{row.requestKey},#{row.requestHash},#{row.createdAt},#{row.hasImages})
         """)
     int insertComment(@Param("row") CommentRowDO row);
     @Insert("""

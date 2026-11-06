@@ -53,7 +53,7 @@ class CommentServiceTest {
         verify(mongo,never()).removeIfPending(anyString());
     }
     @Test void duplicatePurchaseRejectsBeforeWritingMongo() {
-        when(rows.byPurchase(7L,5L)).thenReturn(new CommentRowDO(key,9L,"同学",7L,5L,2L,5,key,"hash",null));
+        when(rows.byPurchase(7L,5L)).thenReturn(new CommentRowDO(key,9L,"同学",7L,5L,2L,5,key,"hash",null,false));
         assertThrows(BusinessException.class,()->service.create(9L,"同学","Bearer signed",key,input));
         verify(mongo,never()).insert(any(CommentContentDO.class));
     }
@@ -68,6 +68,10 @@ class CommentServiceTest {
         var saved=org.mockito.ArgumentCaptor.forClass(CommentContentDO.class);
         verify(mongo).insert(saved.capture());
         assertEquals(List.of(fileKey),saved.getValue().imageFileKeys());
+        // 与Mongo正文持久化一致的标记必须交给元数据事务，保证发布后即可有图分页。
+        var metadata = org.mockito.ArgumentCaptor.forClass(CommentRowDO.class);
+        verify(writer).commit(metadata.capture());
+        assertEquals(Boolean.TRUE, metadata.getValue().hasImages());
         assertEquals(List.of("/api/files/"+fileKey+"/content"),response.images());
     }
     @Test void ratingOnlyNormalizesOmittedOptionalFields() {
@@ -81,6 +85,9 @@ class CommentServiceTest {
         verify(mongo).insert(saved.capture());
         assertEquals("", saved.getValue().body());
         assertTrue(saved.getValue().imageFileKeys().isEmpty());
+        var metadata = org.mockito.ArgumentCaptor.forClass(CommentRowDO.class);
+        verify(writer).commit(metadata.capture());
+        assertEquals(Boolean.FALSE, metadata.getValue().hasImages());
         assertTrue(saved.getValue().tags().isEmpty());
     }
 

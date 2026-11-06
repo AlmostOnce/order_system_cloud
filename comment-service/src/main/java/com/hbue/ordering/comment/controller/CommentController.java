@@ -29,13 +29,17 @@ public class CommentController {
     @GetMapping("/me")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<CommentPageVO> mine(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name="cursor",required=false) String cursor,@RequestParam(name="limit",defaultValue="20") int limit) {
-        return ApiResponse.success(comments.page(Long.valueOf(jwt.getSubject()),null,cursor,limit));
+            @RequestParam(name="cursor",required=false) String cursor,@RequestParam(name="limit",defaultValue="20") int limit,
+            @RequestParam(name="score", required=false) Integer score,
+            @RequestParam(name="hasImages", required=false) Boolean hasImages) {
+        return ApiResponse.success(comments.page(Long.valueOf(jwt.getSubject()),null,cursor,limit,score,hasImages));
     }
     @GetMapping("/products/{productId}")
     public ApiResponse<CommentPageVO> product(@PathVariable("productId") @Positive Long productId,
-            @RequestParam(name="cursor",required=false) String cursor,@RequestParam(name="limit",defaultValue="20") int limit) {
-        return ApiResponse.success(comments.page(null,productId,cursor,limit));
+            @RequestParam(name="cursor",required=false) String cursor,@RequestParam(name="limit",defaultValue="20") int limit,
+            @RequestParam(name="score", required=false) Integer score,
+            @RequestParam(name="hasImages", required=false) Boolean hasImages) {
+        return ApiResponse.success(comments.page(null,productId,cursor,limit,score,hasImages));
     }
     @GetMapping("/products/{productId}/rating")
     public ApiResponse<ProductRatingVO> rating(@PathVariable("productId") @Positive Long productId) {
@@ -43,4 +47,10 @@ public class CommentController {
     }
     @GetMapping("/{commentId}")
     public ApiResponse<CommentVO> detail(@PathVariable("commentId") String id) {return ApiResponse.success(comments.detail(id));}
+    /** 只读全量概览；不返回用户标识，权限与既有公开评价查询保持一致。 */
+    @GetMapping("/products/{productId}/summary")
+    public ApiResponse<com.hbue.ordering.comment.vo.ReviewSummaryVO> summary(
+            @PathVariable("productId") @Positive Long productId) {
+        return ApiResponse.success(comments.summary(productId));
+    }
 }

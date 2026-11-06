@@ -79,10 +79,12 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         var row = reviews.byOrder(userId, orderId);
         return row == null ? null : view(row);
     }
-    public WindowReviewPageVO page(Long userId, Long windowId, String cursor, int limit) {
+    public WindowReviewPageVO page(Long userId, Long windowId, String cursor, int limit, Integer score, Boolean hasImages) {
+        // 筛选只接受产品定义的一星/五星；其余评分仍可发布，并在“全部”中查看。
+        if (score != null && score != 1 && score != 5) throw bad("筛选分数仅支持1星或5星");
         if (limit < 1 || limit > 50 || (windowId != null && windowId <= 0)) throw bad("分页参数不正确");
         if (cursor != null) CommentServiceImpl.requireUuid(cursor);
-        var rows = reviews.page(userId, windowId, cursor, limit + 1);
+        var rows = reviews.page(userId, windowId, cursor, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null);
         boolean more = rows.size() > limit;
         var visible = rows.stream().limit(limit).toList();
         var avatars = authors.resolve(visible.stream().map(Row::userId).toList());
@@ -109,4 +111,9 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         } catch (Exception e) { throw new IllegalStateException("评价内容读取失败", e); }
     }
     private static BusinessException bad(String message) { return new BusinessException(CommonErrorCode.BAD_REQUEST, message); }
+    /** 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。 */
+    public com.hbue.ordering.comment.vo.ReviewSummaryVO summary(Long windowId) {
+        if (windowId == null || windowId <= 0) throw bad("评价对象编号不正确");
+        return reviews.reviewSummary(windowId);
+    }
 }
