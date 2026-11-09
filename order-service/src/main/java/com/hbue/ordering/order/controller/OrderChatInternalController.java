@@ -32,8 +32,8 @@ public class OrderChatInternalController {
         if(order==null) throw new BusinessException(CommonErrorCode.NOT_FOUND,"订单不存在");
         // 复用订单既有名称补全逻辑，聊天摘要展示真实店铺名，不拼接“窗口+ID”。
         var view=names.enrich(List.of(OrderDetailVO.from(order))).getFirst();
-        // 当前订单完成后不再有状态写入，updatedAt即核销完成时间。
+        // 售后等后续操作仍会更新updatedAt；沟通期限必须使用首次核销时间，防止不断延长24小时窗口。
         return ApiResponse.success(new OrderChatContextVO(id,order.getOrderNo(),order.getUserId(),order.getWindowId(),
-        view.getWindowName(),order.getStatus(),"已完成".equals(order.getStatus())?order.getUpdatedAt():null));
+        view.getWindowName(),order.getStatus(),"已完成".equals(order.getStatus())?order.getCompletedAt():null));
     }
 }
