@@ -3,7 +3,7 @@ package com.hbue.ordering.notification.websocket;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
@@ -15,9 +15,9 @@ import org.springframework.stereotype.Service;
 public class NotificationTicketService {
     private static final String PREFIX = "notification:ws-ticket:";
     private final SecureRandom random = new SecureRandom();
-    private final StringRedisTemplate redis;
+    private final RedisOperationsService redis;
     /** 注入Redis票据存储；票据签发设置30秒TTL，消费必须用原子读取删除。 */
-    public NotificationTicketService(StringRedisTemplate redis) { this.redis = redis; }
+    public NotificationTicketService(RedisOperationsService redis) { this.redis = redis; }
     /**
      * 生成随机一次性票据并保存30秒身份摘要。票据不能替代聊天资源授权，也不保存原始访问Token。
      */
@@ -32,7 +32,7 @@ public class NotificationTicketService {
         // 使用安全随机数生成票据；登录Token本身不会被带入握手。
         byte[] bytes = new byte[32]; random.nextBytes(bytes);
         String ticket = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        redis.opsForValue().set(PREFIX + ticket, userId + "|" + jwt.getId() + "|" + jwt.getExpiresAt().getEpochSecond()+"|"+uuid+"|"+credentialVersion, Duration.ofSeconds(30));
+        redis.setValue(PREFIX + ticket, userId + "|" + jwt.getId() + "|" + jwt.getExpiresAt().getEpochSecond()+"|"+uuid+"|"+credentialVersion, Duration.ofSeconds(30));
         return ticket;
     }
     /**
@@ -41,7 +41,7 @@ public class NotificationTicketService {
     public SessionIdentity consume(String ticket) {
         if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{43}")) return null;
         // 读取和删除必须是原子动作，防止多个连接同时重放同一票据。
-        String value = redis.opsForValue().getAndDelete(PREFIX + ticket);
+        String value = redis.getAndDelete(PREFIX + ticket);
         if (value == null) return null;
         String[] fields = value.split("\\|", -1);
         if (fields.length != 5) return null;

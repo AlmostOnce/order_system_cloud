@@ -18,9 +18,28 @@ class GatewayCorsConfigTest {
 
     private final CorsWebFilter filter = new CorsWebFilter(
             new GatewaySecurityConfig(null, null).corsConfigurationSource(
-                    List.of("http://localhost:5173", "http://127.0.0.1:5173")
+                    List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://192.168.0.14:8088", "http://localhost")
             )
     );
+
+    @Test
+    void shouldAllowNativeSocketToReachTicketAuthentication() {
+        // 真机原生Socket携带无端口localhost来源；仍需进入票据鉴权，放行来源不代表已认证。
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("http://localhost:9090/api/notifications/ws")
+                        .header(HttpHeaders.ORIGIN, "http://localhost")
+                        .header(HttpHeaders.UPGRADE, "websocket")
+                        .header(HttpHeaders.CONNECTION, "Upgrade")
+        );
+        AtomicBoolean downstreamCalled = new AtomicBoolean();
+        filter.filter(exchange, next -> {
+            downstreamCalled.set(true);
+            next.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+            return next.getResponse().setComplete();
+        }).block();
+        assertEquals(true, downstreamCalled.get());
+        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    }
 
     @Test
     void shouldHandlePreflightBeforeAuthentication() {

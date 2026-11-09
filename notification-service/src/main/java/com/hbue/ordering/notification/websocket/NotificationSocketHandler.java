@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.hbue.ordering.common.redis.RedisOperationsService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -22,22 +22,24 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  */
 @Component
 public class NotificationSocketHandler extends TextWebSocketHandler implements SubProtocolCapable {
+    /** 仅记录故障定位信息，不记录票据、令牌或聊天正文。 */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NotificationSocketHandler.class);
     public static final String IDENTITY = "notificationIdentity";
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
-    private final StringRedisTemplate redis;
+    private final RedisOperationsService redis;
     private final String blacklistPrefix;
     private final com.hbue.ordering.common.web.security.JwtUserIdentity users;
     /** 注入黑名单存储、键前缀及凭据版本校验器；连接与每次事件处理都重新验证登录状态。 */
-    public NotificationSocketHandler(StringRedisTemplate redis, @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String prefix, com.hbue.ordering.common.web.security.JwtUserIdentity users) {
+    public NotificationSocketHandler(RedisOperationsService redis, @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String prefix, com.hbue.ordering.common.web.security.JwtUserIdentity users) {
         this.redis = redis; this.blacklistPrefix = prefix; this.users=users;
     }
     /**
      * 声明客户端和服务端共同使用的通知协议版本，票据子协议只在握手中消费，不作为响应协议回显。
      */
+    @Override public List<String> getSubProtocols() { return List.of("notification.v1"); }
     /**
      * 验证握手绑定的身份，设置输入帧上限，并用并发装饰器保存连接，统一串行发送。
      */
-    @Override public List<String> getSubProtocols() { return List.of("notification.v1"); }
     @Override public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         Object identity = session.getAttributes().get(IDENTITY);
         if (!(identity instanceof NotificationTicketService.SessionIdentity) || !valid((NotificationTicketService.SessionIdentity) identity)) {
@@ -50,14 +52,14 @@ public class NotificationSocketHandler extends TextWebSocketHandler implements S
     /**
      * 从本实例在线连接表中删除已关闭连接，避免继续推送及内存泄漏。
      */
+    @Override public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { sessions.remove(session.getId()); }
     /**
      * 清理传输异常的连接并关闭底层Socket。客户端通过已有退避机制重连和补查，不依赖旧连接恢复。
      */
-    @Override public void afterConnectionClosed(WebSocketSession session, CloseStatus status) { sessions.remove(session.getId()); }
+    @Override public void handleTransportError(WebSocketSession session, Throwable error) throws Exception { sessions.remove(session.getId()); if (session.isOpen()) session.close(CloseStatus.SERVER_ERROR); }
     /**
      * 仅向指定通知接收人的有效在线设备发送notification.changed信号，正文仍通过本人HTTP列表读取。
      */
-    @Override public void handleTransportError(WebSocketSession session, Throwable error) throws Exception { sessions.remove(session.getId()); if (session.isOpen()) session.close(CloseStatus.SERVER_ERROR); }
     public void notifyUser(long userId) {
         for (WebSocketSession session : sessions.values()) {
             Object value = session.getAttributes().get(IDENTITY);
@@ -122,6 +124,8 @@ public class NotificationSocketHandler extends TextWebSocketHandler implements S
         } catch(com.hbue.ordering.common.core.exception.BusinessException e) {
             reply(session,java.util.Map.of("type","chat.error","requestId",requestId,"code",e.getErrorCode().code(),"message",e.getMessage()));
         } catch(Exception e) {
+            // 非业务异常不能静默吞掉；保留服务端堆栈便于定位，客户端只收到统一提示。
+            log.error("聊天消息处理异常，sessionId={}，异常类型={}", session.getId(), e.getClass().getSimpleName(), e);
             reply(session,java.util.Map.of("type","chat.error","requestId",requestId,"code","COMMON_503","message","消息未确认，请稍后重试"));
         }
     }

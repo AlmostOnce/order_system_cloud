@@ -19,7 +19,7 @@ public class NotificationWebSocketConfig implements WebSocketConfigurer {
     private final String[] origins;
     /** 注入当前配置所需组件；初始化只建立依赖关系，实际业务操作由请求入口触发。 */
     public NotificationWebSocketConfig(NotificationSocketHandler handler, NotificationHandshakeInterceptor interceptor,
-            @Value("${notification.websocket.allowed-origins:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173}") String origins) {
+            @Value("${notification.websocket.allowed-origins:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}") String origins) {
         this.handler = handler; this.interceptor = interceptor; this.origins = origins.split(",");
     }
     /**

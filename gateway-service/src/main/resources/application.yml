@@ -36,8 +36,10 @@ spring:
 
 gateway:
   cors:
-    # 多个完整来源用逗号分隔；部署时配置实际前端域名，不使用通配来源。
-    allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173}
+    # HTTP与WebSocket共用来源校验；Android原生Socket实测Origin为http://localhost（无端口）。
+    # 同时保留局域网开发入口，地址变化时同步修改。
+    # 部署时覆盖为实际前端域名，不使用通配来源。
+    allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}
   rate-limit:
     login:
       # 每秒向令牌桶补充 1 个令牌。

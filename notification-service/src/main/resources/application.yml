@@ -2,10 +2,12 @@ server:
   port: 9107
 notification:
   chat:
-    # 执行V2聊天迁移后由用户启用；不影响现有通知。
-    enabled: ${NOTIFICATION_CHAT_ENABLED:false}
+    # 开发库已执行V2聊天迁移；可设为false关闭聊天，保留消息数据及原订单通知。
+    enabled: ${NOTIFICATION_CHAT_ENABLED:true}
   websocket:
-    allowed-origins: ${NOTIFICATION_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173}
+    # 网关放行后握手仍核对来源；Android原生Socket实测Origin为http://localhost（无端口）。
+    # 保留局域网和Web开发来源，不取消一次性票据鉴权。
+    allowed-origins: ${NOTIFICATION_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
