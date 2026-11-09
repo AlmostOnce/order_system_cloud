@@ -71,4 +71,16 @@ public class ChatController {
     public ApiResponse<Long> unread(@AuthenticationPrincipal Jwt jwt){
         return ApiResponse.success(chats.unread(Long.parseLong(jwt.getSubject())));
     }
+    /** 撤回只接收资源标识，操作者来自JWT，不接受客户端发送人或撤回时间。 */
+    @PostMapping("/conversations/{uuid}/messages/{messageUuid}/revoke")
+    public ApiResponse<ChatMessageVO> revoke(@AuthenticationPrincipal Jwt jwt,@PathVariable("uuid") String uuid,@PathVariable("messageUuid") String messageUuid){
+        return ApiResponse.success(chats.revoke(Long.parseLong(jwt.getSubject()),uuid,messageUuid));
+    }
+    /** 撤回状态批量查询体；Service限制50条并逐个校验UUID格式。 */
+    public record MessageIdsRequest(java.util.List<String> messageUuids) {}
+    /** 批量状态查询仍校验会话权限，本地UUID列表不代表访问授权。 */
+    @PostMapping("/conversations/{uuid}/messages/revoked")
+    public ApiResponse<java.util.List<ChatMessageVO>> revoked(@AuthenticationPrincipal Jwt jwt,@PathVariable("uuid") String uuid,@RequestBody MessageIdsRequest body){
+        return ApiResponse.success(chats.revoked(Long.parseLong(jwt.getSubject()),uuid,body.messageUuids()));
+    }
 }

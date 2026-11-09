@@ -55,9 +55,11 @@ public class ChatServiceImpl implements ChatService {
     /**
      * 将内部会话映射成公开摘要，并查询当前用户阅读水位之后的对方消息数；不把自己的发送计入未读。
      */
-    private ChatConversationVO view(long uid,ChatConversationDO c,boolean canSend){
+    private ChatConversationVO view(long uid,ChatConversationDO c,boolean canSend,boolean receipt){
         return new ChatConversationVO(c.getConversationUuid(),c.getOrderId(),c.getOrderNo(),c.getWindowName(),c.getLastContent(),
-        c.getLastMessageAt()==null?c.getCreatedAt():c.getLastMessageAt(),c.getLastSeq(),messages.unread(c.getId(),uid),canSend);
+        c.getLastMessageAt()==null?c.getCreatedAt():c.getLastMessageAt(),c.getLastSeq(),messages.unread(c.getId(),uid),canSend,
+        // 列表不额外查对方阅读水位；详情随已有chat.changed补查更新，无需逐消息查数据库。
+        receipt?messages.peerReadSeq(c.getId(),c.getCustomerId(),uid==c.getCustomerId()):null);
     }
     /**
      * 在当前业务事务内写入轻量outbox。此处不直接推Socket，防止事务回滚后客户端收到不存在的消息。
@@ -80,7 +82,7 @@ public class ChatServiceImpl implements ChatService {
         access.check(actor,order);
         // 支付后仍不预建；只有此显式入口执行，重复点击优先返回原会话。
         var old=conversations.byOrder(orderId);
-        if(old!=null)return view(uid,old,access.canSend(order));
+        if(old!=null)return view(uid,old,access.canSend(order),false);
         if(!actor.customer())throw new BusinessException(CommonErrorCode.FORBIDDEN,"请等待顾客发起会话");
         if(!access.canSend(order))throw new BusinessException(CommonErrorCode.CONFLICT,"该订单暂不支持发起沟通");
         var c=new ChatConversationDO();
@@ -94,14 +96,14 @@ public class ChatServiceImpl implements ChatService {
         conversations.create(c);
         var saved=conversations.byOrderCurrent(orderId);
         event(saved.getConversationUuid());
-        return view(uid,saved,true);
+        return view(uid,saved,true,false);
     }
     /**
      * 读取授权会话及当前可发送状态。历史只读与是否能继续发送分别判断，订单完成不删除已有聊天。
      */
     public ChatConversationVO detail(long uid,String uuid){
         var c=require(uid,uuid);
-        return view(uid,c,access.canSend(access.order(c.getOrderId())));
+        return view(uid,c,access.canSend(access.order(c.getOrderId())),true);
     }
     /**
      * 按当前用户可访问范围查询游标页。游标属于其他用户时拒绝；额外取一条判断下一页，避免加载全部记录。
@@ -113,7 +115,7 @@ public class ChatServiceImpl implements ChatService {
         if(!actor.customer()&&actor.windows().isEmpty())return new ChatPageVO<>(List.of(),null,false);
         var rows=conversations.page(uid,actor.customer(),actor.windows(),cursor,size+1);
         boolean more=rows.size()>size;
-        var items=rows.stream().limit(size).map(c->view(uid,c,false)).toList();
+        var items=rows.stream().limit(size).map(c->view(uid,c,false,false)).toList();
         return new ChatPageVO<>(items,more?items.getLast().conversationUuid():null,more);
     }
     /**
@@ -207,5 +209,29 @@ public class ChatServiceImpl implements ChatService {
         catch(RuntimeException e){
             return false;
         }
+    }
+    /** 与发送共用会话锁，撤回标记、摘要和Outbox同事务提交，失败全部回滚。 */
+    @Transactional
+    public ChatMessageVO revoke(long uid,String conversationUuid,String messageUuid){
+        uuid(conversationUuid); uuid(messageUuid);
+        var c=conversations.lock(conversationUuid);
+        if(c==null)throw new BusinessException(CommonErrorCode.NOT_FOUND,"会话不存在");
+        access.check(access.actor(uid),access.order(c.getOrderId()));
+        var m=messages.findMessage(c.getId(),messageUuid);
+        if(m==null||m.getSenderId()!=uid)throw new BusinessException(CommonErrorCode.FORBIDDEN,"只能撤回本人消息");
+        // 重复请求不产生重复事件，VO始终屏蔽原文，发送重试仍可核验幂等内容。
+        if(m.getRevokedAt()!=null)return ChatMessageVO.from(m);
+        var now=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
+        if(messages.revoke(m.getId(),uid,now)!=1)throw new BusinessException(CommonErrorCode.CONFLICT,"消息已超过十分钟，无法撤回");
+        m.setRevokedAt(now); conversations.revokePreview(c.getId(),m.getSeq()); event(conversationUuid);
+        return ChatMessageVO.from(m);
+    }
+    /** 按已加载UUID补查，避免只刷新最近一页而漏掉较早历史的撤回变化。 */
+    public List<ChatMessageVO> revoked(long uid,String conversationUuid,List<String> ids){
+        var c=require(uid,conversationUuid);
+        if(ids==null||ids.size()>50)bad("每次最多查询50条消息");
+        for(String id:ids)uuid(id);
+        if(ids.isEmpty())return List.of();
+        return messages.revoked(c.getId(),ids).stream().map(ChatMessageVO::from).toList();
     }
 }

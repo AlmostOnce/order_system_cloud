@@ -10,15 +10,16 @@ import com.hbue.ordering.notification.model.ChatMessageDO;
  * @param senderSide CUSTOMER或MERCHANT，表示发送时所属一侧
  * @param clientMessageId 客户端生成的幂等键，重试原消息时必须保持不变
  * @param content 已校验的纯文字正文，不作为HTML渲染
+ * @param revokedAt 撤回时间，非空时仅返回撤回提示，屏蔽原文
  * @param createdAt 服务端UTC+8入库时间
  */
 public record ChatMessageVO(String messageUuid, long seq, String senderUuid, String senderName,
-String senderSide, String clientMessageId, String content, LocalDateTime createdAt) {
+String senderSide, String clientMessageId, String content, LocalDateTime createdAt, LocalDateTime revokedAt) {
     /**
      * 从持久化消息生成公开视图，只投影公开身份和显示所需内容，不返回内部主键。
      */
     public static ChatMessageVO from(ChatMessageDO m) {
         return new ChatMessageVO(m.getMessageUuid(),m.getSeq(),m.getSenderUuid(),
-        m.getSenderName(),m.getSenderSide(),m.getClientMessageId(),m.getContent(),m.getCreatedAt());
+        m.getSenderName(),m.getSenderSide(),m.getClientMessageId(),m.getRevokedAt()==null?m.getContent():"该消息已撤回",m.getCreatedAt(),m.getRevokedAt());
     }
 }

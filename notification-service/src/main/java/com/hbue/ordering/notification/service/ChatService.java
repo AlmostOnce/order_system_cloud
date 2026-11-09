@@ -37,4 +37,8 @@ public interface ChatService {
      * 供在线推送筛选接收者。资源不存在、授权撤销或依赖异常都返回false，不向该连接泄露聊天内容。
      */
     boolean canRead(long userId,String uuid);
+    /** 仅本人消息可在十分钟内撤回，重复撤回幂等返回，已读不限制撤回。 */
+    ChatMessageVO revoke(long userId,String conversationUuid,String messageUuid);
+    /** 授权后批量补查已加载消息的撤回状态，最多50条，支持较早历史更新。 */
+    java.util.List<ChatMessageVO> revoked(long userId,String conversationUuid,java.util.List<String> messageUuids);
 }

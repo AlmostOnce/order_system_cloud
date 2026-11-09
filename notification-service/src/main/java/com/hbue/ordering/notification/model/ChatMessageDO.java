@@ -29,6 +29,10 @@ public class ChatMessageDO {
     private String content;
     /** 服务端UTC+8创建时间，不采用客户端时间排序。 */
     private LocalDateTime createdAt;
+    /** 撤回时间；保留原文用于发送幂等核对，对外视图必须遮蔽正文。 */
+    private LocalDateTime revokedAt;
+    public LocalDateTime getRevokedAt() { return revokedAt; }
+    public void setRevokedAt(LocalDateTime value) { revokedAt = value; }
     public Long getId() {
         return id;
     }

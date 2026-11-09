@@ -26,8 +26,19 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessageDO> {
     /**
      * 统计指定会话中由他人发送、且序号大于本人阅读水位的消息；会话访问权限由Service在调用前核验。
      */
-    @Select("SELECT COUNT(*) FROM chat_messages WHERE conversation_id=#{cid} AND sender_id != #{uid} AND seq > COALESCE((SELECT last_read_seq FROM chat_read_state WHERE conversation_id=#{cid} AND user_id=#{uid}),0)")
+    @Select("SELECT COUNT(*) FROM chat_messages WHERE conversation_id=#{cid} AND sender_id != #{uid} AND revoked_at IS NULL AND seq > COALESCE((SELECT last_read_seq FROM chat_read_state WHERE conversation_id=#{cid} AND user_id=#{uid}),0)")
     long unread(@Param("cid") long cid,@Param("uid") long uid);
+    /**
+     * 查询对方一侧的阅读水位，仅在会话详情授权成功后调用。
+     * 顾客查看时任一店主读过即算商家已读；店主查看时只取该订单顾客的水位。
+     * 不把当前发送人的水位算作对方已读，也不改变多店主各自的未读统计。
+     */
+    @Select("""
+      <script>SELECT COALESCE(MAX(last_read_seq),0) FROM chat_read_state WHERE conversation_id=#{cid}
+      <choose><when test="customer">AND user_id != #{customerId}</when><otherwise>AND user_id = #{customerId}</otherwise></choose>
+      </script>
+      """)
+    long peerReadSeq(@Param("cid") long cid,@Param("customerId") long customerId,@Param("customer") boolean customer);
     /**
      * 写入已由Service验证的阅读水位。GREATEST防止旧请求回退水位，Mapper不自行认定页面已经展示消息。
      */
@@ -36,4 +47,16 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessageDO> {
       ON DUPLICATE KEY UPDATE last_read_seq=GREATEST(last_read_seq,#{seq}),updated_at=CURRENT_TIMESTAMP(3)
       """)
     int read(@Param("cid") long cid,@Param("uid") long uid,@Param("seq") long seq);
+    /** 查本会话消息；Service先授权，不能凭消息UUID跨会话操作。 */
+    @Select("SELECT * FROM chat_messages WHERE conversation_id=#{cid} AND message_uuid=#{uuid}")
+    ChatMessageDO findMessage(@Param("cid") long cid,@Param("uuid") String uuid);
+    /** 原子限制本人、未撤回、创建后十分钟；采用UTC+8服务端时间，不信任设备时钟。 */
+    @Update("UPDATE chat_messages SET revoked_at=#{now} WHERE id=#{id} AND sender_id=#{uid} AND revoked_at IS NULL AND created_at >= DATE_SUB(#{now}, INTERVAL 10 MINUTE) AND created_at <= #{now}")
+    int revoke(@Param("id") long id,@Param("uid") long uid,@Param("now") java.time.LocalDateTime now);
+    /** 按已加载UUID批量补查撤回，最多50条；空集合由Service返回，避免无界扫描。 */
+    @Select("""
+      <script>SELECT * FROM chat_messages WHERE conversation_id=#{cid} AND revoked_at IS NOT NULL AND message_uuid IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach></script>
+      """)
+    List<ChatMessageDO> revoked(@Param("cid") long cid,@Param("ids") List<String> ids);
 }

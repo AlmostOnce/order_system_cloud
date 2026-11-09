@@ -54,15 +54,18 @@ public interface ChatConversationMapper extends BaseMapper<ChatConversationDO> {
       ORDER BY COALESCE(last_message_at,created_at) DESC,conversation_uuid DESC LIMIT #{size}</script>
       """)
     List<ChatConversationDO> page(@Param("userId") long userId,@Param("customer") boolean customer,
+    @Param("windows") List<Long> windows,@Param("cursor") String cursor,@Param("size") int size);
     /**
      * 统计授权会话中阅读水位之后由他人发送的消息。只用最大seq相减会误计自己的消息，因此使用条件计数。
      */
-    @Param("windows") List<Long> windows,@Param("cursor") String cursor,@Param("size") int size);
     @Select("""
-      <script>SELECT COALESCE(SUM((SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id=c.id AND m.sender_id != #{userId}
+      <script>SELECT COALESCE(SUM((SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id=c.id AND m.sender_id != #{userId} AND m.revoked_at IS NULL
       AND m.seq &gt; COALESCE((SELECT last_read_seq FROM chat_read_state r WHERE r.conversation_id=c.id AND r.user_id=#{userId}),0))),0)
       FROM chat_conversations c WHERE <choose><when test="customer">c.customer_id=#{userId}</when><otherwise>c.window_id IN
       <foreach collection="windows" item="w" open="(" separator="," close=")">#{w}</foreach></otherwise></choose></script>
       """)
     long unreadTotal(@Param("userId") long userId,@Param("customer") boolean customer,@Param("windows") List<Long> windows);
+    /** 仅撤回末条消息时替换列表摘要，不改变序号和排序时间。 */
+    @Update("UPDATE chat_conversations SET last_content='该消息已撤回' WHERE id=#{id} AND last_seq=#{seq}")
+    int revokePreview(@Param("id") long id,@Param("seq") long seq);
 }

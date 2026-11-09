@@ -10,8 +10,9 @@ import java.time.LocalDateTime;
  * @param activityAt 最近消息时间；无消息时使用会话创建时间
  * @param lastSeq 会话已提交的最大消息序号
  * @param unreadCount 本人尚未阅读的对方消息数，不包括自己发送的消息
+ * @param peerReadSeq 对方一侧已读到的序号，0表示尚未阅读；仅详情提供，列表为null，不能把未知当未读
  * @param canSend 详情接口按实时订单状态计算；列表仅用于导航，返回false后进入详情重新确认
  */
 public record ChatConversationVO(String conversationUuid, long orderId, String orderNo, String windowName,
-String preview, LocalDateTime activityAt, long lastSeq, long unreadCount, boolean canSend) {
+String preview, LocalDateTime activityAt, long lastSeq, long unreadCount, boolean canSend, Long peerReadSeq) {
 }
