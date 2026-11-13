@@ -1,0 +1,53 @@
+server:
+  port: 9111
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+spring:
+  profiles:
+    include: statistics-mq
+  application:
+    name: statistics-service
+  datasource:
+    url: ${STATISTICS_DB_URL:jdbc:mysql://127.0.0.1:9095/statistics_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${STATISTICS_DB_USERNAME:statistics_service}
+    password: ${STATISTICS_DB_PASSWORD:statistics_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # DATETIME 的业务月份以开发环境 UTC+8 会话为准，避免容器默认时区改变统计月份。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 3000
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+statistics:
+  messaging:
+    enabled: true
+  sales:
+    reconcile-delay-ms: 300000

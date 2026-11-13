@@ -33,6 +33,7 @@
         <module>comment-service</module>
         <module>search-service</module>
         <module>notification-service</module>
+        <module>statistics-service</module>
     </modules>
 
     <properties>

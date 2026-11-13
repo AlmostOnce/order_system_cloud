@@ -70,10 +70,24 @@ spring:
               filters:
                 - RewritePath=/api/search/v3/api-docs, /v3/api-docs
 
+            - id: statistics-service-docs
+              uri: lb://statistics-service
+              predicates:
+                - Path=/api/statistics/v3/api-docs
+              filters:
+                - RewritePath=/api/statistics/v3/api-docs, /v3/api-docs
+
             - id: search-service
               uri: lb://search-service
               predicates:
                 - Path=/api/search,/api/search/**
+              filters:
+                - StripPrefix=1
+
+            - id: statistics-service
+              uri: lb://statistics-service
+              predicates:
+                - Path=/api/statistics,/api/statistics/**
               filters:
                 - StripPrefix=1
 
