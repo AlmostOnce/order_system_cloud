@@ -1,6 +1,6 @@
 # order-system-cloud 架构与模块规划
 
-> 文档性质：**架构规划与当前落地状态**；最近更新：**2026-11-02**（补邮件找回密码；其他模块核对基线为2026-10-30）。
+> 文档性质：**架构规划与当前落地状态**；最近更新：**2026-11-13**（新增统计服务首期销量读模型与学生端月售展示；服务运行验收仍待进行）。
 > 与进度日志的分工：`PROJECT_PROGRESS.md` 记录"已经做完了什么"（追加式）；
 > 本文档记录目标架构、当前实现和剩余工作（修订须更新第 13 节变更记录）。
 > 状态以当前源码、配置及已记录的验证结果为依据；存在模块或测试源码不等于已通过运行验收。
@@ -13,14 +13,14 @@
 
 | 维度 | 当前落地（2026-10-30） | 全部规划完成后 |
 |---|---|---|
-| 独立服务 | **12 个已有启动入口和业务源码**；不代表 12 个服务全部通过运行验收 | **13 个**，剩余 `statistics-service` |
+| 独立服务 | **13 个已有启动入口和业务源码**；不代表 13 个服务全部通过运行验收 | **13 个** |
 | 独立子模块 | **21 个**：12 个服务 + 4 个公共库 + 5 个契约库；不计根聚合工程 | 至少 22 个；统计契约库按实际服务调用需要决定 |
-| MySQL 业务 Schema | **8 个**：`user_db`、`order_db`、`product_db`、`payment_db`、`stock_db`、`file_db`、`comment_db`、`notification_db` | 统计服务首期无独立库；是否建统计读模型另行设计 |
+| MySQL 业务 Schema | **9 个**：前述 8 个业务库及 `statistics_db` | 已新增订单销量事件事实及 ALL/MONTH 读模型 |
 | 其他业务存储 | Redis、MongoDB 评论内容集合、Elasticsearch 菜品索引 | 在现有设施上继续演进 |
 
 - **阶段 A（6 个）**：`gateway` / `auth` / `user` / `order` / `product` / `payment` 已有实现，后续持续增强。
 - **阶段 B（4 个）**：`stock` / `cart` / `comment` / `file` 均已有实现；评论不再是未创建服务。
-- **阶段 C（3 个）**：`notification`、`search` 首期代码及学生端接入已实现；**`statistics` 尚未建模块**，商家与顾客聊天也尚未实现。
+- **阶段 C（3 个）**：`notification`、`search` 首期代码及学生端接入已实现；`statistics` 首期代码和学生端累计榜/月售展示已补，运行验收待做；商家与顾客聊天也尚未实现。
 - **基础设施配置已接入**：Nginx、RocketMQ、Seata、Elasticsearch、MongoDB、Redis、MySQL、Nacos。本文不据此断言当前容器或业务进程正在运行。
 - **交易一致性现状**：下单扣库存、待支付取消回补仍使用 Seata AT；取消通知通过 TCC Confirm 写 outbox；MQ 处理销量、库存快照失效、评分投影、搜索索引和订单通知。**未将全部业务改为 TCC，也未把核心库存扣减改成无确认的异步操作。**
 - **端侧边界**：uni-app 只作为普通学生端；商家及其他管理角色属于独立 Vue 管理端。已有非学生页面为临时调试入口，后续清理。
@@ -55,7 +55,7 @@
 | 1 | `gateway-service` | 9090 | 无业务库 | A，已有实现 | WebFlux 路由、认证前置、限流、HTTP/WS 转发 |
 | 2 | `auth-service` | 9094 | Redis | A，已有实现 | JWT、刷新令牌轮换与 TTL、注销黑名单、分布式锁 |
 | 3 | `user-service` | 9092 | `user_db` | A，已有实现 | 用户号/邮箱登录资料、RBAC、数据范围、余额流水、独立支付密码、邮箱绑定验证；已补邮件找回登录密码与旧会话版本撤销 |
-| 4 | `order-service` | 9091 | `order_db` + Redis | A，持续增强 | 幂等建单、状态机、AT 事务、销量 ZSet、通知 outbox/TCC；已补唯一取餐码核销、批量店铺名称 |
+| 4 | `order-service` | 9091 | `order_db` + Redis | A，持续增强 | 幂等建单、状态机、AT 事务、首次支付时间与销量 outbox、通知 outbox/TCC；已补唯一取餐码核销、批量店铺名称 |
 | 5 | `product-service` | 9093 | `product_db` + Redis | A，已有实现 | 餐厅/窗口/分类/菜品目录、核价、缓存防护、库存查询、评分投影、搜索 outbox |
 | 6 | `payment-service` | 9101 | `payment_db` | A，已有实现 | 渠道编排、余额同步扣款、回调验签与幂等；支付一致性边界见 6.4 |
 | 7 | `stock-service` | 9104 | `stock_db` + Redis | B，核心实现及 MQ 源码已落地 | AT 扣减/回补、Lua 快照、流水、对账、outbox 与快照失效；新版 MQ 链路待完整运行验收 |
@@ -64,11 +64,11 @@
 | 10 | `file-service` | 9102 | `file_db` + 文件存储 | B，已有实现 | 上传校验、存储抽象、fileKey 引用；头像/窗口/菜品/评价图片复用 |
 | 11 | `notification-service` | 9107 | `notification_db` + Redis | C，第一阶段及学生端接入已实现 | MQ 幂等落库、游标分页、已读/未读、一次性票据 WebSocket、断线补查；聊天未实现 |
 | 12 | `search-service` | 9106 | Elasticsearch + Redis 同步锁 | C，首期及学生端接入已实现 | 中文搜索、店内筛选、单菜品增量/窗口刷新、别名切换全量重建、定时对账 |
-| 13 | `statistics-service` | **待分配** | 规划无独立库 | C，**尚未创建模块** | 规划：经营概览、趋势及食堂/店铺/菜品聚合报表；由 Vue 管理端展示 |
+| 13 | `statistics-service` | 9111 | `statistics_db` + Redis | C，首期代码与开发库迁移已完成，待运行验收 | 学生端累计菜品榜、窗口与菜品月售；MySQL 读模型为重建来源，Redis ZSet 为榜单缓存；管理端经营报表后续规划 |
 
 > “已有实现”表示源码与配置存在，不替代故障、并发、多实例及端到端验收。评论、搜索、通知的新能力仍需在各服务加载最新代码后验证。
 >
-> 历史规划将统计服务放在 9108，但当前 Compose 已将该端口映射到 Seata 控制台；实施统计服务前须重新分配端口，不直接沿用 9108。
+> `9108` 继续由 Seata 控制台占用；统计服务使用 `9111`，与商品服务 Sentinel 通信端口 `9110` 分开。
 >
 > `auth-service` 独立后登录链路多一跳远程调用，跨服务错误映射与降级仍需维护。
 
@@ -158,7 +158,7 @@
 
 ### 6.2 为什么是 RocketMQ + Spring Cloud Stream
 
-2026-10-22 首个落地场景为销量榜：订单确认支付时同库事务写 outbox，RocketMQ 至少一次投递，消费者 Lua 原子去重 + ZSet 增量更新；历史重建同时恢复销量与已计入订单集合，定时对账兜底。此场景使用本地 outbox，不是余额支付半消息事务。配置、部署状态和验证边界见 [销量榜](SALES_RANKING.md)。2026-10-28 已补库存变更 outbox 与 RocketMQ 快照失效消费者，仍保留核心扣减与回补的 Seata AT 边界；数据库迁移和运行验收状态见 [库存接入](STOCK_INTEGRATION.md)。
+2026-10-22 的历史销量榜曾由订单服务维护 Redis ZSet。2026-11-13 已迁移到 `statistics-service`：订单服务事务内写销量 outbox，RocketMQ 至少一次投递，统计服务幂等写入 `statistics_db` 事实和 ALL/MONTH 汇总，再更新 Redis 排行缓存；详细当前设计见 [销量榜](SALES_RANKING.md)。此场景使用本地 outbox，不是余额支付半消息事务。2026-10-28 已补库存变更 outbox 与 RocketMQ 快照失效消费者，仍保留核心扣减与回补的 Seata AT 边界；数据库迁移和运行验收状态见 [库存接入](STOCK_INTEGRATION.md)。
 
 | 决策 | 理由 |
 |---|---|
@@ -187,7 +187,7 @@
 | 取消成功通知 | `order → notification` | AT 业务配合通知 TCC：Try 预备，Confirm 本地事务写通知 outbox，Cancel 阻止悬挂 | 仍需 Seata 二阶段重试、回滚、宕机恢复完整验收 |
 | 余额支付扣款 | `payment → user` | 同步内部接口；`user_db` 同库事务修改余额与写流水，支付标识幂等 | **未实现 MQ 事务消息**；跨服务失败仍需核查，不能声称账务全链路已自动补偿 |
 | 支付成功推进订单 | `payment → order` | 支付成功记录后同步调用订单内部已支付接口 | 当前失败保留支付事实并记录错误；持久化重试/补偿需单独设计，未改为 MQ 异步推进 |
-| 已支付销量 | `order → RocketMQ → order` | 支付确认同事务写销量 outbox；消费者 Lua 去重并更新 ZSet，重建及对账兜底 | 已支付菜品累计份数；待支付、已取消不计入 |
+| 已支付销量 | `order → RocketMQ → statistics` | 支付确认同事务写 outbox；统计服务在 MySQL 事务内幂等写事件、明细与 ALL/MONTH 汇总，之后更新 Redis ZSet 缓存 | 已支付菜品累计份数；待支付、已取消不计入；迁移已执行，运行验收待做 |
 | 库存、评分、搜索、订单通知 | 各事实源 → 对应消费者 | 本地事务写 outbox，Broker 确认后标记发送，消费端幂等 | 各链路独立验收；发送成功不代表消费或用户已读 |
 
 余额账务归 `user-service`，支付编排归 `payment-service`，不跨库直接改余额。支付密码与登录密码独立，使用独立哈希及失败计数限制；充值和余额支付按业务验证支付密码，不把支付密码放入 JWT。
@@ -198,7 +198,7 @@
 
 | 中间件 | 镜像/配置 | 宿主机端口 | 状态边界 |
 |---|---|---|---|
-| MySQL | `mysql:8.0` | 9095 → 3306 | 8 个业务库及 Seata 参与库；UTC+8 |
+| MySQL | `mysql:8.0` | 9095 → 3306 | 9 个业务库及 Seata 参与库；UTC+8 |
 | Redis | `redis:7.4-alpine` | 9096 → 6379 | 共享实例、AOF 及数据卷 |
 | Nacos | `nacos/nacos-server:v3.0.3` | 9098 控制台、9097 HTTP、10097/10098 gRPC | 本地服务发现与配置 |
 | Seata Server | `apache/seata-server:2.5.0` | **9109 TC、9108 控制台** | 9108 不是可用的统计服务端口 |
@@ -215,7 +215,7 @@
 - [x] 已有 Seata、RocketMQ Binder、Elasticsearch、MongoDB 相关源码和配置；本次不读取或修改 Maven 声明。
 - [x] `order_db`、`stock_db` 已有 AT 参与及 `undo_log` 迁移记录；本地 TC 直连方案已记录。
 - [x] Compose 已纳入 Seata、MQ NameServer/Broker/初始化器、MongoDB、ES 和 Nginx。
-- [x] MQ 初始化配置覆盖 `order-paid-sales-v1`、`product-rating-changed-v1`、`stock-changed-v1`、`product-search-refresh-v1`、`order-status-notification-v1`。
+- [x] MQ 初始化配置覆盖新旧销量主题 `order-paid-sales-v1` / `order-paid-sales-v2`，以及评分、库存、搜索、订单通知和超时取消主题。
 - [x] 评论/库存/搜索/通知的数据库迁移脚本及执行记录已补；2026-10-30 唯一活跃取餐码迁移已执行并验证约束。
 - [ ] 对最新源码做完整 Java 编译、单测与运行验收；Maven 操作须遵守当前请求明确授权约束。
 - [ ] 补齐真实故障、多实例、重复/乱序、Seata 二阶段重试、MQ 重试/DLQ 及回滚隔离验收。
@@ -250,7 +250,7 @@
 | 4 | 图片上传 | **`file-service`（独立）** | 横切复用（头像/菜品图/评论图） |
 | 5 | 站内消息推送 | **`notification-service`（独立）** | WebSocket 长连接练习 |
 | 6 | 菜单搜索 | **`search-service`（独立，首期及学生端已实现）** | ES 检索；MySQL 为准，RocketMQ 驱动索引刷新 |
-| 7 | 经营报表 | **`statistics-service`（独立，稍后）** | 只读聚合 / CQRS 雏形 |
+| 7 | 销量读模型与后续经营报表 | **`statistics-service`（独立）** | 首期已提供学生端累计榜及月售查询；管理端报表后续扩展 |
 | 8 | 订单超时自动取消（15 分钟，待实现） | `order-service` | 现有取消涉及跨服务库存回补，后续定时入口应复用取消及一致性规则，不能仅本地改状态 |
 | 9 | 余额 + 余额流水 | `user-service` | 必须与余额字段同事务，拆开会制造无收益的分布式事务 |
 | 10 | 餐厅（食堂）层级 | `product-service` | 见 4.3，拆开只多一跳 |
@@ -264,7 +264,7 @@
 
 - 业务服务：Gateway 9090、订单 9091、用户 9092、商品 9093、认证 9094、支付 9101、文件 9102、购物车 9103、库存 9104、评论 9105、搜索 9106、通知 9107。
 - Nginx 当前统一入口为 8088，提供 Web 静态托管及 `/api` HTTP/WS 转发；**8088 不再是当前购物车服务默认端口**。
-- Seata TC 9109、控制台 9108；统计服务尚未创建，端口需在实施前重新确认。
+- Seata TC 9109、控制台 9108；统计服务端口为 9111。
 - 商品服务 Sentinel 通信端口已让位为 9110，避免占用文件服务 9102。
 - Windows 宿主机开发时，订单/库存 Seata 客户端使用 `registry.type: file` 和 `grouplist.default` 直连 `127.0.0.1:9109`，避免访问不可路由的 Docker 内网地址。服务与 TC 同 Docker 网络部署时需按该环境重新确认发现及寻址配置。
 
@@ -280,7 +280,7 @@
 | `file-service` | `file_db`（`file_objects`）+ 文件存储 | 已使用元数据表；业务表存 fileKey，文件服务生成内容访问地址 |
 | `search-service` | ES 索引 | 与 MySQL 的主从式关系：**MySQL 为准，索引可随时重建** |
 | `notification-service` | **已使用 `notification_db`** + Redis | 通知持久化与幂等、本人游标分页；Redis 票据与在线分发，WebSocket 不是消息事实源 |
-| `statistics-service` | 规划无独立库，尚未实现 | 首期规划由其他服务提供统计结果后汇总；后续 MQ 统计读模型另行设计 |
+| `statistics-service` | `statistics_db` + Redis | RocketMQ 接收支付事实快照，MySQL 事件/明细及 ALL/MONTH 汇总可重建，Redis ZSet 只服务累计榜读取 |
 | Seata 参与库 | `order_db`、`stock_db` 的 `undo_log` | AT 全局回滚日志；`order_db` 另有取消通知 TCC 状态及通知 outbox |
 
 ## 9. 分期实施与风险
@@ -291,7 +291,7 @@
 阶段 A：6 个服务均已有实现，交易及身份能力持续增强
 阶段 B：stock / cart / comment / file 均已有实现
 阶段 C：notification 第一阶段与 search 首期及学生端已实现
-        statistics 尚未建模块；商家与顾客订单聊天尚未实现
+        statistics 首期源码与学生端调用已补，运行验收待做；商家与顾客订单聊天尚未实现
 ```
 
 | 优先范围 | 当前状态 | 下一步 |
@@ -303,7 +303,7 @@
 | 通知第一阶段 | HTTP 分页、已读/未读、票据 WS、学生端订单中心已有实现 | 验证实际 MQ→落库→WS、离线补查、重复事件、取消全局回滚及 TCC 重试 |
 | 库存 MQ | outbox、undo-log 门控及快照失效消费者已补、迁移已执行 | 验证 AT 提交/回滚与事件发布时序、Redis 故障、重复消息及死信 |
 | 商家与顾客沟通 | 仅方案 | 后续再实施，当前不把订单通知视为聊天 |
-| 统计服务 | 仅规划，无模块 | 确认指标定义、权限、聚合接口及端口后实施；不能标记为已完成 |
+| 统计服务 | 首期代码、学生端调用和开发库迁移已完成，未运行验收 | 发布 Nacos 路由，启动最新服务，验证 RocketMQ、Redis、网关与真机展示 |
 | 端侧收口 | 边界已定，旧调试入口暂留 | 商家接入独立 Vue 管理端后清理 uni-app 非学生页面，严格限制登录角色 |
 
 最近的取餐码改造只要求六位码，活跃码唯一迁移与 SQL 约束已验证；前端旧核销调试页按用户明确要求同步适配，不作为继续扩展 uni-app 管理能力的依据。
@@ -354,7 +354,7 @@
 | 5 | 餐厅命名 | ✅ **已定**：统一用**餐厅**（表名 `restaurants`）；原单体的"食堂 / `canteen`"只作为历史对照，不再出现在新代码中 |
 | 6 | ES 索引同步方式 | ✅ **已定**：**RocketMQ 消息驱动**（见 6.1）；Canal / 定时全量不再作为首选 |
 
-| 7 | 统计服务端口与指标 | ⬜ 待实施前确认：9108 已被 Seata 控制台占用；订单数、营业额、销量等须明确状态、时间范围及权限口径 |
+| 7 | 统计服务首期指标 | ✅ 已定：使用 9111；学生端累计菜品榜与自然月窗口/菜品销量只统计已支付原始份数，退款不冲减；管理端经营指标后续单独定口径 |
 | 8 | 核心资源整体迁移 TCC | ⬜ 未决定整体迁移；当前只落地取消通知 TCC，库存仍采用 AT |
 
 前 6 项保留原有已确认方案；新增事项按当前进度单独列为待定，不再笼统写成“全部收敛”。
@@ -393,3 +393,4 @@
 | 2026-10-28 | 搜索服务首期源码已补：商品目录事务 outbox、RocketMQ 窗口刷新事件、商品内部菜单快照、ES 菜品搜索与全量重建、Nacos 路由和本地 ES profile。product_db V9 已执行；未运行 Maven、未启动容器/服务，消息和搜索运行态仍待验收，详见 [搜索服务](SEARCH_SERVICE.md)。 |
 | 2026-10-30 | 对照当前源码、Compose、迁移及已记录验证更新进度：现有 12 服务/21 子模块/8 个 MySQL 业务库；评论、搜索、通知首期及学生端已实现，统计与聊天仍为规划。纠正余额支付并未采用 MQ 事务消息、AT 与取消通知 TCC 并存、店铺评价单独存 MySQL、仅评分与作者当前头像、活跃取餐码唯一迁移、Nginx 入口和 9108 端口冲突；保留源码完成与运行验收的区别。本次仅更新文档，未运行 Maven 或启动服务。 |
 | 2026-11-02 | 新增邮件找回登录密码：图片验证后发邮件，邮箱验证码换短期一次性授权，再设置新密码；密码与credential_version同库原子更新，旧Access/Refresh及通知连接增加版本校验。V7迁移、隔离SQL/Redis检查与前端检查已完成，Java运行和真实邮件联调待验收。 |
+| 2026-11-13 | 新增 `statistics-service`（9111）与 `statistics_db`，按支付服务真实 `success_time` 固化 `orders.paid_at`；累计榜使用 Redis ZSet，MySQL 保存可重建销量事实与 ALL/MONTH 汇总，MQ 新旧主题兼容消费，学生端首页/点餐页显示月售。迁移已执行情况及运行验收边界见 [销量统计读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)。 |

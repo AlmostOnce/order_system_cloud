@@ -1,6 +1,6 @@
 # 数据库中文数据字典
 
-覆盖当前六个业务数据库；金额单位为元，数量单位为份。
+覆盖当前九个业务数据库；金额单位为元，数量单位为份。统计读模型中的销量按已支付订单原始购买份数计算，退款不冲减。
 
 ## user_db.users：用户账户表，保存登录身份、角色及账户余额
 
@@ -123,6 +123,7 @@
 | pickup_code | varchar(16) | 订单取餐码 |
 | version | int unsigned | 乐观锁版本号，用于并发更新校验 |
 | created_at | datetime(3) | 记录创建时间 |
+| paid_at | datetime | 首次成功支付时间，来源于 `payment_db.payments.success_time`，退款及后续状态变化不得改写 |
 | updated_at | datetime(3) | 记录最后更新时间 |
 | idempotency_key | varchar(128) | 顾客提交的下单幂等键，在用户维度唯一 |
 | request_hash | char(64) | 规范化下单请求的摘要，用于拒绝同一幂等键提交不同内容 |
@@ -258,3 +259,55 @@
 同日已创建 comment_db.comments、comment_rating_stats、comment_rating_outbox 及 product_db.product_rating_stats，中文字段说明以 comment_db/V1 和 product_db/V8 建表脚本为准。
 
 2026-10-28 后续执行更新：图片字段迁移已获授权并执行完成，上方字段已更新为当前实际结构；先前“待部署”段落仅为历史状态，迁移结果以 migrations/IMAGE_FILE_KEYS.md 为准。
+
+## statistics_db.statistics_sales_events：统计服务的已支付订单事实表
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| event_id | varchar(80) | 稳定销量事件键，格式为 `order-paid-sales:{orderId}`，用于跨消息重投幂等 |
+| order_id | bigint unsigned | 来源订单主键；唯一索引保证每笔订单只进入销量事实一次 |
+| window_id | bigint unsigned | 下单时所属窗口主键快照，不依赖商品目录当前归属 |
+| paid_at | datetime | 订单首次支付成功时间，决定自然月归属 |
+| event_version | smallint unsigned | 消息契约版本，用于兼容 V1 ID-only 与 V2 快照事件 |
+| created_at | datetime | 统计服务首次接收并保存该支付事实的时间 |
+
+## statistics_db.statistics_sales_event_items：已支付订单菜品明细事实
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| event_id | varchar(80) | 所属支付事实事件键，关联同库事件头 |
+| item_id | bigint unsigned | 原订单明细主键快照，用于识别重复行及比较最新菜名 |
+| product_id | bigint unsigned | 下单时菜品主键快照 |
+| product_name | varchar(255) | 下单时菜品名称快照，不随商品改名追溯修改 |
+| quantity | int unsigned | 下单时购买原始份数；退款不会减少该值 |
+
+## statistics_db.statistics_sales_window_totals：窗口累计与月度销量汇总
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| period_type | varchar(8) | 汇总周期类型：ALL累计、MONTH自然月 |
+| period_key | char(7) | ALL 使用固定值 `ALLTIME`；MONTH 使用 `YYYY-MM` |
+| window_id | bigint unsigned | 下单窗口主键 |
+| paid_quantity | bigint unsigned | 成功支付订单中的原始购买总份数，不扣退款 |
+| updated_at | datetime | 汇总最后更新时刻 |
+
+## statistics_db.statistics_sales_product_totals：窗口内菜品累计与月度销量汇总
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| period_type | varchar(8) | 汇总周期类型：ALL累计、MONTH自然月 |
+| period_key | char(7) | ALL 使用固定值 `ALLTIME`；MONTH 使用 `YYYY-MM` |
+| window_id | bigint unsigned | 下单窗口主键；不同窗口的同一菜品编号分别统计 |
+| product_id | bigint unsigned | 下单菜品主键 |
+| product_name | varchar(255) | 最近支付订单明细中的菜品名称，供排行榜直接展示 |
+| latest_item_id | bigint unsigned | 上述名称来源的最大订单明细主键，用来避免乱序消息回退名称 |
+| paid_quantity | bigint unsigned | 成功支付订单的原始购买总份数，不扣退款 |
+| updated_at | datetime | 汇总最后更新时刻 |
+
+## statistics_db.statistics_sales_projection_meta：读模型缓存版本
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| projection_id | tinyint unsigned | 固定单行主键，当前使用 1 |
+| version | bigint unsigned | MySQL 汇总每新增一笔支付事件后递增，用于判断 Redis ZSet 是否落后 |
+| updated_at | datetime | 投影版本最后更新时刻 |

@@ -3,7 +3,7 @@
 > 文档性质：**现状清单**。回答两个问题：①我们现在一共有哪些服务；②每个服务对应哪个库、哪些表、哪个账号。
 > 事实来源：根 `docker-compose.yml`、各服务 `application.yml`、`docs/database/migrations/**`、`backup/db-accounts-fix.sh`。
 > 分工：**规划中**（阶段 B/C 未落地的服务与库）见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8 节；本文只记"已经建好"的部分。
-> 最后核对：2026-10-24（本机 Linux，逐表读取 MySQL 的字段、索引和约束；历史记录不能替代本机实际结构核对）。
+> 最后核对：2026-11-13（统计服务读模型迁移后核对；本次执行结果见销量读模型计划，历史快照不能替代当前结构）。
 
 ## 1. 服务总表
 
@@ -18,6 +18,10 @@
 | 7 | `file-service` | `file-service` | 9102 | `file_db` | ✅（黑名单） | `/api/files/**` | ✅ |
 | 8 | `stock-service` | `stock-service` | 9104 | `stock_db` | ✅（库存快照 + 黑名单） | 仅 `-docs` 路由 | ✅ |
 | 9 | `cart-service` | `cart-service` | 9103 | 不建 MySQL 库，仅使用 Redis | ✅（购物车主存储 + 黑名单） | `/api/cart/**` | ✅ |
+| 10 | `comment-service` | `comment-service` | 9105 | `comment_db` + MongoDB | ✅（黑名单） | `/api/comments/**` | ✅ |
+| 11 | `notification-service` | `notification-service` | 9107 | `notification_db` | ✅（票据与连接分发） | `/api/notifications/**` | ✅ |
+| 12 | `search-service` | `search-service` | 9106 | Elasticsearch | ✅（锁与缓存） | `/api/search/**` | ✅ |
+| 13 | `statistics-service` | `statistics-service` | 9111 | `statistics_db` | ✅（销量 ZSet） | `/api/statistics/**` | 源码及开发库迁移已完成，待服务联调 |
 
 > `stock-service` 当前对外**只有** `/internal/stocks/**` 三个内部接口（扣减、回补、查询），
 > 按项目约定 `/internal/**` 不进网关，故 Nacos 路由中只有 `stock-service-docs`
@@ -31,11 +35,11 @@
 |---|---|---|
 | `common-core` | 通用错误码、异常、角色枚举、`DataScopeService` 契约 | 全部服务 |
 | `common-response` | `ApiResponse`（无 Servlet 依赖，供 WebFlux 用） | 全部服务 |
-| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file / stock / cart |
-| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file / stock / cart |
+| `common-redis` | Redis 基础操作、缓存键常量 | gateway / auth / user / order / product / payment / file / stock / cart / statistics |
+| `common-web` | 全局异常处理（仅 Servlet 服务） | auth / user / order / product / payment / file / stock / cart / statistics |
 | `user-api` | `UserBasicVO` + `UserServiceClient` + 降级工厂 | auth / order |
 | `product-api` | 报价契约、窗口/餐厅内部查询客户端 + 降级工厂 | order / cart（批量核价） |
-| `order-api` | 当前用户订单的只读购买事实契约 + `OrderServiceClient` + 降级工厂 | cart（清理前核实）；order 仅在测试范围校验 JSON 契约 |
+| `order-api` | 当前用户订单读取、支付时间命令、已支付菜品快照及内部 Feign 契约 | cart / payment / statistics |
 | `stock-api` | `StockDeductRequest` / `StockRestoreRequest` / `StockVO` + `StockServiceClient` + 降级工厂 | order |
 
 > 端口为**当前设备工作区**实际值（`9090` 段）。另一台设备使用的旧端口段见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 3、8.1 节；两套端口不要互相合并。
@@ -44,7 +48,10 @@
 
 | 数据库 | 表 | 归属服务 | 迁移脚本（按执行顺序） |
 |---|---|---|---|
-| `order_db` | `orders`、`order_items`、`undo_log`、`sales_event_outbox` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) → [销量事件 outbox](migrations/order_db/V1__add_sales_event_outbox.sql) |
+| `order_db` | `orders`（含首次支付 `paid_at`）、`order_items`、`undo_log`、`sales_event_outbox` | order-service | [V1__create_orders_table.sql](migrations/V1__create_orders_table.sql) → [V2__add_order_idempotency.sql](migrations/V2__add_order_idempotency.sql) → [V3__create_order_items_table.sql](migrations/V3__create_order_items_table.sql) → [V4__add_undo_log.sql](migrations/V4__add_undo_log.sql) → [销量事件 outbox](migrations/order_db/V1__add_sales_event_outbox.sql) → [V8__order_paid_at.sql](migrations/order_db/V8__order_paid_at.sql) |
+| `statistics_db` | `statistics_sales_events`、`statistics_sales_event_items`、窗口/菜品 ALL/MONTH 汇总、投影版本 | statistics-service | [V1__create_sales_read_model.sql](migrations/statistics_db/V1__create_sales_read_model.sql) |
+| `comment_db` | `comments`（关系元数据）、`comment_rating_stats`、`comment_rating_outbox`、`window_reviews` | comment-service | [comment_db/V1](migrations/comment_db/V1__create_comments.sql) → [V2](migrations/comment_db/V2__create_window_reviews.sql) → [V3](migrations/comment_db/V3__review_score_filter_indexes.sql) → [V4](migrations/comment_db/V4__review_image_filter.sql) |
+| `notification_db` | `notifications`、`chat_conversations`、`chat_messages`、`chat_read_state`、`chat_event_outbox` | notification-service | [notification_db/V1](migrations/notification_db/V1__create_notifications.sql) → [V2](migrations/notification_db/V2__create_order_chat.sql) → [V3](migrations/notification_db/V3__chat_message_revoke.sql) |
 | `user_db` | `users`（含 `pay_password_hash`、`user_uuid`、`user_no`、`email`；V6 后不含 `phone`）、`user_data_scopes`、`balance_records` | user-service | [user_db/V1__create_users_table.sql](migrations/user_db/V1__create_users_table.sql) → [user_db/V2__create_user_data_scopes_table.sql](migrations/user_db/V2__create_user_data_scopes_table.sql) → [user_db/V3__add_pay_password_and_balance_records.sql](migrations/user_db/V3__add_pay_password_and_balance_records.sql) → [user_db/V4__add_public_user_uuid.sql](migrations/user_db/V4__add_public_user_uuid.sql) → [user_db/V5__add_user_number_and_email_login.sql](migrations/user_db/V5__add_user_number_and_email_login.sql) → [user_db/V6__remove_user_phone.sql](migrations/user_db/V6__remove_user_phone.sql) |
 | `product_db` | `dining_windows`（含 `image_url`/`is_open`）、`product_categories`、`products`、`restaurants`（含 `location`/`phone`/`image_url`/`notice`/`sort_order`）、`product_search_outbox` | product-service | [product_db/V1__create_product_catalog_tables.sql](migrations/product_db/V1__create_product_catalog_tables.sql) → [product_db/V2__create_restaurants_and_window_restaurant.sql](migrations/product_db/V2__create_restaurants_and_window_restaurant.sql) → [product_db/V4__enrich_restaurants.sql](migrations/product_db/V4__enrich_restaurants.sql) → [product_db/V5__enrich_dining_windows.sql](migrations/product_db/V5__enrich_dining_windows.sql) → [product_db/V6__add_window_description_and_sort_order.sql](migrations/product_db/V6__add_window_description_and_sort_order.sql) → [product_db/V7__seed_window_messages.sql](migrations/product_db/V7__seed_window_messages.sql) → [product_db/V8__add_product_rating_projection.sql](migrations/product_db/V8__add_product_rating_projection.sql) → [product_db/V9__create_product_search_outbox.sql](migrations/product_db/V9__create_product_search_outbox.sql) → [product_db/V10__add_search_outbox_product_id.sql](migrations/product_db/V10__add_search_outbox_product_id.sql)；V9、V10 于 2026-10-28 执行成功 |
 | `payment_db` | `payments` | payment-service | [payment_db/V1__create_payments_table.sql](migrations/payment_db/V1__create_payments_table.sql) |
@@ -75,11 +82,12 @@
 | `payment_service` | `payment_db` | **迁移脚本内置**：`payment_db/V1` 中 `CREATE USER` + `GRANT` | `PAYMENT_DB_PASSWORD` |
 | `file_service` | `file_db` | **迁移脚本内置**：`file_db/V1` 中 `CREATE USER` + `GRANT` | `FILE_DB_PASSWORD` |
 | `stock_service` | `stock_db` | **迁移脚本内置**：`stock_db/V1` 中 `CREATE USER` + `GRANT` | `STOCK_DB_PASSWORD` |
+| `statistics_service` | `statistics_db` | **迁移脚本内置**：`statistics_db/V1` 中 `CREATE USER` + 最小库权限 | `STATISTICS_DB_PASSWORD` |
 
-> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎、重建系统库后只有 `order_user` 会自动重建，其余五个账号必须重新创建（见第 4.2 节）。
+> ⚠️ MySQL 账号存放在 `mysql` 系统库，**不随数据卷迁移**。换 Docker 引擎或重建系统库后，应用账号需要按初始化脚本重新创建并授权（见第 4.2 节）。
 
 
-> 2026-10-22 增量：本机 order_db 已新增 sales_event_outbox（销量消息本地待发送表），当前 0 条；上面的 2026-10-19 统计为历史快照，不代表最新表数。RocketMQ Compose 配置已补，尚未启动或联调，见 [销量榜](../SALES_RANKING.md)。
+> 历史增量：订单销量事件 outbox 与 RocketMQ 初始链路见 [销量统计读模型](../SALES_RANKING.md)；本次统计读模型迁移与核对见对应实施计划。
 
 ## 4. 新建环境（新建数据库）清单
 
@@ -159,7 +167,7 @@ FLUSH PRIVILEGES;
 
 统一约定：透传用户 JWT = "代表用户"；`X-Internal-Token` = "系统事件"（无用户上下文），密钥变量 `INTERNAL_SCOPE_TOKEN`，请求头 `X-Internal-Token`。
 
-## 7. 待建库 / 表清单（尚未创建）
+## 7. 已建库补充项与未建存储
 
 ### 7.1 已建服务范围内的缺失项 —— ✅ 2026-10-13 已全部补齐
 
@@ -175,21 +183,18 @@ FLUSH PRIVILEGES;
 
 > 说明：支付密码校验失败的计数与锁定**不落库**，用 Redis 带 TTL 的计数器实现。余额支付已实现；2026-10-22 补充模拟充值和本人流水查询代码，复用 `users`、`balance_records`，无需额外迁移，接口与验证范围见 [账户中心与模拟充值](../WALLET_API.md)。
 
-### 7.2 未建服务（阶段 B / C）的库 —— 部分已落地
+### 7.2 无 MySQL Schema 或外部存储的服务
 
-以下库属于**尚未创建的服务**，等该服务开工时再建（新增服务的标准动作见第 8 节）：
+以下项目说明哪些能力不创建独立 MySQL 库，或使用外部索引；各业务服务的 MySQL Schema 见第 2 节：
 
 | 库 | 表 | 归属服务 | 备注 |
 |---|---|---|---|
 | ~~`stock_db`~~ | ~~`stock`、`stock_flow`、`undo_log`~~ | stock-service | ✅ **2026-10-19 已建**，见第 2 节 |
 | ~~`order_db.undo_log`（补表）~~ | ~~`undo_log`~~ | order-service | ✅ **2026-10-19 已补**（`migrations/V4__add_undo_log.sql`），Seata 参与库都要有 `undo_log` |
-| `comment_db` | `comments`（仅关系元数据） | comment-service | 正文/图片/标签/回复入 **MongoDB**（集合 `comments`） |
-| `comment_db` | `window_reviews` | comment-service | 已完成订单的店铺评价，按订单唯一；与菜品评价和菜品评分独立 |
-| — | MongoDB 集合 `comments` | comment-service | 需先引入 MongoDB 容器（27017） |
-| `cart_db`（取消） | 不建设购物车备份表 | cart-service | 2026-10-17 用户确认仅使用 Redis（AOF + 数据卷），不做 MySQL 双存储，也不做游客合并 |
-| ES 索引（无 MySQL 库） | — | search-service | MySQL 为唯一事实来源，索引可随时重建；Elasticsearch Compose profile 已配置，尚未启动 |
-| `notification_db`（可选） | 离线消息表 | notification-service | 离线消息需要落库才能补投 |
-| 无库 | — | statistics-service | 只读聚合，经 Feign 从 order/product 拉取 |
+| `cart_db`（取消） | 不建设购物车备份表 | cart-service | 用户确认购物车仅使用 Redis（AOF + 数据卷），不做 MySQL 双存储或游客合并 |
+| Elasticsearch 索引（无 MySQL 库） | 菜品搜索索引 | search-service | `product_db` 是唯一事实来源，索引可重建；Compose `search` profile 已配置，是否在线需运行时检查 |
+| MongoDB 集合 `comments` | 评论正文和图片/标签内容 | comment-service | 与 `comment_db` 关系元数据配合；MongoDB 配置及部署记录见评论服务文档 |
+| Redis 销量 ZSet | 累计菜品排行榜缓存 | statistics-service | `statistics_db` 为事实及重建来源；开发库迁移结果见销量读模型计划 |
 
 ### 7.3 需配套新增的中间件（与库同期）
 
@@ -200,7 +205,7 @@ FLUSH PRIVILEGES;
 | MongoDB | 27017 | B | 评论内容 |
 | Elasticsearch | 9200 | C | 菜单全文检索；本地 Compose 使用 `search` profile，尚未启动 |
 
-> 目标状态：数据库 Schema 从阶段 A 的 **4 个** → 阶段 B 后 **7 个**（+`stock_db`、`comment_db`、`file_db`）→ 阶段 C 再加 ES 索引与（可选）`notification_db`。当前已建 **6 个**（含 `stock_db`），仅剩 `comment_db` + MongoDB 未落地。服务数从 6 → 13，见 [ARCHITECTURE.md](../ARCHITECTURE.md) 第 1、3 节。
+> 当前仓库记录的 MySQL 业务 Schema 共 **9 个**：`user_db`、`order_db`、`product_db`、`payment_db`、`file_db`、`stock_db`、`comment_db`、`notification_db`、`statistics_db`。`cart-service` 不建 MySQL 库；`search-service` 使用可重建的 Elasticsearch 索引。Schema 实际是否在线以相应环境检查为准，不能仅凭脚本存在推断。
 
 
 ## 8. 新增服务时的标准动作

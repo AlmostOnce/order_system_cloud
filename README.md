@@ -83,6 +83,7 @@ flowchart LR
     Gateway --> Payment[支付服务]
     Gateway --> Comment[评论服务]
     Gateway --> Search[搜索服务]
+    Gateway --> Statistics[统计服务]
     Gateway -. 路由待部署验证 .-> Notification[通知服务]
     Gateway --> File[文件服务]
     Order --> Stock[库存服务]
@@ -96,6 +97,9 @@ flowchart LR
     Services --> MQ[RocketMQ]
     Comment --> Mongo[(MongoDB)]
     Search --> ES[(Elasticsearch)]
+    Order -->|已支付快照 / RocketMQ| Statistics
+    Statistics --> StatsDB[(statistics_db)]
+    Statistics --> Redis
 ```
 
 图中展示主要关系，并未列出全部内部调用。网关经 Nacos 发现服务；服务间通过接口契约通信，各服务负责自己的业务数据。异步消息用于驱动搜索、评分、销量等读模型更新，而下单时库存成功与否仍由同步事务链路决定。
@@ -115,15 +119,16 @@ flowchart LR
 | `user-service` | 9092 | 用户资料、身份与权限、余额、支付密码和余额流水 |
 | `product-service` | 9093 | 食堂、楼层、窗口、分类、菜品、商品查询和评分投影 |
 | `cart-service` | 9103 | Redis 购物车、商品核价和下单后的安全清理 |
-| `order-service` | 9091 | 订单、订单状态、销量榜与相关事件 |
+| `order-service` | 9091 | 订单、支付状态确认、取消与订单事件 |
 | `payment-service` | 9101 | 支付编排和支付记录，包含开发环境支付渠道 |
 | `stock-service` | 9104 | 库存、变更流水、扣减、回补及库存事件 |
 | `file-service` | 9102 | 文件上传、存储和受控图片访问 |
 | `comment-service` | 9105 | 订单相关评价、菜品及窗口评分和评价内容 |
 | `search-service` | 9106 | 菜品搜索、索引更新与重建 |
 | `notification-service` | 9107 | 订单通知、未读管理及 WebSocket 推送；完整链路仍需联调 |
+| `statistics-service` | 9111 | 已支付销量事实、累计菜品榜、窗口与菜品月售读模型 |
 
-统计服务和商家与顾客的聊天能力属于后续规划，不是现有已交付服务。`9108` 在当前 Compose 中映射到 Seata 控制台，不应作为现有统计服务端口使用。
+统计服务仅向 CUSTOMER 提供学生端销量查询；商家与顾客的聊天和管理端经营报表仍属后续工作。`9108` 继续由 Seata 控制台占用，统计服务使用 `9111`。
 
 ### 公共模块与服务契约
 
@@ -318,23 +323,29 @@ Access Token 用于访问业务接口，资源服务可使用公钥验证签名�
 
 **技术细节：`revision` 为什么不能只用数量代替？** 用户下单时数量为 2，随后改为 3 又改回 2；仅比较数量会误以为购物车没有变化。每次修改生成新的版本，即便数量恢复，旧订单快照也不会删除新意图。Lua 内将业务 ID 作为字符串处理，避免大整数经 Lua 浮点数处理时损失精度。
 
-### 6. 订单与销量榜：`order-service`
+### 6. 订单：`order-service`
 
 **职责与实现：**保存订单与商品快照，维护订单状态、订单归属和请求幂等；订单明细保存下单时的名称、单价和数量，避免历史展示被后续菜品修改改变。状态更新需要校验允许的转换及并发竞争结果。
 
 **创建订单：**校验顾客和商品 → 获取商品报价 → 建立订单和明细 → 调用库存服务扣减；订单与库存采用 Seata 全局事务，任何关键步骤失败时触发回滚。待支付取消时通过状态条件更新竞争取消资格，再按原订单调用库存回补，重复取消不应重复回补。
 
-**销量榜：**支付成功状态变化与销量 outbox 同事务写入，后台发布消息；消费者读取订单明细，通过 Lua 对 Redis ZSet 累加，并维护已处理订单集合。查询按销量排序；冷启动及异常恢复可从订单数据重建，对账修复缺失。只统计已支付及后续履约状态，待支付、已取消不计入。
+**支付事实：**首次确认支付时，将支付服务持久化的 `success_time` 写入 `orders.paid_at`；状态 CAS、支付时间和完整菜品快照 outbox 在订单库同一事务提交。后续履约、取消或退款流程不得改写首次支付时间；重复支付通知不会重复写事件。
 
-**代码入口：**`OrderController`、`OrderServiceImpl`、`OrderPersistenceServiceImpl`、`SalesRankingService`、`SalesRankingMessaging`、`SalesRankingJobs`、`ranking/` 和 `notification/`。
+**代码入口：**`OrderController`、`OrderServiceImpl`、`OrderPersistenceServiceImpl`、`SalesOutboxWriter`、`SalesOutboxPublisher`、`ranking/` 和 `notification/`。旧销量榜类已退出 Spring 活跃链路；订单服务只负责支付事实和可靠发布。
 
 **技术细节：幂等键与状态竞争**
 
 网络超时只代表客户端没有拿到确定响应，不代表服务端一定没有创建订单。订单请求使用幂等标识，使相同业务请求能够安全核对或重试；不同请求内容是否冲突由服务端校验。订单状态更新通过条件更新和版本竞争处理并发：例如支付与取消同时到达时，不能让两者都把自己当作状态变更的赢家。
 
-**技术细节：销量榜为什么使用 ZSet？** Redis ZSet 的成员表示一个菜品维度，score 表示累计销量；更新销量后可以直接按 score 排序读取。MQ 事件会重复投递，所以消费者还维护已处理订单集合；Lua 将判重和销量更新放在一次执行里，避免重复计数。这里的 score 是排行榜分数，不是商品价格。
+### 6.1 统计与销量：`statistics-service`
 
-支付成功后，订单更新与销量 outbox 同事务落库；发布器发送 `order-paid-sales-v1`，消费者查询订单明细并更新 Redis。Redis 投影丢失时可从订单事实重建，并恢复去重信息；定时对账用于修复遗漏。榜单是异步投影，支付刚完成时可能短暂看不到最新销量。
+统计服务承接学生端累计销量榜及窗口、菜品本月销量。RocketMQ 消费者把稳定订单事件、购买明细和 ALL/MONTH 汇总写入 `statistics_db`；事件唯一键和订单唯一键确保重复投递不会重复累计。统计库只保存订单号、窗口、菜品快照、原始份数和首次支付时间，不复制用户或支付凭证信息。
+
+**销量口径：**只计成功支付订单的原始购买份数；待支付、取消的订单不计入，退款不冲减已支付销量。月售按 `paid_at` 的 `Asia/Shanghai` 自然月归属，不用下单时间或订单更新时间猜测。
+
+**为什么同时用 MySQL 和 Redis？** `statistics_db` 中的事件事实与汇总是可核对、可重建的数据来源；Redis ZSet 只负责快速排序读取。Lua 把订单去重、ZSet 增量和缓存版本写入原子化。Redis 丢失或落后时，服务从 MySQL 重建 ZSet 和已计入订单集合；RocketMQ 重投只恢复漏掉的缓存变化，不会再次增加 MySQL 销量。异步投影可能使支付刚完成的榜单短暂延迟。
+
+**代码入口：**`SalesStatisticsController`、`SalesStatisticsService`、`SalesProjectionService`、`SalesRankingCacheService`、`SalesStatisticsMessaging`、`SalesProjectionMapper` 及 `statistics/*.lua`。
 
 **技术细节：MQ 为什么不能保证业务只执行一次？** 发布器可能在 Broker 已接收、但本地尚未标记成功时崩溃，重试会产生重复消息。项目采用稳定事件标识、幂等消费、失败重试和对账处理，目标是让重复投递不会重复改变业务结果，而不是假定消息只会到达一次。
 
@@ -496,9 +507,7 @@ Lua 执行具有原子性，但脚本中已经执行的写入不会因后续报�
 
 ### 销量排行榜
 
-排行榜按**已支付菜品累计份数**统计，待支付和已取消订单不计入。订单支付状态变化与销量事件 outbox 同事务写入，发布器将事件发送至 RocketMQ；消费者核对订单事实，通过 Redis ZSet 更新销量，使用去重信息防止重复累计。
-
-Redis 投影可从订单事实重建，并有定时对账。消息至少一次投递，必须依靠幂等和补偿处理重复或遗漏。
+排行榜按**已支付菜品累计份数**统计，待支付和已取消订单不计入。订单服务在支付状态事务内写销量 outbox，RocketMQ 将事件交给统计服务；统计服务先幂等保存 `statistics_db` 的销量事实和汇总，再更新 Redis ZSet 排行榜缓存。Redis 可从 MySQL 读模型重建，MQ 重复投递不会重复累计。
 
 ### 评论与评分
 
@@ -533,6 +542,7 @@ Redis 投影可从订单事实重建，并有定时对账。消息至少一次�
 | `comment_db`（MySQL） | 评论关系元数据、评分统计及事件 outbox |
 | `comment_db`（MongoDB） | 菜品评价的文档内容 |
 | `notification_db` | 用户站内通知 |
+| `statistics_db` | 已支付销量事件事实、订单菜品快照、窗口与菜品累计/月度汇总 |
 | Redis | 购物车、登录状态、缓存、分布式锁、销量榜等 |
 | Elasticsearch | 可重建的菜品搜索索引 |
 
@@ -545,6 +555,7 @@ Compose 中的 `mq` profile 提供 NameServer、Broker、权限初始化和主�
 | 主题 | 用途 |
 | --- | --- |
 | `order-paid-sales-v1` | 已支付订单驱动销量榜 |
+| `order-paid-sales-v2` | 携带支付时间、窗口及菜品快照的新销量事件；统计服务同时消费 V1 兼容旧消息 |
 | `product-rating-changed-v1` | 菜品评分变化及商品评分投影 |
 | `stock-changed-v1` | 库存变化及缓存失效 |
 | `product-search-refresh-v1` | 商品搜索索引刷新 |
@@ -637,7 +648,9 @@ Nginx 将用户端的 `unpackage/dist/build/nginx-web` 目录只读挂载为站�
 | 登录 | `POST /api/auth/login` |
 | 注册 | `POST /api/auth/register` |
 | 菜品搜索 | `GET /api/search/products?q=鸡肉` |
-| 菜品销量榜 | `GET /api/orders/rankings/sales` |
+| 菜品累计销量榜 | `GET /api/statistics/rankings/sales?limit=50` |
+| 窗口本月销量 | `GET /api/statistics/windows/monthly-sales` |
+| 窗口内菜品本月销量 | `GET /api/statistics/windows/{windowId}/monthly-sales` |
 | 窗口库存 | `GET /api/products/windows/{windowId}/stocks` |
 | 菜品评价 | `GET /api/comments/products/{productId}` |
 
@@ -703,6 +716,7 @@ Nginx 将用户端的 `unpackage/dist/build/nginx-web` 目录只读挂载为站�
 | status | tinyint | 账号状态：1启用，0停用 |
 | version | int | 乐观锁版本号，用于并发更新校验 |
 | created_at | datetime(3) | 记录创建时间 |
+| paid_at | datetime | 首次成功支付时间，来源于支付表 `success_time`；退款及后续状态变化不得改写 |
 | updated_at | datetime(3) | 记录最后更新时间 |
 | deleted_at | datetime(3) | 逻辑删除时间，空值表示未删除 |
 | email | varchar(254) | 登录邮箱，去除首尾空白并转小写，历史账号可为空 |

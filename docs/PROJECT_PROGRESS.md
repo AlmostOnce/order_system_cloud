@@ -579,3 +579,11 @@ order-service ── OpenFeign ──> user-service ──> user_db
 按用户要求，为用户、商品、订单、支付、库存、文件、评论七个服务声明官方 druid-spring-boot-3-starter 1.2.27，根项目管理版本；排除现有 JDBC/MyBatis 依赖路径的 HikariCP，显式指定 DruidDataSource。默认初始/最小空闲1个、最大10个（评论5个）、获取连接等待3秒，配置空闲连接检测；监控 Servlet/Web Filter 关闭。MongoDB 驱动连接池不变。
 
 已通过 tools/check-druid-contracts.py 的 XML/配置静态契约审计，以及 SnakeYAML 对七份配置结构和关键值的解析检查。未运行 Maven、依赖解析、编译、测试或重启；尚不能据此断言实际启动与连接池运行已验证。后续由新配置启动后可检查 Druid 初始化日志及连接池类型。官方依赖与自动配置来源：https://github.com/alibaba/druid/tree/1.2.27/druid-spring-boot-3-starter 。
+
+### 2026-11-13 统计服务销量读模型首期
+
+- 新增 `statistics-service`（9111）和 `statistics_db`：消费 RocketMQ 订单支付销量事件，MySQL 保存幂等事件事实、订单菜品快照及窗口/菜品 ALL 与 MONTH 汇总，Redis ZSet 提供累计销量榜缓存。新端点由 Gateway `/api/statistics/**` 转发，并只允许 CUSTOMER 查询。
+- 支付服务传递数据库中的 `payments.success_time`；订单首次支付状态 CAS 同事务写 `orders.paid_at` 和销量 outbox。新 V2 事件包含窗口/菜品快照，统计服务同时消费 V1 旧消息并通过内部快照接口兼容历史格式。学生端排行榜、首页窗口月售和点餐页菜品月售已改读统计接口，统计调用失败不会阻塞核心目录展示。
+- 执行迁移前核对 18 笔订单、12 笔成功支付可关联、14 条明细共 28 份，并备份 `order_db` 与 `payment_db`。备份：`C:\Users\DELL\.codex\backups\order_system_cloud\statistics_sales_20261113\order-payment-before-statistics-171302.sql.gz`；大小 9055 字节，gzip 检查通过，SHA-256：`aa5c7af1ee08c74ddf86ca685333bffb02a142fcae94de0548347ab001f1c4d2`。
+- 首次执行发现 SQL 客户端未固定字符集，中文状态回填未匹配；DDL 成功但事实表为空，未产生错误销量。两份脚本加入 `SET NAMES utf8mb4` 后，以 UTF-8 客户端安全重跑并核验：`paid_at` 12 条，与成功支付时间不一致 0，未支付订单误写 0；统计事件 12、订单明细 14、销量 28，月份为 2026-10 共 25、2026-11 共 3；投影版本 12。统计账号只获 `statistics_db` 读写权限，登录读取成功。
+- 静态源码、配置、SQL 及调用点复核完成，差异空白检查通过。未运行 Maven、构建、测试、应用启动或服务重启；RocketMQ、Redis 缓存重建、Gateway/Nacos 生效、Android 真机与新支付订单端到端仍待运行验收，详见 [销量读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)。

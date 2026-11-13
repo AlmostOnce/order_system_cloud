@@ -6,6 +6,15 @@
 
 优先补待支付超时处理、登录/支付密码恢复和注册邮箱验证，再做我的订单后端分页、详情实时状态同步；退款与聊天先确认业务规则。学生端角色收口是正式发布门槛，便利功能按需另选。
 
+## 销量统计首期：运行验收
+
+`statistics-service`、已支付销量读模型、学生端累计榜/窗口月售/菜品月售及开发库迁移已完成。迁移数据核验、备份和口径记录见 [销量读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)。下一步在不改写现有统计数据的前提下：
+
+- 发布 Nacos 中 `/api/statistics/**` 路由配置，并确认 Gateway 路由到 `statistics-service`。
+- 启动最新的 MySQL、Redis、Nacos、RocketMQ、Gateway、statistics-service、order-service、payment-service；检查 V2 新消息与 V1 兼容消费组是否订阅成功。
+- 通过 CUSTOMER 身份验证累计榜、窗口月售和单窗口菜品月售；确认 Redis 缓存丢失时可从 MySQL 汇总恢复。
+- 使用正常测试订单验证支付时间、outbox、RocketMQ、统计库与 Redis 的异步更新，再用 Android 真机检查月售显示和接口失败时页面可用性。
+
 ## 前后端联调边界
 
 用户于 2026-10-30 明确：uni-app 仅作为普通学生端，商家与其他管理角色使用专门的 Vue 管理端。后续联调遵守该划分，不继续扩展 uni-app 的管理能力。
