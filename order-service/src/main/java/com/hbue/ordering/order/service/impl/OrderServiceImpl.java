@@ -13,12 +13,14 @@ import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
 import com.hbue.ordering.order.notification.CancellationNotificationTcc;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
 import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.vo.PaymentCloseVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
@@ -405,11 +407,17 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
-        ApiResponse<String> closure=paymentClose.close(orderId,internalScopeToken);
+        ApiResponse<PaymentCloseVO> closure = paymentClose.close(orderId, internalScopeToken);
         if(closure==null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode()))
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"暂时无法确认支付关闭结果，请稍后重试");
-        if("PAID".equals(closure.getData())) return markOrderPaid(orderId);
-        if(!"CLOSED".equals(closure.getData()))
+        var closeResult = closure.getData();
+        if (closeResult == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"支付服务没有返回关单结果");
+        if("PAID".equals(closeResult.status())) {
+            // 关单与支付成功竞争时，支付服务返回其持久化的 success_time，订单不能自行用当前时间补猜。
+            if (closeResult.paidAt() == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"无法确认支付成功时间，请稍后重试");
+            return markOrderPaid(orderId, closeResult.paidAt());
+        }
+        if(!"CLOSED".equals(closeResult.status()))
             throw new BusinessException(CommonErrorCode.CONFLICT,"支付结果待确认，不能取消订单");
         // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
         orderDO=getOrderForStatusChange(orderId);
@@ -535,7 +543,8 @@ public class OrderServiceImpl
      * @return 订单状态变更结果
      */
     @Override
-    public OrderStatusVO markOrderPaid(Long orderId) {
+    public OrderStatusVO markOrderPaid(Long orderId, java.time.LocalDateTime paidAt) {
+        if (paidAt == null) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付服务确认的支付成功时间");
         // 支付通知可能重放或并发到达，先读取状态并按状态机判定是否允许推进。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         OrderStatus currentStatus = getCurrentStatus(orderDO);
@@ -555,7 +564,7 @@ public class OrderServiceImpl
 
         try {
             // 状态与版本号条件更新用于竞争唯一写入权，防止重复通知重复推进订单。
-            return persistStatusTransition(orderDO, OrderStatus.PAID);
+            return persistPaidTransition(orderDO, paidAt);
         } catch (BusinessException conflictException) {
             // 并发回调竞争失败时回读订单：已被推进为已支付则幂等成功。
             OrderDO latestOrder = getById(orderId);
@@ -568,6 +577,31 @@ public class OrderServiceImpl
             }
             throw conflictException;
         }
+    }
+
+    /**
+     * 查询订单已支付的最小销量事实，供统计服务处理旧版 ID-only MQ 事件。
+     *
+     * @param orderId 订单主键
+     * @return 仅含原始菜品购买份数和不可变支付时间的快照
+     */
+    @Override
+    public OrderPaidSalesSnapshotVO getPaidSalesSnapshot(Long orderId) {
+        OrderDO order = getOrderForStatusChange(orderId);
+        OrderStatus status = getCurrentStatus(order);
+        if (order.getPaidAt() == null || !(status == OrderStatus.PAID || status == OrderStatus.PREPARING
+                || status == OrderStatus.WAITING_FOR_PICKUP || status == OrderStatus.COMPLETED || status == OrderStatus.REFUNDED)) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单没有可统计的成功支付事实");
+        }
+        List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "已支付订单缺少菜品明细");
+        }
+        List<OrderPaidSalesSnapshotVO.Item> items = orderItems.stream()
+                .map(item -> new OrderPaidSalesSnapshotVO.Item(item.getItemId(), item.getProductId(),
+                        item.getProductNameSnapshot(), item.getQuantity()))
+                .toList();
+        return new OrderPaidSalesSnapshotVO(order.getOrderId(), order.getPaidAt(), order.getWindowId(), items);
     }
 
     /**
@@ -637,6 +671,15 @@ public class OrderServiceImpl
                 .orderId(orderDO.getOrderId())
                 .status(targetStatus.getLabel())
                 .build();
+    }
+
+    /**
+     * 通过支付专用 CAS 写入 paid_at；失败的并发请求由调用方回读状态并按原规则幂等处理。
+     */
+    private OrderStatusVO persistPaidTransition(OrderDO order, java.time.LocalDateTime paidAt) {
+        boolean updated = orderPersistenceService.markPaidIfUnchanged(order.getOrderId(), order.getVersion(), paidAt);
+        if (!updated) throw invalidStatusTransition();
+        return OrderStatusVO.builder().orderId(order.getOrderId()).status(OrderStatus.PAID.getLabel()).build();
     }
 
     /**

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import com.hbue.ordering.payment.channel.BalancePaymentChannel;
 import com.hbue.ordering.payment.channel.MockChannelNotifier;
 import com.hbue.ordering.payment.channel.PaymentChannel;
@@ -35,6 +37,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -242,7 +245,7 @@ class PaymentServiceImplTest {
         when(paymentMapper.markSuccessIfCreated(
                 anyString(), eq(ORDER_AMOUNT), anyString()
         )).thenReturn(1);
-        when(orderInternalClient.markPaid(ORDER_ID))
+        when(orderInternalClient.markPaid(eq(ORDER_ID), any(OrderPaidCommand.class)))
                 .thenReturn(ApiResponse.success(null));
         when(paymentMapper.selectByPaymentNo(anyString()))
                 .thenReturn(balancePayment("SUCCESS"));
@@ -260,7 +263,7 @@ class PaymentServiceImplTest {
                 eq(USER_ID), eq(INTERNAL_SCOPE_TOKEN),
                 any(UserBalanceDeductCommand.class)
         );
-        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
     }
 
     @Test
@@ -287,7 +290,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).markSuccessIfCreated(
                 anyString(), any(), anyString()
         );
-        verify(orderInternalClient, never()).markPaid(any());
+        verify(orderInternalClient, never()).markPaid(any(), any());
     }
 
     @Test
@@ -357,18 +360,18 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).markSuccessIfCreated(
                 anyString(), any(), anyString()
         );
-        verify(orderInternalClient, never()).markPaid(any());
+        verify(orderInternalClient, never()).markPaid(any(), any());
     }
 
     @Test
     void shouldMarkSuccessAndAdvanceOrderOnceOnFirstNotify() {
         stubSignatureVerify(true);
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO))
-                .thenReturn(payment("CREATED"));
+                .thenReturn(payment("CREATED"), payment("SUCCESS"));
         when(paymentMapper.markSuccessIfCreated(
                 eq(PAYMENT_NO), any(), anyString()
         )).thenReturn(1);
-        when(orderInternalClient.markPaid(ORDER_ID))
+        when(orderInternalClient.markPaid(eq(ORDER_ID), any(OrderPaidCommand.class)))
                 .thenReturn(ApiResponse.success(null));
 
         ApiResponse<Void> response = paymentService.handleNotify(
@@ -380,7 +383,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper).markSuccessIfCreated(
                 eq(PAYMENT_NO), eq(ORDER_AMOUNT), anyString()
         );
-        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
     }
 
     @Test
@@ -388,7 +391,7 @@ class PaymentServiceImplTest {
         stubSignatureVerify(true);
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO))
                 .thenReturn(payment("CREATED"))
-                .thenReturn(payment("SUCCESS"));
+                .thenReturn(payment("SUCCESS"), payment("SUCCESS"));
         when(paymentMapper.markSuccessIfCreated(
                 eq(PAYMENT_NO), any(), anyString()
         )).thenReturn(0);
@@ -398,7 +401,7 @@ class PaymentServiceImplTest {
         );
 
         assertEquals(CommonErrorCode.SUCCESS.code(), response.getCode());
-        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
     }
 
     @Test
@@ -417,7 +420,7 @@ class PaymentServiceImplTest {
 
         // 返回成功让渠道停止重试，但不推进订单。
         assertEquals(CommonErrorCode.SUCCESS.code(), response.getCode());
-        verify(orderInternalClient, never()).markPaid(any());
+        verify(orderInternalClient, never()).markPaid(any(), any());
     }
 
     @Test
@@ -434,18 +437,18 @@ class PaymentServiceImplTest {
 
         assertEquals(CommonErrorCode.SUCCESS.code(), response.getCode());
         verify(paymentMapper).markFailedIfCreated(eq(PAYMENT_NO), anyString());
-        verify(orderInternalClient, never()).markPaid(any());
+        verify(orderInternalClient, never()).markPaid(any(), any());
     }
 
     @Test
     void shouldKeepPaymentSuccessWhenOrderAdvanceThrows() {
         stubSignatureVerify(true);
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO))
-                .thenReturn(payment("CREATED"));
+                .thenReturn(payment("CREATED"), payment("SUCCESS"));
         when(paymentMapper.markSuccessIfCreated(
                 eq(PAYMENT_NO), any(), anyString()
         )).thenReturn(1);
-        when(orderInternalClient.markPaid(ORDER_ID))
+        when(orderInternalClient.markPaid(eq(ORDER_ID), any(OrderPaidCommand.class)))
                 .thenThrow(feignServiceUnavailable());
 
         ApiResponse<Void> response = paymentService.handleNotify(
@@ -454,18 +457,18 @@ class PaymentServiceImplTest {
 
         // 支付事实保持 SUCCESS 不回滚，订单推进失败仅留痕人工处置。
         assertEquals(CommonErrorCode.SUCCESS.code(), response.getCode());
-        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
     }
 
     @Test
     void shouldKeepPaymentSuccessWhenOrderRejectedConflict() {
         stubSignatureVerify(true);
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO))
-                .thenReturn(payment("CREATED"));
+                .thenReturn(payment("CREATED"), payment("SUCCESS"));
         when(paymentMapper.markSuccessIfCreated(
                 eq(PAYMENT_NO), any(), anyString()
         )).thenReturn(1);
-        when(orderInternalClient.markPaid(ORDER_ID))
+        when(orderInternalClient.markPaid(eq(ORDER_ID), any(OrderPaidCommand.class)))
                 .thenReturn(ApiResponse.failure(
                         CommonErrorCode.CONFLICT, "订单当前状态不允许执行该操作"
                 ));
@@ -590,6 +593,10 @@ class PaymentServiceImplTest {
         payment.setChannelCode("MOCK");
         payment.setAmount(ORDER_AMOUNT);
         payment.setStatus(status);
+        if ("SUCCESS".equals(status)) {
+            // 成功支付时间来自持久化的支付事实，测试不以订单创建或更新时间替代它。
+            payment.setSuccessTime(LocalDateTime.of(2026, 11, 13, 9, 30));
+        }
         payment.setNotifyCount(0);
         return payment;
     }
@@ -656,15 +663,20 @@ class PaymentServiceImplTest {
     @Test void successfulPaymentRetryRepairsOrderWithoutAnotherDeduction() {
         stubOrder(order("待支付",USER_ID));
         when(paymentMapper.selectSuccessByOrderId(ORDER_ID)).thenReturn(payment("SUCCESS"));
+        when(paymentMapper.selectByPaymentNo(PAYMENT_NO)).thenReturn(payment("SUCCESS"));
         paymentService.createPayment(USER_ID,createRequest("BALANCE"));
-        verify(orderInternalClient).markPaid(ORDER_ID);
+        verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
         verify(userBalanceInternalClient,never()).deduct(any(),anyString(),any());
     }
     @Test void closeConsultsLedgerAndRecoversMissingSuccessFact() {
         PaymentDO pending=payment("CREATED");pending.setChannelCode("BALANCE");
         when(paymentMapper.selectAllByOrderId(ORDER_ID)).thenReturn(List.of(pending));
         when(userBalanceInternalClient.close(eq(USER_ID),eq(INTERNAL_SCOPE_TOKEN),any())).thenReturn(ApiResponse.success("PAID"));
-        assertEquals("PAID",paymentService.closeUnpaidOrder(ORDER_ID));
+        when(paymentMapper.markSuccessIfCreated(eq(PAYMENT_NO), any(), anyString())).thenReturn(1);
+        when(paymentMapper.selectByPaymentNo(PAYMENT_NO)).thenReturn(payment("SUCCESS"));
+        PaymentCloseResult closeResult = paymentService.closeUnpaidOrder(ORDER_ID);
+        assertEquals("PAID", closeResult.status());
+        assertEquals(LocalDateTime.of(2026, 11, 13, 9, 30), closeResult.paidAt());
         verify(paymentGate).beginClose(ORDER_ID);
         verify(paymentMapper,never()).closeIfCreated(anyString());
     }

@@ -5,7 +5,7 @@ order:
 spring:
   cloud:
     function:
-      definition: salesRankingPaid;orderPaymentTimeout;orderTimeoutDeadLetter
+      definition: orderPaymentTimeout;orderTimeoutDeadLetter
     stream:
       output-bindings: salesPaid-out-0;orderTimeout-out-0
       bindings:

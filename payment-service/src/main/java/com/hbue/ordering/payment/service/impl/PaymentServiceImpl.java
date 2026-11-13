@@ -15,6 +15,8 @@ import com.hbue.ordering.payment.dto.request.MockPayRequest;
 import com.hbue.ordering.payment.dto.request.PaymentCreateRequest;
 import com.hbue.ordering.payment.enums.PaymentStatus;
 import com.hbue.ordering.payment.feign.OrderInternalClient;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import com.hbue.ordering.payment.mapper.PaymentMapper;
 import com.hbue.ordering.payment.model.PaymentDO;
 import com.hbue.ordering.payment.service.PaymentService;
@@ -534,8 +536,14 @@ public class PaymentServiceImpl
      */
     private void advanceOrderPaid(PaymentDO paymentDO) {
         try {
-            ApiResponse<Void> response =
-                    orderInternalClient.markPaid(paymentDO.getOrderId());
+            // 调用前回读支付表，避免支付对象是在置 SUCCESS 之前读取的旧实例而丢失 success_time。
+            PaymentDO confirmed = baseMapper.selectByPaymentNo(paymentDO.getPaymentNo());
+            if (confirmed == null || !"SUCCESS".equals(confirmed.getStatus()) || confirmed.getSuccessTime() == null) {
+                log.error("无法读取已确认支付的成功时间，paymentNo={}，orderId={}", paymentDO.getPaymentNo(), paymentDO.getOrderId());
+                return;
+            }
+            ApiResponse<Void> response = orderInternalClient.markPaid(
+                    confirmed.getOrderId(), new OrderPaidCommand(confirmed.getSuccessTime()));
             if (response == null
                     || !SUCCESS_CODE.equals(response.getCode())) {
                 // 不回滚已记录的支付成功事实；将无法推进的订单留给告警和人工核查。
@@ -731,12 +739,17 @@ public class PaymentServiceImpl
     }
 
     @Override
-    public String closeUnpaidOrder(Long orderId) {
+    public PaymentCloseResult closeUnpaidOrder(Long orderId) {
         // 此方法只关闭支付，不调用订单服务，避免关单与订单Seata分支发生反向等待。
         paymentGate.beginClose(orderId);
         boolean paid=false;
+        java.time.LocalDateTime paidAt=null;
         for(PaymentDO payment:baseMapper.selectAllByOrderId(orderId)) {
-            if("SUCCESS".equals(payment.getStatus())) { paid=true;continue; }
+            if("SUCCESS".equals(payment.getStatus())) {
+                paid=true;
+                if (payment.getSuccessTime() != null && (paidAt == null || payment.getSuccessTime().isBefore(paidAt))) paidAt=payment.getSuccessTime();
+                continue;
+            }
             if(BalancePaymentChannel.CHANNEL_CODE.equals(payment.getChannelCode())) {
                 var response=userBalanceInternalClient.close(payment.getUserId(),internalScopeToken,
                         new com.hbue.ordering.user.api.dto.BalanceCloseCommand(BALANCE_BIZ_TYPE,payment.getPaymentNo(),payment.getAmount()));
@@ -746,7 +759,13 @@ public class PaymentServiceImpl
                     if(!"CREATED".equals(payment.getStatus()))
                         throw new BusinessException(CommonErrorCode.CONFLICT,"支付流水与支付单终态冲突，请核查");
                     baseMapper.markSuccessIfCreated(payment.getPaymentNo(),payment.getAmount(),"BAL-RECOVER-"+payment.getPaymentNo());
-                    paid=true;continue;
+                    // 余额服务已确认款项时重新读取支付表，不能依赖关单前加载的 CREATED 快照。
+                    PaymentDO recovered = baseMapper.selectByPaymentNo(payment.getPaymentNo());
+                    if (recovered == null || !"SUCCESS".equals(recovered.getStatus()) || recovered.getSuccessTime() == null)
+                        throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"无法确认余额支付的成功时间");
+                    paid=true;
+                    if (paidAt == null || recovered.getSuccessTime().isBefore(paidAt)) paidAt=recovered.getSuccessTime();
+                    continue;
                 }
                 if(!"CLOSED".equals(response.getData()))
                     throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"未知余额结算结果");
@@ -755,6 +774,7 @@ public class PaymentServiceImpl
             }
             baseMapper.closeIfCreated(payment.getPaymentNo());
         }
-        return paid?"PAID":"CLOSED";
+        if (paid && paidAt == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"成功支付记录缺少成功时间");
+        return new PaymentCloseResult(paid?"PAID":"CLOSED", paidAt);
     }
 }

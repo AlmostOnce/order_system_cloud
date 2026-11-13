@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -34,6 +35,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderPersistenceServiceTest {
+
+    /** 支付时间使用支付服务确认的固定值，不从订单更新时间或当前时刻推断。 */
+    private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 11, 13, 9, 30);
 
     @Mock
     private OrderMapper orderMapper;
@@ -168,18 +172,19 @@ class OrderPersistenceServiceTest {
     @Test
     void onlyWinningPaidTransitionWritesOutbox() {
         var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
-        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1, 0);
-        assertTrue(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
-        assertFalse(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
-        verify(salesOutbox, times(1)).recordPaid(81L);
+        when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1, 0);
+        assertTrue(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+        assertFalse(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+        verify(salesOutbox, times(1)).recordPaid(81L, PAID_AT);
     }
 
     @Test
     void outboxFailurePropagatesSoPaymentStateTransactionRollsBack() {
         var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
-        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1);
-        org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(salesOutbox).recordPaid(81L);
-        assertThrows(IllegalStateException.class, () -> persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
+        when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed"))
+                .when(salesOutbox).recordPaid(81L, PAID_AT);
+        assertThrows(IllegalStateException.class, () -> persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
     }
 
     @Test

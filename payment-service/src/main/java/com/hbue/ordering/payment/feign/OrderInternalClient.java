@@ -2,10 +2,12 @@ package com.hbue.ordering.payment.feign;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.payment.dto.OrderInternalDTO;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 
 /**
  * 订单服务内部客户端（payment-service 专用）。
@@ -36,10 +38,12 @@ public interface OrderInternalClient {
      * 支付成功后推进订单状态：待支付到已支付。
      *
      * @param orderId 订单 ID
+     * @param command 支付服务已经持久化的支付成功时间
      * @return 订单状态变更结果；订单已取消等冲突场景返回 CONFLICT 码
      */
     @PatchMapping("/internal/orders/{orderId}/paid")
     ApiResponse<Void> markPaid(
-            @PathVariable("orderId") Long orderId
+            @PathVariable("orderId") Long orderId,
+            @RequestBody OrderPaidCommand command
     );
 }

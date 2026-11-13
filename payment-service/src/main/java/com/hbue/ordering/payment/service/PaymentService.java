@@ -8,6 +8,7 @@ import com.hbue.ordering.payment.model.PaymentDO;
 import com.hbue.ordering.payment.vo.CheckoutInfoVO;
 import com.hbue.ordering.payment.vo.PaymentCreateVO;
 import com.hbue.ordering.payment.vo.PaymentStatusVO;
+import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import com.hbue.ordering.common.response.ApiResponse;
 
 /**
@@ -20,7 +21,7 @@ import com.hbue.ordering.common.response.ApiResponse;
  * @date 2026-10-12
  */
 public interface PaymentService extends IService<PaymentDO> {
-    String closeUnpaidOrder(Long orderId);
+    PaymentCloseResult closeUnpaidOrder(Long orderId);
 
 
     /**

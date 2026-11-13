@@ -5,18 +5,17 @@ import com.hbue.ordering.order.mapper.SalesOutboxMapper;
 import com.hbue.ordering.order.service.SalesRankingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.messaging.support.ErrorMessage;
-import org.springframework.scheduling.annotation.Scheduled;
 import java.util.function.Consumer;
 
-/** 激活 ranking-mq profile 后才连接 Broker，避免未安装 MQ 阻断普通订单服务启动。 */
-@Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(name = "ranking.messaging.enabled", havingValue = "true")
+/**
+ * 已停用的旧订单内榜单配置，仅保留原契约方法供历史测试源码编译。
+ *
+ * <p>生产环境不注册本类；新 outbox 发布由 {@link SalesOutboxPublisher} 负责，榜单事件由 statistics-service 消费。</p>
+ */
+@Deprecated(forRemoval = false)
 public class SalesRankingMessaging {
     private static final Logger log = LoggerFactory.getLogger(SalesRankingMessaging.class);
     private final SalesOutboxMapper outbox;
@@ -27,7 +26,6 @@ public class SalesRankingMessaging {
         this.outbox = outbox; this.json = json; this.stream = stream; this.rankings = rankings;
     }
 
-    @Bean
     public Consumer<OrderPaidSalesEvent> salesRankingPaid() {
         return event -> {
             if (event == null || !event.valid()) throw new IllegalArgumentException("销量事件格式不正确");
@@ -36,13 +34,11 @@ public class SalesRankingMessaging {
         };
     }
 
-    @Bean
     public Consumer<ErrorMessage> salesRankingRetryError() {
         // 默认错误处理可能仅记录并丢弃；必须抛回 RocketMQ adapter 才会 RECONSUME_LATER。
         return error -> { throw new IllegalStateException("销量事件消费失败，交由 Broker 重试", error.getPayload()); };
     }
 
-    @Scheduled(fixedDelayString = "${ranking.messaging.publish-delay-ms:1000}")
     public void publishPending() {
         try {
             for (var row : outbox.pending()) {

@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -36,6 +37,8 @@ import static org.mockito.Mockito.when;
 class OrderMarkOrderPaidTest {
 
     private static final Long ORDER_ID = 501L;
+    /** 固定支付成功事实，避免测试用当前时间推测订单支付时刻。 */
+    private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 11, 13, 9, 30);
 
     @Mock
     private UserServiceClient userServiceClient;
@@ -82,27 +85,23 @@ class OrderMarkOrderPaidTest {
     void shouldAdvancePendingPaymentOrderToPaid() {
         OrderDO order = order("待支付", 0);
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order);
-        when(orderPersistenceService.updateStatusIfUnchanged(
-                ORDER_ID, "待支付", 0, "已支付"
-        )).thenReturn(true);
+        when(orderPersistenceService.markPaidIfUnchanged(ORDER_ID, 0, PAID_AT)).thenReturn(true);
 
-        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID);
+        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID, PAID_AT);
 
         assertEquals("已支付", vo.getStatus());
-        verify(orderPersistenceService).updateStatusIfUnchanged(
-                ORDER_ID, "待支付", 0, "已支付"
-        );
+        verify(orderPersistenceService).markPaidIfUnchanged(ORDER_ID, 0, PAID_AT);
     }
 
     @Test
     void shouldBeIdempotentWhenOrderAlreadyPaid() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order("已支付", 1));
 
-        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID);
+        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID, PAID_AT);
 
         assertEquals("已支付", vo.getStatus());
         verify(orderPersistenceService, never())
-                .updateStatusIfUnchanged(any(), any(), any(), any());
+                .markPaidIfUnchanged(any(), any(), any());
     }
 
     @Test
@@ -110,14 +109,14 @@ class OrderMarkOrderPaidTest {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order("已取消", 0));
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> orderService.markOrderPaid(ORDER_ID));
+                () -> orderService.markOrderPaid(ORDER_ID, PAID_AT));
 
         assertEquals(
                 CommonErrorCode.CONFLICT.code(),
                 exception.getErrorCode().code()
         );
         verify(orderPersistenceService, never())
-                .updateStatusIfUnchanged(any(), any(), any(), any());
+                .markPaidIfUnchanged(any(), any(), any());
     }
 
     @Test
@@ -126,11 +125,9 @@ class OrderMarkOrderPaidTest {
         when(orderMapper.selectById(ORDER_ID))
                 .thenReturn(order("待支付", 0))
                 .thenReturn(order("已支付", 1));
-        when(orderPersistenceService.updateStatusIfUnchanged(
-                ORDER_ID, "待支付", 0, "已支付"
-        )).thenReturn(false);
+        when(orderPersistenceService.markPaidIfUnchanged(ORDER_ID, 0, PAID_AT)).thenReturn(false);
 
-        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID);
+        OrderStatusVO vo = orderService.markOrderPaid(ORDER_ID, PAID_AT);
 
         assertEquals("已支付", vo.getStatus());
     }

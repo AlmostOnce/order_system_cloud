@@ -102,7 +102,10 @@ public interface OrderService extends IService<OrderDO> {
      * @return 订单状态变更结果
      * @throws com.hbue.ordering.common.core.exception.BusinessException 订单不存在或状态不允许支付确认时抛出
      */
-    OrderStatusVO markOrderPaid(Long orderId);
+    OrderStatusVO markOrderPaid(Long orderId, java.time.LocalDateTime paidAt);
+
+    /** 读取受内部令牌保护的销量事实快照，供异步统计消费者兼容旧版仅含订单号的消息。 */
+    com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO getPaidSalesSnapshot(Long orderId);
 
 
     /**

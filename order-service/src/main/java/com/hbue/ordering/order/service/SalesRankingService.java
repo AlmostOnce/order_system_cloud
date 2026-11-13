@@ -19,7 +19,8 @@ import java.time.Instant;
 import java.util.*;
 
 /** MQ 增量更新，历史重建和定时对账使用同一个受 fencing 保护的临界区。 */
-@Service
+/** 已迁往 statistics-service 的旧实现；不再由 Spring 注册或接受生产请求。 */
+@Deprecated(forRemoval = false)
 public class SalesRankingService {
     private static final Logger log = LoggerFactory.getLogger(SalesRankingService.class);
     static final String DATA = "ranking:{sales:v2}:data";

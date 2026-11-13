@@ -46,4 +46,14 @@ public interface OrderPersistenceService {
             Integer expectedVersion,
             String targetStatus
     );
+
+    /**
+     * 支付确认专用事务：原子更新订单状态与 paid_at，并写入销量、状态通知 outbox。
+     *
+     * @param orderId 订单主键
+     * @param expectedVersion 支付服务回调前读取的订单版本
+     * @param paidAt 支付数据库确认的真实成功时间
+     * @return 只有待支付状态和版本匹配的请求返回 true
+     */
+    boolean markPaidIfUnchanged(Long orderId, Integer expectedVersion, java.time.LocalDateTime paidAt);
 }

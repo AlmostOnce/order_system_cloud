@@ -66,6 +66,10 @@ public class OrderDO {
   /** 订单创建时间。 */
   private LocalDateTime createdAt;
 
+  /** 首次支付确认时间，来源于支付服务的 success_time，后续状态变化与退款不得改写。 */
+  @TableField("paid_at")
+  private LocalDateTime paidAt;
+
   /** 创建时固定的支付截止时间，使用数据库UTC+8时间。 */
   private LocalDateTime expiresAt;
 

@@ -122,6 +122,34 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
             @Param("targetStatus") String targetStatus
     );
 
+    /**
+     * 仅由支付确认链路执行待支付到已支付的 CAS 更新，并首次固定支付成功时间。
+     *
+     * <p>把 paid_at 与状态、版本号放在同一条 SQL 内，支付通知竞争时只有一个请求能写入；
+     * 条件要求 paid_at 为空，避免重复或补偿请求覆盖已确认的原始支付时间。</p>
+     *
+     * @param orderId 订单主键
+     * @param expectedVersion 已读取的订单版本
+     * @param paidAt 支付库已记录的 success_time
+     * @return 更新行数；只有状态、版本和时间约束均匹配时为1
+     */
+    @Update("""
+        UPDATE orders
+        SET status = '已支付',
+            paid_at = #{paidAt},
+            updated_at = CURRENT_TIMESTAMP,
+            version = version + 1
+        WHERE order_id = #{orderId}
+          AND status = '待支付'
+          AND version = #{expectedVersion}
+          AND paid_at IS NULL
+        """)
+    int markPaidIfVersionMatches(
+            @Param("orderId") Long orderId,
+            @Param("expectedVersion") Integer expectedVersion,
+            @Param("paidAt") java.time.LocalDateTime paidAt
+    );
+
     /** 与接单/核销共用订单行及版本，申请按获取锁后的真实状态决定是否直接退款。 */
     @Select("SELECT * FROM orders WHERE order_id=#{id} FOR UPDATE")
     OrderDO lockRefundOrder(@Param("id") Long id);

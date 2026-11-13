@@ -13,13 +13,11 @@ spring:
       pool:
         size: 2
   cloud:
-    function:
-      definition: salesRankingPaid
     stream:
       output-bindings: salesPaid-out-0
       bindings:
         salesPaid-out-0:
-          destination: order-paid-sales-v1
+          destination: order-paid-sales-v2
           content-type: application/json
           producer:
             error-channel-enabled: false
@@ -28,13 +26,6 @@ spring:
           content-type: application/json
           producer:
             error-channel-enabled: false
-        salesRankingPaid-in-0:
-          destination: order-paid-sales-v1
-          group: sales-ranking-v1
-          content-type: application/json
-          error-handler-definition: salesRankingRetryError
-          consumer:
-            max-attempts: 1
       rocketmq:
         binder:
           name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
@@ -49,9 +40,3 @@ spring:
               group: order-notification-outbox-v1
               send-type: Sync
               send-msg-timeout: 3000
-          salesRankingPaid-in-0:
-            consumer:
-              consume-from-where: CONSUME_FROM_FIRST_OFFSET
-              push:
-                orderly: false
-                max-reconsume-times: 16

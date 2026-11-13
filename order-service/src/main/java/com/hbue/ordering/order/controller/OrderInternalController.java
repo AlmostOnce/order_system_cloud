@@ -8,6 +8,9 @@ import com.hbue.ordering.order.security.InternalTokenVerifier;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
+import org.springframework.web.bind.annotation.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -85,16 +88,38 @@ public class OrderInternalController {
      *
      * @param token 内部调用令牌
      * @param orderId 订单 ID
+     * @param request 支付服务已经持久化的支付成功时间；订单服务不使用本机时间推测
      * @return 订单状态变更结果
      */
     @PatchMapping("/{orderId}/paid")
     public ApiResponse<OrderStatusVO> markOrderPaid(
             @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false)
             String token,
+            @PathVariable("orderId") Long orderId,
+            @RequestBody OrderPaidCommand request
+    ) {
+        verifyInternalToken(token);
+        if (request == null || request.paidAt() == null) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付成功时间");
+        return ApiResponse.success(orderService.markOrderPaid(orderId, request.paidAt()));
+    }
+
+    /**
+     * 为统计服务提供兼容旧版 ID-only 消息所需的最小销量快照。
+     *
+     * <p>内部共享密钥校验通过后，返回真实订单 paid_at、窗口及下单菜品原始份数；
+     * 该契约不包含用户、金额或支付凭据，也不经过 Gateway 对外开放。</p>
+     *
+     * @param token 统计服务配置的内部共享密钥
+     * @param orderId 来源订单主键
+     * @return 订单服务当前保存的不可变支付销量事实
+     */
+    @GetMapping("/{orderId}/paid-sales-snapshot")
+    public ApiResponse<OrderPaidSalesSnapshotVO> paidSalesSnapshot(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
             @PathVariable("orderId") Long orderId
     ) {
         verifyInternalToken(token);
-        return ApiResponse.success(orderService.markOrderPaid(orderId));
+        return ApiResponse.success(orderService.getPaidSalesSnapshot(orderId));
     }
 
     /**

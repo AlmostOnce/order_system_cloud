@@ -151,6 +151,10 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             Integer expectedVersion,
             String targetStatus
     ) {
+        if (OrderStatus.PAID.getLabel().equals(targetStatus)) {
+            // 支付迁移必须同时写入支付服务确认的 paid_at 和销量 outbox，禁止走不含支付事实的通用状态更新。
+            throw new IllegalArgumentException("订单支付状态必须通过 markPaidIfUnchanged 写入");
+        }
         // 仅当旧状态与版本号同时匹配才执行迁移；受影响行数为 0 表示状态已被其他请求改变。
         boolean changed = orderMapper.updateStatusIfVersionMatches(
                 orderId,
@@ -158,9 +162,25 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
                 expectedVersion,
                 targetStatus
         ) == 1;
-        if (changed && OrderStatus.PAID.getLabel().equals(targetStatus)) salesOutbox.recordPaid(orderId);
         // 取消订单在 Seata 全局事务中，由单独的 TCC 确认阶段生成通知。
         if (changed) recordStatusNotification(orderId, expectedVersion, targetStatus);
         return changed;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public boolean markPaidIfUnchanged(Long orderId, Integer expectedVersion, java.time.LocalDateTime paidAt) {
+        if (orderId == null || orderId <= 0 || expectedVersion == null || paidAt == null) {
+            throw new IllegalArgumentException("支付确认缺少订单版本或支付成功时间");
+        }
+        // paid_at、状态及乐观锁版本必须由同一条 CAS SQL 固定，避免两次提交产生错误月份或孤立事件。
+        boolean changed = orderMapper.markPaidIfVersionMatches(orderId, expectedVersion, paidAt) == 1;
+        if (!changed) return false;
+
+        // outbox writer 使用 MANDATORY 加入当前本地事务；任一快照或事件写入失败都会回滚支付状态。
+        salesOutbox.recordPaid(orderId, paidAt);
+        recordStatusNotification(orderId, expectedVersion, OrderStatus.PAID.getLabel());
+        return true;
     }
 }
