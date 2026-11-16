@@ -2,7 +2,14 @@
 
 ## 当前状态
 
-更新时间：2026-10-26
+更新时间：2026-11-16
+
+### 2026-11-16 学生端店铺与菜品收藏
+
+- `user-service` 新增 CUSTOMER 收藏接口与 MyBatis-Plus 持久化：窗口和菜品两种类型，用户归属从 JWT `sub` 读取；唯一键/upsert 保证重复收藏幂等，删除幂等，状态查询批量限额，列表按收藏 ID 倒序游标分页。
+- 新增 `user_db` V11 `user_favorites` 表迁移。执行前确认目标为项目开发库 `user_db`（MySQL 8.0.46）、同名表不存在且当前有4张表；用 `.env` 中的 user-service 数据库账号生成事务一致性备份 `C:\Users\DELL\AppData\Local\Temp\order_system_cloud_user_db_before_favorites_v11_20261116.sql`（17,905 字节，SHA-256 `B18554B34C0EBC25C8396D66B1ECDD88C72B3F193A2DD2869E0D5D36F3EE6E43`），随后执行 V11。执行后核验表为 InnoDB、`utf8mb4_unicode_ci`，5个字段及中文注释完整，主键、目标唯一键和用户类型游标索引正确，初始记录数为0。
+- 学生端首页窗口卡片与点餐页菜品卡片新增独立爱心操作；我的页面新增“我的收藏”，含店铺/菜品标签、游标追加、下拉刷新、目录详情、暂不可用时保留并移除、点菜页定向定位。目录接口临时失败会显示可重试错误，不误报为下架。
+- 设计与执行计划：`docs/superpowers/specs/2026-11-16-customer-favorites-design.md`、`docs/superpowers/plans/2026-11-16-customer-favorites.md`。本次未运行 Maven、构建、测试或服务重启，未做 HBuilder/真机联调；因此迁移结构已确认，业务接口与 Android 页面仍需用户启动服务后验收。
 
 ### 已完成
 
