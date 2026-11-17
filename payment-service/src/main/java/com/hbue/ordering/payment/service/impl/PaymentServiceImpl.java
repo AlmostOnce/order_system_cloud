@@ -644,8 +644,9 @@ public class PaymentServiceImpl
         payment.setOrderNo(order.getOrderNo());
         payment.setUserId(order.getUserId());
         payment.setChannelCode(channel.channelCode());
-        // 金额取订单快照，绝不取客户端输入。
-        payment.setAmount(order.getTotalAmount());
+        // 金额取订单服务已持久化的应付快照，绝不取客户端输入或由支付服务重算优惠。
+        // 仅兼容旧版内部调用 DTO 缺少 payableAmount 的历史部署；新订单始终带有该字段。
+        payment.setAmount(order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount());
         payment.setStatus(INITIAL_PAYMENT_STATUS);
         payment.setNotifyCount(0);
         payment.setCreatedAt(now);
