@@ -16,6 +16,10 @@ import com.hbue.ordering.product.model.ProductDO;
  * @date 2026-09-28
  */
 public interface ProductMapper extends BaseMapper<ProductDO> {
+    /** 在规格替换事务中锁住菜品行，避免两个完整替换交错写入；锁随事务提交或回滚释放。 */
+    @Select("SELECT * FROM products WHERE product_id = #{productId} FOR UPDATE")
+    ProductDO selectForSpecificationUpdate(@Param("productId") Long productId);
+
     /** 一次读取顾客可见菜品的图片，不加载完整菜单或逐项查询。 */
     @Select("""
         <script>
