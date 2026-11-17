@@ -6,11 +6,12 @@
 ## 实现边界
 
 - 已实现按用户隔离的 Redis 购物车、按窗口分组、数量与种类限制、勾选、删除，以及商品实时核验。
+- 一条购物车明细由菜品 ID 与规格选择键共同标识；同菜不同规格分行，相同规格合并数量。旧无规格明细继续使用 `base`，保持原 Redis Field 兼容。
 - 请求中不接收价格，用户 ID 仅从 JWT sub 读取；同一用户多个设备共享 Redis 状态。
 - 新增默认勾选；同窗口同菜品重复 POST 会累加，POST 本身不承诺请求幂等。不要对结果未知的添加请求自动重试，可先查询确认数量，或用 PUT 设定明确目标值。
 - 修改数量和勾选只更新对应字段，Lua 原子执行，避免并发请求互相覆盖。默认每项最多 99 份、每个用户最多 100 类菜品（所有窗口合计）。
 - Redis 的 30 天 TTL 在发生修改后续期，GET 不续期；删除不存在的条目不续期，也不会创建空购物车。
-- 查询时每个窗口调用一次商品批量核价。商品改价立即影响预览；停用窗口、下架菜品和失效分类对应的条目保留，`available=false`，单价与行金额为 null，不计入可结算合计。
+- 查询时每个窗口调用一次商品批量核价。若其中一行规格已失效，购物车会逐行隔离该行并保留其它可售行的实时报价；失效项 `available=false`，不计入可结算合计，也仍可删除。
 - 商品服务故障返回 HTTP 503，不把整批菜品误标成下架，不退回旧价格。删除、清空、数量与勾选修改只依赖 Redis，允许用户清理失效项。
 - 价格仅用于预览，不做库存预占。已提供下单后的安全清理接口，调用方需显式串联；并非创建订单后自动触发。Redis 是唯一业务存储，不建设 MySQL 备份，也不支持游客购物车及登录合并。
 
@@ -26,7 +27,8 @@ Postman 中选择 Authorization → Bearer Token，填入顾客的 Access Token�
 ```json
 {
   "productId": 11,
-  "quantity": 2
+  "quantity": 2,
+  "selectedOptionIds": [22]
 }
 ```
 
@@ -36,7 +38,7 @@ Postman 中选择 Authorization → Bearer Token，填入顾客的 Access Token�
 {"code":"COMMON_000","message":"操作成功","data":null}
 ```
 
-再次提交相同请求会增加到 4 份，累加后的数量仍受 Lua 中的原子上限检查保护。
+`selectedOptionIds` 为菜单中由商品服务返回的选项编号；没有规格的菜品可省略或传空数组。金额、选择键和规格文字均由商品服务核验生成，不能由客户端提交。再次提交相同规格会累加数量，不同规格会创建独立明细。
 
 ### 查询购物车
 
@@ -59,7 +61,10 @@ Postman 中选择 Authorization → Bearer Token，填入顾客的 Access Token�
           "available": true,
           "unavailableReason": null,
           "unitPrice": 18.50,
-          "lineAmount": 37.00
+          "lineAmount": 37.00,
+          "selectionKey": "22",
+          "selectedOptionIds": [22],
+          "specificationText": "份量：大份"
         }
       ],
       "checkedAmount": 37.00
@@ -76,7 +81,9 @@ Postman 中选择 Authorization → Bearer Token，填入顾客的 Access Token�
 
 ### 修改数量
 
-`PUT /api/cart/windows/1/items/11`：
+无规格菜品仍可使用旧路径 `PUT /api/cart/windows/1/items/11`。有规格菜品应使用 GET 返回的 `selectionKey`：
+
+`PUT /api/cart/windows/1/items/11/selections/22`：
 
 ```json
 {"quantity":3}
@@ -87,7 +94,9 @@ Postman 中选择 Authorization → Bearer Token，填入顾客的 Access Token�
 
 ### 修改勾选
 
-`PATCH /api/cart/windows/1/items/11/checked`：
+无规格旧路径仍可使用 `PATCH /api/cart/windows/1/items/11/checked`；有规格行使用：
+
+`PATCH /api/cart/windows/1/items/11/selections/22/checked`：
 
 ```json
 {"checked":false}
@@ -97,7 +106,7 @@ false 为有效值；不传 checked 返回 400。不可售条目即使勾选也�
 
 ### 删除与清空
 
-- `DELETE /api/cart/windows/1/items/11`：只删除当前用户这一项。
+- `DELETE /api/cart/windows/1/items/11`：只删除无规格 `base` 行；有规格行使用 `DELETE /api/cart/windows/1/items/11/selections/22`。
 - `DELETE /api/cart/windows/1`：只清空当前用户窗口 1，不影响窗口 10 或其它窗口。
 - 两者均幂等，成功返回 HTTP 200 和 `data=null`。
 
@@ -124,19 +133,19 @@ Redis 若在 JWT 黑名单检查阶段已经不可用，会沿用资源服务器
 
 调用顺序：
 
-1. `GET /api/cart` 后，在下单前保存本次窗口内选中且可售商品的 productId、quantity、revision。
-2. 使用原有 `POST /api/orders` 创建订单，提交同一窗口及同一批商品数量，携带 `Idempotency-Key`。
+1. `GET /api/cart` 后，在下单前保存本次窗口内选中且可售明细的 productId、selectionKey、quantity、revision 和 selectedOptionIds。
+2. 使用原有 `POST /api/orders` 创建订单，提交同一窗口及同一批菜品规格与数量，携带 `Idempotency-Key`。
 3. 收到成功的订单 ID 后，用第一步保存的快照调用清理接口，不重新查询并替换 revision。
 4. 清理失败只重试清理，不重新下单；若下单本身超时、结果未知，先用原幂等键与相同订单请求重放，确认订单成功后再清理。
 
-例如订单 123 购买了窗口 1 的商品 11 共 2 份，请求体如下；所有 ID 和 revision
+例如订单 123 购买了窗口 1 的商品 11 的大份 2 份，请求体如下；所有 ID 和 revision
 必须替换为本次真实订单及下单前取得的值，不能直接照抄占位版本：
 
 ```json
 {
   "windowId": 1,
   "items": [
-    {"productId": 11, "quantity": 2, "revision": "下单前保存的原始UUID版本"}
+    {"productId": 11, "quantity": 2, "revision": "下单前保存的原始UUID版本", "selectionKey": "22"}
   ]
 }
 ```
@@ -147,7 +156,7 @@ Redis 若在 JWT 黑名单检查阶段已经不可用，会沿用资源服务器
 {"orderId":123,"removedCount":1,"skippedCount":0}
 ```
 
-- removedCount 按商品条目计数，不按份数计数。
+- removedCount 按菜品规格明细计数，不按份数计数；同菜不同规格需要分别提交快照。
 - skippedCount 包含已不存在、版本变化、数量不符或取消勾选的项。跳过是安全保护，不代表订单失败。
 - 同一请求重试后，已删除条目计入 skippedCount；操作效果幂等，但两次返回的计数可以不同。
 - 修改数量后再改回、取消再勾选、删除后重新添加都会生成新 revision，因此旧请求不会误删新意图。

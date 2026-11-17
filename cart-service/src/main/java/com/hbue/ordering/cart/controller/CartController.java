@@ -105,6 +105,24 @@ public class CartController {
     }
 
     /**
+     * 设置某一规格行的目标数量；selectionKey 由购物车响应返回，不能以菜品 ID 推断具体规格。
+     * @param jwt 当前顾客令牌
+     * @param windowId 窗口编号
+     * @param productId 菜品编号
+     * @param selectionKey 商品服务生成的规范规格组合键
+     * @param request 目标数量
+     * @return 更新成功响应
+     */
+    @PutMapping("/windows/{windowId}/items/{productId}/selections/{selectionKey}")
+    public ApiResponse<Void> updateSelectionQuantity(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId,
+            @PathVariable("selectionKey") String selectionKey,
+            @Valid @RequestBody CartItemQuantityRequest request) {
+        cartService.updateQuantity(userId(jwt), windowId, productId, selectionKey, request.getQuantity());
+        return ApiResponse.success(null);
+    }
+
+    /**
      * 修改已有条目的勾选状态。
      *
      * @param jwt 当前用户令牌
@@ -122,6 +140,24 @@ public class CartController {
     }
 
     /**
+     * 修改某一规格行的结算勾选状态；每个选择组合彼此独立。
+     * @param jwt 当前顾客令牌
+     * @param windowId 窗口编号
+     * @param productId 菜品编号
+     * @param selectionKey 商品服务生成的规范规格组合键
+     * @param request 勾选状态
+     * @return 更新成功响应
+     */
+    @PatchMapping("/windows/{windowId}/items/{productId}/selections/{selectionKey}/checked")
+    public ApiResponse<Void> updateSelectionChecked(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId,
+            @PathVariable("selectionKey") String selectionKey,
+            @Valid @RequestBody CartItemCheckedRequest request) {
+        cartService.updateChecked(userId(jwt), windowId, productId, selectionKey, request.getChecked());
+        return ApiResponse.success(null);
+    }
+
+    /**
      * 删除单个菜品，重复删除不会报错。
      *
      * @param jwt 当前用户令牌
@@ -133,6 +169,22 @@ public class CartController {
     public ApiResponse<Void> removeItem(@AuthenticationPrincipal Jwt jwt,
             @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId) {
         cartService.removeItem(userId(jwt), windowId, productId);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 删除一项指定规格的菜品，不会误删同一道菜的其它选择组合。
+     * @param jwt 当前顾客令牌
+     * @param windowId 窗口编号
+     * @param productId 菜品编号
+     * @param selectionKey 商品服务生成的规范规格组合键
+     * @return 删除成功响应
+     */
+    @DeleteMapping("/windows/{windowId}/items/{productId}/selections/{selectionKey}")
+    public ApiResponse<Void> removeSelection(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId,
+            @PathVariable("selectionKey") String selectionKey) {
+        cartService.removeItem(userId(jwt), windowId, productId, selectionKey);
         return ApiResponse.success(null);
     }
 

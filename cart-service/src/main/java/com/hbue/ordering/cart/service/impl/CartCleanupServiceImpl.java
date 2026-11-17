@@ -2,6 +2,7 @@ package com.hbue.ordering.cart.service.impl;
 
 import com.hbue.ordering.cart.dto.request.CartCleanupRequest;
 import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
+import com.hbue.ordering.cart.model.CartSelectionKey;
 import com.hbue.ordering.cart.repository.CartRedisRepository;
 import com.hbue.ordering.cart.service.CartCleanupService;
 import com.hbue.ordering.cart.vo.CartCleanupVO;
@@ -67,12 +68,14 @@ public class CartCleanupServiceImpl implements CartCleanupService {
             throw mismatch();
         }
 
-        Map<Long, Integer> purchased = new HashMap<>();
+        Map<String, Integer> purchased = new HashMap<>();
         for (OrderPurchasedItemVO item : order.items()) {
             // 损坏的明细不能被当成合法购买证明；先验证整份订单，之后才允许访问 Redis。
             if (item == null || item.productId() == null || item.productId() < 1
                     || item.quantity() == null || item.quantity() < 1
-                    || purchased.putIfAbsent(item.productId(), item.quantity()) != null) {
+                    || !CartSelectionKey.isValid(item.selectionKey())
+                    || purchased.putIfAbsent(CartSelectionKey.identity(item.productId(), item.selectionKey()),
+                    item.quantity()) != null) {
                 throw unavailable();
             }
         }
@@ -80,7 +83,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
             throw mismatch();
         }
         for (CartSubmittedItemRequest item : request.items()) {
-            if (!item.quantity().equals(purchased.get(item.productId()))) {
+            String identity = CartSelectionKey.identity(item.productId(), item.selectionKey());
+            if (!item.quantity().equals(purchased.get(identity))) {
                 throw mismatch();
             }
         }
@@ -105,13 +109,14 @@ public class CartCleanupServiceImpl implements CartCleanupService {
                 || request.items().size() > 100) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单和提交快照不能为空或超出限制");
         }
-        Set<Long> ids = new HashSet<>();
+        Set<String> identities = new HashSet<>();
         for (CartSubmittedItemRequest item : request.items()) {
             if (item == null || item.productId() == null || item.productId() < 1
                     || item.quantity() == null || item.quantity() < 1
                     || item.revision() == null || item.revision().isBlank() || item.revision().length() > 128
-                    || !ids.add(item.productId())) {
-                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "商品、数量、版本无效或商品重复");
+                    || !CartSelectionKey.isValid(item.selectionKey())
+                    || !identities.add(CartSelectionKey.identity(item.productId(), item.selectionKey()))) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "商品、规格、数量、版本无效或商品规格组合重复");
             }
         }
     }

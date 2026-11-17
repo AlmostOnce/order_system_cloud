@@ -43,6 +43,9 @@ public interface CartService {
      */
     void updateQuantity(Long userId, Long windowId, Long productId, Integer quantity);
 
+    /** 更新指定规格组合数量；缺省规格键的旧接口固定指向 base 行。 */
+    void updateQuantity(Long userId, Long windowId, Long productId, String selectionKey, Integer quantity);
+
     /**
      * 更新已有条目的勾选状态，false 为取消勾选。
      *
@@ -54,6 +57,9 @@ public interface CartService {
      */
     void updateChecked(Long userId, Long windowId, Long productId, Boolean checked);
 
+    /** 更新指定规格组合勾选状态；缺省规格键的旧接口固定指向 base 行。 */
+    void updateChecked(Long userId, Long windowId, Long productId, String selectionKey, Boolean checked);
+
     /**
      * 幂等删除当前用户指定菜品。
      *
@@ -62,6 +68,9 @@ public interface CartService {
      * @param productId 菜品 ID
      */
     void removeItem(Long userId, Long windowId, Long productId);
+
+    /** 删除指定规格组合；旧接口只会删除 base 行，不影响规格菜品。 */
+    void removeItem(Long userId, Long windowId, Long productId, String selectionKey);
 
     /**
      * 幂等清空指定窗口，保留其它窗口。
