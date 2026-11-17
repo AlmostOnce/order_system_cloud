@@ -158,3 +158,21 @@ docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWOR
 ```
 
 导入时必须指定 `--default-character-set=utf8mb4`：MySQL 命令行客户端默认按 latin1 解释文件内容，会把中文写成二次编码乱码。若数据已经被写成乱码，执行 `seeds/product_catalog_encoding_repair.sql` 还原（脚本幂等，可重复执行）。
+
+
+## 菜品规格（2026-11-17）
+
+迁移 `migrations/product_db/V12__create_product_specification_tables.sql` 新增：
+
+- `product_specification_groups`：`group_id/product_id/name/is_required/sort_order/status`；按菜品、状态、排序和编号建立读取索引，外键指向 `products`。
+- `product_specification_options`：`option_id/group_id/name/additional_price/sort_order/status`；按组、状态、排序和编号建立读取索引，外键指向规格组。
+
+两张表只软停用（`status=0`），不物理删除。启用名称以生成列 `active_name` 参与唯一键，已停用同名历史不占用名称；加价为 `DECIMAL(10,2)`、非负且最多两位小数。每菜最多10组、每组1至20项、同组单选；必选组必须有至少一个零加价项，保证基础售价可作为最低起售价。
+
+`GET/PUT /products/admin/products/{productId}/specifications` 只放行 `STALL_MANAGER/RESTAURANT_MANAGER`，并复用所属窗口的数据范围校验；技术管理员不自动获得管理权限。PUT请求为 `{ "groups": [...] }`，空数组清除全部规格。更新时带回 `groupId/optionId` 保持身份，无编号表示新增，跨菜品或跨组编号拒绝。规格整份替换使用菜品行锁串行化，事务中写搜索Outbox，提交后与菜单回源重建共用窗口锁再失效缓存，避免旧菜单快照在删除后写回。
+
+学生菜单的菜品始终带 `specificationGroups` 数组；组字段为 `groupId/name/required/sortOrder/options`，选项字段为 `optionId/name/additionalPrice/sortOrder`。菜单缓存升为 `product:menu:window:v4:{windowId}`，未配置规格返回 `[]`。
+
+内部核价支持 `items: [{productId, selectedOptionIds}]`，旧 `productIds` 作为无选择兼容，两字段只能提交一个非空列表。商品服务实时校验当前启用规格、所属菜品、单组单选、必选完整性及重复编号；选择错误整体返回400，商品不可售仍沿用省略该商品报价的原协议。核价结果含服务端最终单价、升序选项编号、`selectionKey` 以及 `specificationText`。无选择的键为 `base`，否则为升序ID以 `-` 连接；文字按组显示顺序生成“组名：选项名”，以“；”连接。
+
+订单明细将核价后的选择键、规格文字和最终单价保存为自身快照；`order_db/V9__add_order_item_specification_snapshot.sql` 新增 `selection_key_snapshot` 和 `specification_text_snapshot`，旧订单通过 `base` 和空文字保持原义。商品规格后续改名、涨价或停用不改写历史订单，商品库不跨库建立订单外键。开发库已执行商品 V12 与订单 V9，并对表、索引、外键、默认值和中文注释完成核验；现有商品 77 行、订单明细 20 行未改变。开发演示数据由 `docs/database/seeds/product_specifications_dev.sql` 初始化 69 道菜、94 个规格组和 260 个选项；真实商品编码未被该脚本触及。
