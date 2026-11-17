@@ -21,6 +21,18 @@ import java.util.List;
  */
 @Mapper
 public interface OrderMapper extends BaseMapper<OrderDO> {
+    /**
+     * 内部推荐回填按主键正序读取已支付事实，paid_at非空包含后来全退或完成的订单。
+     * limit由服务层限定为2至101用于多取一条，不使用OFFSET或状态标签推测是否付过款。
+     */
+    @Select("""
+        SELECT order_id, user_id, window_id, version, paid_at
+        FROM orders
+        WHERE order_id > #{afterOrderId} AND paid_at IS NOT NULL
+        ORDER BY order_id ASC LIMIT #{limit}
+        """)
+    List<OrderDO> selectRecommendationPurchasePage(@Param("afterOrderId") Long afterOrderId, @Param("limit") int limit);
+
     @Select("SELECT * FROM orders WHERE order_no = #{orderNo} LIMIT 1")
     OrderDO selectByOrderNo(@Param("orderNo") String orderNo);
 

@@ -41,6 +41,12 @@ public class OrderItemVO {
     /** 下单时的商品单价。 */
     private BigDecimal unitPrice;
 
+    /** 下单时规格选项 ID 的组合键，供购物车按原规格核对订单购买事实。 */
+    private String selectionKey;
+
+    /** 下单时选择的规格文字快照；空字符串代表该菜品下单时没有规格。 */
+    private String specificationText;
+
     /** 购买数量。 */
     private Integer quantity;
 
@@ -65,6 +71,8 @@ public class OrderItemVO {
                 .productCode(item.getProductCodeSnapshot())
                 .productName(item.getProductNameSnapshot())
                 .unitPrice(item.getUnitPriceSnapshot())
+                .selectionKey(item.getSelectionKeySnapshot())
+                .specificationText(item.getSpecificationTextSnapshot())
                 .quantity(item.getQuantity())
                 .lineAmount(item.getLineAmount())
                 .build();

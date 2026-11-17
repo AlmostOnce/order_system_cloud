@@ -17,6 +17,22 @@ import java.util.List;
  */
 @Mapper
 public interface OrderItemMapper extends BaseMapper<OrderItemDO> {
+    /**
+     * 一次批量读取本页最多100个订单的推荐明细，避免每订单一次查询；空集合由服务层提前返回。
+     * 只读推荐协议所需字段，不读取价格、取餐码等无关事实；逐订单和明细主键保证稳定顺序。
+     */
+    @Select("""
+        <script>
+        SELECT item_id, order_id, product_id, selection_key_snapshot, specification_text_snapshot,
+               specification_selection_snapshot, quantity, refunded_quantity
+        FROM order_items
+        WHERE order_id IN
+          <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">#{orderId}</foreach>
+        ORDER BY order_id ASC, item_id ASC
+        </script>
+        """)
+    List<OrderItemDO> selectRecommendationItems(@Param("orderIds") List<Long> orderIds);
+
 
     /**
      * 按订单 ID 查询明细，并按主键顺序返回。

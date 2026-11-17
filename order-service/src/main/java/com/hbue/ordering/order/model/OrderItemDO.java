@@ -46,6 +46,21 @@ public class OrderItemDO {
     @TableField("unit_price_snapshot")
     private BigDecimal unitPriceSnapshot;
 
+    /** 下单时规格选项 ID 的规范化组合键；base 表示没有规格选择。 */
+    @TableField("selection_key_snapshot")
+    private String selectionKeySnapshot;
+
+    /** 下单时的规格组与选项文字快照，避免规格改名后历史订单展示变化。 */
+    @TableField("specification_text_snapshot")
+    private String specificationTextSnapshot;
+
+    /**
+     * 商品核价返回的结构化规格选择 JSON，保存当时的组/选项 ID 与名称；不随商品规格改名变动。
+     * 旧订单迁移为 []，表示没有可恢复的结构化事实，不能用当前目录伪造历史选择。
+     */
+    @TableField("specification_selection_snapshot")
+    private String specificationSelectionSnapshot;
+
     /** 购买数量。 */
     private Integer quantity;
 

@@ -12,8 +12,8 @@ import java.util.List;
 /**
  * 创建订单请求对象。
  *
- * <p>调用方只提交档口、商品 ID、购买数量和备注，不得指定价格或订单总金额；
- * 订单服务会向商品服务取得当前可售状态与价格后自行计算金额。</p>
+ * <p>调用方只提交档口、菜品 ID、规格选项 ID、购买数量和备注，不得指定价格或订单总金额；
+ * 订单服务会向商品服务取得当前可售状态与最终规格价格后自行计算金额。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -29,7 +29,7 @@ public class OrderCreateRequest {
     @Positive(message = "窗口 ID 必须大于 0")
     private Long windowId;
 
-    /** 订单菜品清单，菜品 ID 不可重复。 */
+    /** 订单菜品清单；相同菜品可以不同规格分行，相同规格必须合并数量。 */
     @NotEmpty(message = "订单至少需要一个菜品")
     @Size(max = MAX_ITEM_COUNT, message = "订单菜品不能超过 100 项")
     @Valid

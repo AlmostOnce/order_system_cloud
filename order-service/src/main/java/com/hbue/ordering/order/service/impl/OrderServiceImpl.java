@@ -13,6 +13,7 @@ import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
+import com.hbue.ordering.order.recommendation.OrderSpecificationSnapshot;
 import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
 import com.hbue.ordering.order.notification.CancellationNotificationTcc;
 import com.hbue.ordering.order.service.OrderPersistenceService;
@@ -22,6 +23,7 @@ import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import com.hbue.ordering.order.vo.PaymentCloseVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
+import com.hbue.ordering.product.api.dto.ProductQuoteItemRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
@@ -39,6 +41,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import feign.FeignException;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -55,6 +58,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /**
@@ -308,14 +312,12 @@ public class OrderServiceImpl
             Long userId,
             OrderCreateRequest request
     ) {
-        // 把订单明细转换为库存扣减明细：菜品 ID、数量与下单内容完全一致。
-        List<StockItemRequest> stockItems = new ArrayList<>();
+        // 多规格会让同一菜品在订单中出现多行；库存仍按菜品维护，因此先合并总份数。
+        Map<Long, Long> quantitiesByProduct = new TreeMap<>();
         for (OrderItemCreateRequest item : request.getItems()) {
-            stockItems.add(StockItemRequest.builder()
-                    .productId(item.getProductId())
-                    .quantity(item.getQuantity())
-                    .build());
+            quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
         }
+        List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
 
         StockDeductRequest deductRequest = StockDeductRequest.builder()
                 // 订单号是库存扣减的幂等键，重复下单请求不会重复扣减同一订单的库存。
@@ -359,6 +361,25 @@ public class OrderServiceImpl
                         ? "库存扣减失败，请调整后重试"
                         : message
         );
+    }
+
+    /**
+     * 把同菜的规格明细合并成库存服务现有的菜品级请求，并拒绝超出其 Integer 数量字段的合计。
+     *
+     * @param quantitiesByProduct 按商品 ID 汇总后的长整型数量
+     * @return 商品 ID 唯一且数量可由库存服务准确表示的请求明细
+     */
+    private List<StockItemRequest> toStockItems(Map<Long, Long> quantitiesByProduct) {
+        List<StockItemRequest> stockItems = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : quantitiesByProduct.entrySet()) {
+            if (entry.getValue() == null || entry.getValue() <= 0
+                    || entry.getValue() > Integer.MAX_VALUE) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "同一菜品的购买总数超出库存服务限制");
+            }
+            stockItems.add(StockItemRequest.builder()
+                    .productId(entry.getKey()).quantity(entry.getValue().intValue()).build());
+        }
+        return stockItems;
     }
 
     /**
@@ -432,11 +453,12 @@ public class OrderServiceImpl
         if (orderItems == null || orderItems.isEmpty()) {
             throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
         }
-        List<StockItemRequest> stockItems = new ArrayList<>();
+        // 规格分行不拆分库存；向库存服务提交每道菜的合计回补数量，保持其现有幂等键语义。
+        Map<Long, Long> quantitiesByProduct = new TreeMap<>();
         for (OrderItemDO item : orderItems) {
-            stockItems.add(StockItemRequest.builder()
-                    .productId(item.getProductId()).quantity(item.getQuantity()).build());
+            quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
         }
+        List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
         ApiResponse<Void> response;
         try {
             response = stockServiceClient.restore(internalScopeToken,
@@ -712,7 +734,7 @@ public class OrderServiceImpl
     }
 
     /**
-     * 校验订单业务字段并拒绝重复菜品行。
+     * 校验订单业务字段并拒绝重复的菜品规格行。
      *
      * @param request 创建订单请求
      */
@@ -730,19 +752,28 @@ public class OrderServiceImpl
             );
         }
 
-        // 同一订单内每种商品只允许一行；购买多个同类商品应通过 quantity 表达。
-        Set<Long> productIds = new HashSet<>();
+        // 相同菜品可以按不同规格分行；完全相同的选择组合仍须合并到 quantity，避免重复行。
+        Set<String> productSelections = new HashSet<>();
         for (OrderItemCreateRequest item : request.getItems()) {
             if (item == null
                     || item.getProductId() == null
                     || item.getProductId() <= 0
                     || item.getQuantity() == null
-                    || item.getQuantity() <= 0
-                    || !productIds.add(item.getProductId())) {
+                    || item.getQuantity() <= 0) {
                 throw new BusinessException(
                         CommonErrorCode.BAD_REQUEST,
-                        "菜品 ID、数量无效，且同一菜品不能重复提交"
+                        "菜品 ID 或数量无效"
                 );
+            }
+            List<Long> rawOptionIds = item.getSelectedOptionIds();
+            if (rawOptionIds != null && (rawOptionIds.size() > 10
+                    || rawOptionIds.stream().anyMatch(id -> id == null || id <= 0)
+                    || new HashSet<>(rawOptionIds).size() != rawOptionIds.size())) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "菜品规格选项无效");
+            }
+            List<Long> selectedOptionIds = normalizedSelectedOptionIds(item);
+            if (!productSelections.add(quoteKey(item.getProductId(), selectionKey(selectedOptionIds)))) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "相同菜品与规格不能重复提交");
             }
         }
     }
@@ -756,17 +787,34 @@ public class OrderServiceImpl
     private List<ProductQuoteVO> queryProductQuotes(
             OrderCreateRequest request
     ) {
-        // 仅把窗口和商品 ID 清单交给商品服务，由商品服务判定归属、可售状态和实际价格。
+        // 逐行提交商品 ID 与选项 ID；商品服务负责规格归属、必选规则和最终价格校验。
         ProductQuoteRequest quoteRequest = new ProductQuoteRequest();
         quoteRequest.setWindowId(request.getWindowId());
-        List<Long> productIds = new ArrayList<>();
+        List<ProductQuoteItemRequest> quoteItems = new ArrayList<>();
         for (OrderItemCreateRequest item : request.getItems()) {
-            productIds.add(item.getProductId());
+            ProductQuoteItemRequest quoteItem = new ProductQuoteItemRequest();
+            quoteItem.setProductId(item.getProductId());
+            quoteItem.setSelectedOptionIds(normalizedSelectedOptionIds(item));
+            quoteItems.add(quoteItem);
         }
-        quoteRequest.setProductIds(productIds);
+        quoteRequest.setItems(quoteItems);
 
-        ApiResponse<ProductQuoteResponse> response =
-                productServiceClient.quote(quoteRequest);
+        ApiResponse<ProductQuoteResponse> response;
+        try {
+            response = productServiceClient.quote(quoteRequest);
+        } catch (FeignException exception) {
+            // 商品服务以HTTP 400报告失效规格，映射为顾客可修正的请求错误；其它HTTP故障视为依赖失败。
+            if (exception.status() == 400) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "规格选择无效，请刷新菜单后重试");
+            }
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "商品服务暂时不可用");
+        }
+        if (response != null && CommonErrorCode.BAD_REQUEST.code().equals(response.getCode())) {
+            // 规格已失效、必选项缺失等属于顾客可修正的业务错误，不能伪装成依赖服务不可用。
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST,
+                    response.getMessage() == null || response.getMessage().isBlank()
+                            ? "规格选择无效，请刷新菜单后重试" : response.getMessage());
+        }
         // 校验远程服务的统一响应结构，防止失败响应或空数据被继续当作有效报价使用。
         if (response == null
                 || !CommonErrorCode.SUCCESS.code().equals(response.getCode())
@@ -808,28 +856,42 @@ public class OrderServiceImpl
             OrderCreateRequest request,
             List<ProductQuoteVO> productQuotes
     ) {
-        // 按商品 ID 建立报价索引，之后按客户端请求顺序组装订单行。
-        Map<Long, ProductQuoteVO> quoteByProductId = new HashMap<>();
+        // 按商品 ID 与规格选择键索引报价，同菜的不同规格必须读取各自的服务端价格。
+        Map<String, ProductQuoteVO> quoteBySelection = new HashMap<>();
+        Set<String> expectedSelections = new HashSet<>();
+        for (OrderItemCreateRequest requestedItem : request.getItems()) {
+            expectedSelections.add(quoteKey(requestedItem.getProductId(),
+                    selectionKey(normalizedSelectedOptionIds(requestedItem))));
+        }
         for (ProductQuoteVO quote : productQuotes) {
             if (quote == null
                     || quote.getProductId() == null
-                    || quoteByProductId.putIfAbsent(
-                            quote.getProductId(),
-                            quote
-                    ) != null) {
+                    || quote.getSelectionKey() == null
+                    || quote.getSelectionKey().isBlank()
+                    || quote.getSelectedOptionIds() == null
+                    || quote.getSelectedOptionIds().stream().anyMatch(id -> id == null || id <= 0)
+                    || new HashSet<>(quote.getSelectedOptionIds()).size() != quote.getSelectedOptionIds().size()
+                    || !selectionKey(quote.getSelectedOptionIds()).equals(quote.getSelectionKey())) {
                 throw new BusinessException(
                         CommonErrorCode.SERVICE_UNAVAILABLE,
                         "商品服务返回了无效的核价结果"
                 );
             }
+            String key = quoteKey(quote.getProductId(), quote.getSelectionKey());
+            if (!expectedSelections.contains(key) || quoteBySelection.putIfAbsent(key, quote) != null) {
+                throw new BusinessException(
+                        CommonErrorCode.SERVICE_UNAVAILABLE,
+                        "商品服务返回了与请求不匹配的核价结果"
+                );
+            }
         }
-
         List<OrderItemDO> items = new ArrayList<>();
         for (OrderItemCreateRequest requestedItem : request.getItems()) {
             // 任一请求商品缺少报价都整体拒绝，不静默跳过菜品以免总金额与顾客意图不符。
-            ProductQuoteVO quote = quoteByProductId.get(
-                    requestedItem.getProductId()
-            );
+            List<Long> requestedOptionIds = normalizedSelectedOptionIds(requestedItem);
+            String requestedSelectionKey = selectionKey(requestedOptionIds);
+            ProductQuoteVO quote = quoteBySelection.get(
+                    quoteKey(requestedItem.getProductId(), requestedSelectionKey));
             if (quote == null) {
                 throw new BusinessException(
                         CommonErrorCode.BAD_REQUEST,
@@ -854,6 +916,16 @@ public class OrderServiceImpl
             item.setProductCodeSnapshot(quote.getProductCode());
             item.setProductNameSnapshot(quote.getProductName());
             item.setUnitPriceSnapshot(quote.getPrice());
+            item.setSelectionKeySnapshot(quote.getSelectionKey());
+            item.setSpecificationTextSnapshot(quote.getSpecificationText() == null
+                    ? "" : quote.getSpecificationText());
+            // 结构化事实只接受商品服务核价结果；若协议缺失或选择键不一致，整体拒绝而不保存伪造历史。
+            try {
+                item.setSpecificationSelectionSnapshot(OrderSpecificationSnapshot.validate(
+                        quote.getSelectionKey(), quote.getSpecificationSelectionSnapshot(), false));
+            } catch (IllegalArgumentException exception) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "商品服务返回了无效的规格快照");
+            }
             item.setQuantity(requestedItem.getQuantity());
             item.setLineAmount(lineAmount);
             item.setCreatedAt(LocalDateTime.now());
@@ -929,7 +1001,7 @@ public class OrderServiceImpl
     }
 
     /**
-     * 对窗口、菜品 ID 和数量、备注生成稳定摘要；菜品顺序不影响请求语义。
+     * 对窗口、菜品 ID、规格选项、数量和备注生成稳定摘要；行顺序不影响请求语义。
      *
      * @param request 创建订单请求
      * @return 请求内容的 SHA-256 摘要
@@ -940,16 +1012,16 @@ public class OrderServiceImpl
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             updateDigest(digest, request.getWindowId().toString());
 
-            // 先按商品 ID 排序，使商品行排列顺序不同但内容相同的请求得到相同摘要。
+            // 按商品及规范化规格键排序，使不同排列顺序的等价请求得到相同摘要。
             List<OrderItemCreateRequest> sortedItems = new ArrayList<>(
                     request.getItems()
             );
-            sortedItems.sort(Comparator.comparing(
-                    OrderItemCreateRequest::getProductId
-            ));
+            sortedItems.sort(Comparator.comparing(OrderItemCreateRequest::getProductId)
+                    .thenComparing(item -> selectionKey(normalizedSelectedOptionIds(item))));
             updateDigest(digest, Integer.toString(sortedItems.size()));
             for (OrderItemCreateRequest item : sortedItems) {
                 updateDigest(digest, item.getProductId().toString());
+                updateDigest(digest, selectionKey(normalizedSelectedOptionIds(item)));
                 updateDigest(digest, item.getQuantity().toString());
             }
 
@@ -969,6 +1041,45 @@ public class OrderServiceImpl
                     exception
             );
         }
+    }
+
+    /**
+     * 取得有序、无重复的规格选项 ID；空/null 按旧版无规格请求解释。
+     *
+     * @param item 订单行请求
+     * @return 按数值升序排列的选择项 ID
+     */
+    private List<Long> normalizedSelectedOptionIds(OrderItemCreateRequest item) {
+        List<Long> ids = item.getSelectedOptionIds();
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return ids.stream().sorted().toList();
+    }
+
+    /**
+     * 生成与商品服务一致的选择键，选项 ID 排序后拼接，空列表固定为 base。
+     *
+     * @param selectedOptionIds 规格选项 ID
+     * @return 可用于区分同菜不同规格的稳定键
+     */
+    private String selectionKey(List<Long> selectedOptionIds) {
+        if (selectedOptionIds == null || selectedOptionIds.isEmpty()) {
+            return "base";
+        }
+        return selectedOptionIds.stream().sorted().map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining("-"));
+    }
+
+    /**
+     * 在当前服务内部拼接菜品 ID 和规格键，避免报价索引把不同规格混为一行。
+     *
+     * @param productId 商品 ID
+     * @param selectionKey 规范化选择键
+     * @return 唯一报价索引键
+     */
+    private String quoteKey(Long productId, String selectionKey) {
+        return productId + ":" + selectionKey;
     }
 
     /**
