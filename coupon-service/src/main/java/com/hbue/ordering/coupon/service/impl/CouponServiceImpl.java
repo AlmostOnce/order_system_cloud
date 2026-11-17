@@ -461,7 +461,7 @@ public class CouponServiceImpl implements CouponService {
         return List.copyOf(templateWindowMapper.listWindowIds(templateId));
     }
 
-    /** 把模板与窗口联查行按模板聚合，保持查询的稳定顺序并剔除 LEFT JOIN 空窗口。 */
+    /** 把模板与窗口联查行按模板聚合，保留领取时间及库存供领券校验展示，并剔除 LEFT JOIN 空窗口。 */
     private List<CouponTemplateVO> mergeTemplateRows(List<CouponTemplateRow> rows) {
         Map<Long, TemplateAccumulator> grouped = new LinkedHashMap<>();
         for (CouponTemplateRow row : rows) {
@@ -482,15 +482,19 @@ public class CouponServiceImpl implements CouponService {
                     .discountAmount(row.getDiscountAmount())
                     .scopeType(row.getScopeType())
                     .windowIds(List.copyOf(group.windowIds))
+                    .claimStartAt(row.getClaimStartAt())
+                    .claimEndAt(row.getClaimEndAt())
                     .validFrom(row.getValidFrom())
                     .validUntil(row.getValidUntil())
+                    .totalQuantity(row.getTotalQuantity())
+                    .remainingQuantity(row.getRemainingQuantity())
                     .status(row.getStatus())
                     .build());
         }
         return List.copyOf(result);
     }
 
-    /** 将我的券多窗口联查结果按用户券 ID 聚合，确保每张券只返回一次。 */
+    /** 将我的券多窗口联查结果按用户券 ID 聚合；仅返回持有券有效期，不混入模板领取时间和库存。 */
     private List<UserCouponVO> mergeMineRows(List<CouponMineRow> rows) {
         Map<Long, MineAccumulator> grouped = new LinkedHashMap<>();
         for (CouponMineRow row : rows) {
@@ -512,12 +516,8 @@ public class CouponServiceImpl implements CouponService {
                     .discountAmount(row.getDiscountAmount())
                     .scopeType(row.getScopeType())
                     .windowIds(List.copyOf(group.windowIds))
-                    .claimStartAt(row.getClaimStartAt())
-                    .claimEndAt(row.getClaimEndAt())
                     .validFrom(row.getValidFrom())
                     .validUntil(row.getValidUntil())
-                    .totalQuantity(row.getTotalQuantity())
-                    .remainingQuantity(row.getRemainingQuantity())
                     .status(row.getStatus())
                     .build());
         }
