@@ -45,6 +45,8 @@ public class StatisticsSecurityConfig {
                 .exceptionHandling(handler -> handler.authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // 内部统计入口由 handler 再校验 X-Internal-Token，不转发至 API 网关。
+                        .requestMatchers("/internal/statistics/**").permitAll()
                         .requestMatchers("/statistics/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.authenticationEntryPoint(errors).accessDeniedHandler(errors)
