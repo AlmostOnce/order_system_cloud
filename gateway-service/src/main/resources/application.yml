@@ -82,3 +82,5 @@ springdoc:
         url: /api/comments/v3/api-docs
       - name: statistics-service
         url: /api/statistics/v3/api-docs
+      - name: recommendation-service
+        url: /api/recommendations/v3/api-docs
