@@ -42,11 +42,11 @@
 ### 学生端 `E:/order_system_cloud_user`
 
 - 新建 `api/favorites.uts`：封装新增、删除、状态与游标查询及响应解析。
-- 修改 `pages/home/home.uvue`：窗口收藏入口及状态，不冒泡至卡片导航。
-- 修改 `pages/menu/menu.uvue`：菜品收藏入口及状态，不触发评价和购物操作。
+- 修改 `pages/home/home.uvue`：首页窗口卡片只保留进入点餐动作，不承载收藏操作。
+- 修改 `pages/menu/menu.uvue` 与 `components/review-list/review-list.uvue`：点餐页头部右侧承载店铺收藏；点击菜品打开评价弹层后，在标题栏右侧收藏当前菜品，菜品图片与本店搜索结果不放收藏角标。
 - 修改 `pages/mine/mine.uvue`、`pages.json`：CUSTOMER“我的收藏”入口和列表路由。
 - 新建 `pages/favorites/list.uvue`：店铺/菜品标签、游标加载、刷新、下架占位、移除和点餐定位。
-- 新建 `static/favorites/heart-outline.svg`、`static/favorites/heart-filled.svg`；在 `styles/account.css` 增加收藏页共享视觉类，沿用已维护的 DESIGN/UX 约定。
+- 新建 `static/favorites/bookmark-outline.svg`、`static/favorites/bookmark-filled.svg`；在 `styles/account.css` 增加收藏页共享视觉类，沿用已维护的 DESIGN/UX 约定。
 - 修改 `UX-CONTRACT.md`：记录收藏动作、列表导航、错误和下架行为。
 
 ## 执行步骤
