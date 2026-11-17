@@ -17,6 +17,14 @@ spring:
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS:http://127.0.0.1:9200}
   cloud:
+    openfeign:
+      client:
+        config:
+          # 只约束推荐弱信号采集，不改变现有商品快照读取；请求体含搜索词，禁止Feign记录正文。
+          recommendationSearchIntentClient:
+            connectTimeout: 500
+            readTimeout: 1500
+            loggerLevel: none
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
@@ -38,6 +46,10 @@ security:
 internal:
   scope:
     token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+# 沿用JwtUserIdentity解析当前用户；网络调用仅在推荐意图后台任务内发生，失败丢弃该弱信号。
+identity:
+  user-service-base-url: ${USER_SERVICE_BASE_URL:http://localhost:9092}
 
 springdoc:
   api-docs:
