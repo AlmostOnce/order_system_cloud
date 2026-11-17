@@ -29,6 +29,10 @@ public class OrderCreateRequest {
     @Positive(message = "窗口 ID 必须大于 0")
     private Long windowId;
 
+    /** 顾客主动选择的本人持券记录；订单服务只接受券 ID，优惠金额必须由服务端校验计算。 */
+    @Positive(message = "用户优惠券 ID 必须大于 0")
+    private Long userCouponId;
+
     /** 订单菜品清单，菜品 ID 不可重复。 */
     @NotEmpty(message = "订单至少需要一个菜品")
     @Size(max = MAX_ITEM_COUNT, message = "订单菜品不能超过 100 项")

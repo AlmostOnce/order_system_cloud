@@ -8,6 +8,10 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
+import com.hbue.ordering.coupon.api.client.CouponServiceClient;
+import com.hbue.ordering.coupon.api.dto.CouponLockRequest;
+import com.hbue.ordering.coupon.api.dto.CouponReleaseRequest;
+import com.hbue.ordering.coupon.api.vo.CouponLockVO;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
@@ -41,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -107,7 +112,10 @@ public class OrderServiceImpl
     /** 库存服务内部扣减客户端。 */
     private final StockServiceClient stockServiceClient;
 
-    /** 服务间内部接口共享密钥，调用库存服务时通过请求头传递。 */
+    /** 优惠券服务内部客户端；锁券/释放随当前 Seata 全局事务提交或回滚。 */
+    private final CouponServiceClient couponServiceClient;
+
+    /** 服务间内部接口共享密钥，调用库存与优惠券服务时通过请求头传递。 */
     private final String internalScopeToken;
 
     private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
@@ -133,6 +141,7 @@ public class OrderServiceImpl
      * @param dataScopeService 数据范围判定服务
      * @param auditLogger 管理操作审计日志记录器
      * @param stockServiceClient 库存服务内部扣减客户端
+     * @param couponServiceClient 优惠券服务内部锁定与释放客户端
      * @param internalScopeToken 服务间内部接口共享密钥
      */
     public OrderServiceImpl(
@@ -143,6 +152,7 @@ public class OrderServiceImpl
             DataScopeService dataScopeService,
             ManagementAuditLogger auditLogger,
             StockServiceClient stockServiceClient,
+            CouponServiceClient couponServiceClient,
             @Value("${internal.scope.token:}") String internalScopeToken
     ) {
         this.userServiceClient = userServiceClient;
@@ -152,6 +162,7 @@ public class OrderServiceImpl
         this.dataScopeService = dataScopeService;
         this.auditLogger = auditLogger;
         this.stockServiceClient = stockServiceClient;
+        this.couponServiceClient = couponServiceClient;
         this.internalScopeToken = internalScopeToken;
     }
 
@@ -206,13 +217,13 @@ public class OrderServiceImpl
     /**
      * 创建订单，商品价格始终以商品服务返回值为准。
      *
-     * <p>整个方法运行在 Seata 全局事务中：订单与明细写入本地库后调用库存服务扣减库存，
-     * 任一环节失败（包括库存不足、库存服务不可用）都会回滚全局事务，
-     * 使「订单落库」与「库存扣减」要么同时成功、要么同时不发生。</p>
+     * <p>整个方法运行在 Seata 全局事务中：先由数据库唯一约束确定幂等赢家，再按需锁券、
+     * 保存优惠金额快照并扣减库存。任一环节失败（包括券服务拒绝、库存不足或远程不可用）
+     * 都会回滚订单、优惠券锁定和库存分支，避免留下没有对应订单的资源占用。</p>
      *
      * @param userId 当前登录用户 ID
      * @param idempotencyKey 客户端幂等键
-     * @param request 窗口、菜品清单和备注
+     * @param request 窗口、菜品清单、可选用户券 ID 和备注
      * @return 新订单详情；同键同请求时返回已有订单
      */
     @Override
@@ -272,11 +283,8 @@ public class OrderServiceImpl
         );
 
         try {
-            // 订单头和明细必须在同一事务保存，避免出现缺少明细的半成品订单。
+            // 先让数据库唯一约束选出幂等赢家，再锁券；败者不会先占券后因订单冲突而错误提交券状态。
             orderPersistenceService.saveOrderWithItems(orderDO, orderItems);
-            // 订单与明细已写入本地库，紧接着扣减库存：
-            // 库存不足或库存服务不可用时抛出业务异常，由方法上的全局事务回滚订单写入。
-            deductStock(orderDO.getOrderNo(), userId, request);
         } catch (DuplicateKeyException exception) {
             // 原子写入事务已回滚；使用新的一致性读取取得并发请求的赢家订单。
             OrderDO concurrentOrder = baseMapper.selectByUserIdAndIdempotencyKey(
@@ -289,7 +297,134 @@ public class OrderServiceImpl
             return replayOrder(concurrentOrder, requestHash);
         }
 
+        // 锁券在订单唯一插入后执行，保证并发幂等失败不会锁定一张未创建的订单券。
+        applySelectedCoupon(orderDO, orderItems, request.getUserCouponId());
+        // 订单优惠快照与库存扣减仍处于同一 Seata 事务；任一服务失败都回滚锁券和订单写入。
+        deductStock(orderDO.getOrderNo(), userId, request);
+
         return OrderDetailVO.from(orderDO, userBasicVO, orderItems);
+    }
+
+    /**
+     * 按服务端商品报价锁定顾客选择的券并保存金额快照；客户端提交的金额从不参与优惠计算。
+     *
+     * @param order 已先写入订单库并生成订单号的订单
+     * @param items 已由商品服务核价形成的订单明细
+     * @param userCouponId 顾客选择的本人持券 ID；为空时不调用优惠券服务
+     */
+    private void applySelectedCoupon(OrderDO order, List<OrderItemDO> items, Long userCouponId) {
+        if (userCouponId == null) return;
+        if (order.getTotalAmount() == null || order.getTotalAmount().signum() <= 0) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "零金额订单不能使用优惠券");
+        }
+
+        ApiResponse<CouponLockVO> response;
+        try {
+            // 内部身份由服务间共享密钥传递；用户、窗口和门槛金额均来自已认证主体及服务端报价。
+            response = couponServiceClient.lock(internalScopeToken, CouponLockRequest.builder()
+                    .userCouponId(userCouponId)
+                    .userId(order.getUserId())
+                    .orderNo(order.getOrderNo())
+                    .windowId(order.getWindowId())
+                    .eligibleAmount(order.getTotalAmount())
+                    .build());
+        } catch (RuntimeException exception) {
+            log.warn("锁定优惠券远程调用失败，订单号={}", order.getOrderNo(), exception);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务暂时不可用");
+        }
+        if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode())
+                || response.getData() == null) {
+            String code = response == null ? null : response.getCode();
+            String message = response == null ? null : response.getMessage();
+            if (CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(code)) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,
+                        message == null || message.isBlank() ? "优惠券服务暂时不可用" : message);
+            }
+            if (CommonErrorCode.BAD_REQUEST.code().equals(code)) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST,
+                        message == null || message.isBlank() ? "所选优惠券不适用于当前订单" : message);
+            }
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    message == null || message.isBlank() ? "所选优惠券已不可用，请刷新后重试" : message);
+        }
+
+        CouponLockVO coupon = response.getData();
+        BigDecimal discount = coupon.getDiscountAmount();
+        if (coupon.getUserCouponId() == null || !userCouponId.equals(coupon.getUserCouponId())
+                || coupon.getTitle() == null || coupon.getTitle().isBlank() || coupon.getTitle().length() > 120
+                || discount == null) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务返回了无效的锁券结果");
+        }
+        try {
+            // 数据库金额列为两位小数；不静默舍入券服务返回的非法高精度金额。
+            discount = discount.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务返回了无效的优惠金额");
+        }
+        if (discount.signum() <= 0 || discount.compareTo(order.getTotalAmount()) >= 0) {
+            // 订单系统没有“零元支付”状态流，因此即使远端错误返回全额抵扣也必须拒绝。
+            throw new BusinessException(CommonErrorCode.CONFLICT, "优惠金额必须小于订单金额");
+        }
+
+        // 分摊快照先在内存中完整校验，再一次性写入订单头和全部明细；任何失败触发 Seata 回滚。
+        allocateCouponDiscount(order, items, userCouponId, coupon.getTitle(), discount);
+        orderPersistenceService.applyCouponSnapshot(order, items);
+    }
+
+    /**
+     * 按各行原价占比计算分摊，金额以分为单位；最后一行承接剩余金额，保证总额严格守恒。
+     * 当早期行的四舍五入可能使剩余优惠超过后续商品金额时，向当前行补足最低必要分值，
+     * 避免把某一行优惠分摊成负实付金额或产生负尾差。
+     * @param order 服务端已计算的订单总金额快照
+     * @param items 按订单行顺序排列的商品金额快照
+     * @param userCouponId 已由优惠券服务成功锁定的用户券 ID
+     * @param couponTitle 下单时固定的优惠券标题
+     * @param discount 优惠券服务核定的两位小数优惠金额
+     */
+    private void allocateCouponDiscount(OrderDO order, List<OrderItemDO> items, Long userCouponId,
+            String couponTitle, BigDecimal discount) {
+        BigDecimal grossAmount = order.getTotalAmount();
+        BigDecimal remainingDiscount = discount;
+        BigDecimal remainingGross = grossAmount;
+        BigDecimal discountSum = BigDecimal.ZERO;
+        BigDecimal payableSum = BigDecimal.ZERO;
+        for (int index = 0; index < items.size(); index++) {
+            OrderItemDO item = items.get(index);
+            BigDecimal lineGross = item == null ? null : item.getLineAmount();
+            if (lineGross == null || lineGross.signum() < 0) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "订单明细金额快照无效");
+            }
+            BigDecimal lineDiscount;
+            if (index == items.size() - 1) {
+                lineDiscount = remainingDiscount;
+            } else {
+                BigDecimal roundedShare = discount.multiply(lineGross)
+                        .divide(grossAmount, 2, RoundingMode.HALF_UP);
+                BigDecimal grossAfterLine = remainingGross.subtract(lineGross);
+                BigDecimal minimumToFitRemaining = remainingDiscount.subtract(grossAfterLine).max(BigDecimal.ZERO);
+                lineDiscount = roundedShare.max(minimumToFitRemaining)
+                        .min(remainingDiscount).min(lineGross).setScale(2, RoundingMode.UNNECESSARY);
+            }
+            BigDecimal linePayable = lineGross.subtract(lineDiscount);
+            if (lineDiscount.signum() < 0 || linePayable.signum() < 0) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券分摊金额无效");
+            }
+            item.setLineDiscountAmount(lineDiscount);
+            item.setLinePayableAmount(linePayable);
+            discountSum = discountSum.add(lineDiscount);
+            payableSum = payableSum.add(linePayable);
+            remainingDiscount = remainingDiscount.subtract(lineDiscount);
+            remainingGross = remainingGross.subtract(lineGross);
+        }
+        BigDecimal payable = grossAmount.subtract(discount).setScale(2, RoundingMode.UNNECESSARY);
+        if (remainingDiscount.signum() != 0 || discountSum.compareTo(discount) != 0
+                || payableSum.compareTo(payable) != 0) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券分摊金额不守恒");
+        }
+        order.setUserCouponId(userCouponId);
+        order.setCouponTitleSnapshot(couponTitle);
+        order.setDiscountAmount(discount);
+        order.setPayableAmount(payable);
     }
 
     /**
@@ -461,7 +596,34 @@ public class OrderServiceImpl
             if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
                 throw new IllegalStateException("取消通知事务准备失败");
         }
+        // 只有支付已确认关闭、订单取消和库存回补均成功后才释放券；远程失败抛出以回滚整个 Seata 事务。
+        releaseCoupon(orderDO);
         return result;
+    }
+
+    /**
+     * 释放已绑定到待支付订单的锁定券；优惠券服务按订单号复核状态并以 Seata undo 支持整体回滚。
+     *
+     * @param order 已成功迁移为已取消的订单快照
+     */
+    private void releaseCoupon(OrderDO order) {
+        if (order.getUserCouponId() == null) return;
+        ApiResponse<Void> response;
+        try {
+            response = couponServiceClient.release(internalScopeToken, new CouponReleaseRequest(order.getOrderNo()));
+        } catch (RuntimeException exception) {
+            log.warn("释放订单优惠券远程调用失败，订单号={}", order.getOrderNo(), exception);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务暂时不可用，请稍后重试取消");
+        }
+        if (response != null && CommonErrorCode.SUCCESS.code().equals(response.getCode())) return;
+        String code = response == null ? null : response.getCode();
+        String message = response == null ? null : response.getMessage();
+        if (CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(code)) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,
+                    message == null || message.isBlank() ? "优惠券服务暂时不可用，请稍后重试取消" : message);
+        }
+        throw new BusinessException(CommonErrorCode.CONFLICT,
+                message == null || message.isBlank() ? "优惠券释放失败，请稍后重试取消" : message);
     }
 
     /**
@@ -721,6 +883,7 @@ public class OrderServiceImpl
         if (request == null
                 || request.getWindowId() == null
                 || request.getWindowId() <= 0
+                || (request.getUserCouponId() != null && request.getUserCouponId() <= 0)
                 || request.getItems() == null
                 || request.getItems().isEmpty()
                 || request.getItems().size() > MAX_ORDER_ITEMS) {
@@ -856,6 +1019,8 @@ public class OrderServiceImpl
             item.setUnitPriceSnapshot(quote.getPrice());
             item.setQuantity(requestedItem.getQuantity());
             item.setLineAmount(lineAmount);
+            item.setLineDiscountAmount(BigDecimal.ZERO.setScale(2));
+            item.setLinePayableAmount(lineAmount.setScale(2, RoundingMode.UNNECESSARY));
             item.setCreatedAt(LocalDateTime.now());
             items.add(item);
         }
@@ -893,6 +1058,8 @@ public class OrderServiceImpl
         order.setUserId(userId);
         order.setWindowId(request.getWindowId());
         order.setTotalAmount(totalAmount);
+        order.setDiscountAmount(BigDecimal.ZERO.setScale(2));
+        order.setPayableAmount(totalAmount.setScale(2, RoundingMode.UNNECESSARY));
         order.setRemark(request.getRemark());
         order.setIdempotencyKey(idempotencyKey);
         order.setRequestHash(requestHash);
@@ -939,6 +1106,10 @@ public class OrderServiceImpl
             // 采用 SHA-256 对参与订单语义的字段生成摘要，不将幂等键本身纳入摘要内容。
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             updateDigest(digest, request.getWindowId().toString());
+            // 只有主动选券时才把券 ID 纳入摘要；无券请求沿用旧摘要格式，保证部署前订单仍可安全重放。
+            if (request.getUserCouponId() != null) {
+                updateDigest(digest, request.getUserCouponId().toString());
+            }
 
             // 先按商品 ID 排序，使商品行排列顺序不同但内容相同的请求得到相同摘要。
             List<OrderItemCreateRequest> sortedItems = new ArrayList<>(

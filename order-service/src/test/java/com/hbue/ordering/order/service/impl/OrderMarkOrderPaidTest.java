@@ -76,6 +76,7 @@ class OrderMarkOrderPaidTest {
                 dataScopeService,
                 auditLogger,
                 stockServiceClient,
+                null,
                 "test-internal-token"
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
