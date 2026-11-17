@@ -2,13 +2,12 @@ package com.hbue.ordering.recommendation.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hbue.ordering.recommendation.model.RecommendationOrderItemDO;
-import com.hbue.ordering.recommendation.model.RecommendationSalesCountDO;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import java.util.List;
 
-/** 推荐订单明细快照访问接口；itemId 唯一保留成功退款的准确归属。 */
+/** 推荐订单明细快照访问接口；itemId 唯一保留成功退款的准确归属。热门销量统一由统计服务提供，此处不重复聚合。 */
 public interface RecommendationOrderItemMapper extends BaseMapper<RecommendationOrderItemDO> {
     /** 删除旧版完整快照明细；必须在订单头锁和版本判断之后、同一事务内调用。 */
     @Delete("DELETE FROM recommendation_order_items WHERE order_id=#{orderId}")
@@ -24,11 +23,4 @@ public interface RecommendationOrderItemMapper extends BaseMapper<Recommendation
         """)
     List<RecommendationOrderItemDO> selectByOrderIds(@Param("orderIds") List<Long> orderIds);
 
-    /** 首期数据积累期间以本地已支付事实生成热门基线；退款不改变既有累计销量口径。 */
-    @Select("""
-        SELECT product_id, SUM(purchased_quantity) AS paid_quantity
-        FROM recommendation_order_items GROUP BY product_id
-        ORDER BY paid_quantity DESC, product_id ASC LIMIT #{limit}
-        """)
-    List<RecommendationSalesCountDO> selectTopPaidProducts(@Param("limit") int limit);
 }
