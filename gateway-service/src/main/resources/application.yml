@@ -84,3 +84,5 @@ springdoc:
         url: /api/statistics/v3/api-docs
       - name: recommendation-service
         url: /api/recommendations/v3/api-docs
+      - name: coupon-service
+        url: /api/coupons/v3/api-docs

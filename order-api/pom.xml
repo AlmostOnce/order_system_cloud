@@ -9,7 +9,7 @@
         <version>1.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <!-- 只提供远程订单读取契约，不依赖订单服务实现或数据库对象。 -->
+    <!-- 只提供远程订单内部调用契约，不依赖订单服务实现或数据库对象。 -->
     <artifactId>order-api</artifactId>
     <dependencies>
         <dependency>

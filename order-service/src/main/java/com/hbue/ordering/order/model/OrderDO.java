@@ -40,6 +40,22 @@ public class OrderDO {
   /** 服务端根据商品服务价格和购买数量计算的订单总金额。 */
   private BigDecimal totalAmount;
 
+  /** 下单时锁定的用户券 ID；不建立跨服务数据库外键。 */
+  @TableField("user_coupon_id")
+  private Long userCouponId;
+
+  /** 下单时的优惠券名称快照，历史订单不随模板改名变化。 */
+  @TableField("coupon_title_snapshot")
+  private String couponTitleSnapshot;
+
+  /** 订单优惠总额快照；无券订单为零。 */
+  @TableField("discount_amount")
+  private BigDecimal discountAmount;
+
+  /** 用户应付金额快照；支付服务只按此金额创建支付单。 */
+  @TableField("payable_amount")
+  private BigDecimal payableAmount;
+
   /** 数据库保存的当前订单状态中文值。 */
   private String status;
 

@@ -12,7 +12,7 @@ import static org.mockito.Mockito.*;
 /** 订单分页边界测试：只验证真实Service的状态映射、归属校验及分页上限，不连接数据库。 */
 class OrderPaginationTest {
     private final OrderMapper mapper = mock(OrderMapper.class);
-    private final OrderServiceImpl service = new OrderServiceImpl(null, null, null, null, null, null, null, "test");
+    private final OrderServiceImpl service = new OrderServiceImpl(null, null, null, null, null, null, null, null, "test");
 
     /** 注入Mapper替身，避免启动Spring或访问其他业务服务。 */
     OrderPaginationTest() {

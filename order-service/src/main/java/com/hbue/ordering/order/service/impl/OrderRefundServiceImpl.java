@@ -12,6 +12,7 @@ import com.hbue.ordering.order.notification.*;
 import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import com.hbue.ordering.order.service.*;
 import com.hbue.ordering.order.vo.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -56,10 +57,11 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         }
         LocalDateTime now=LocalDateTime.now();
         RefundRules.requireApplicable(order.getStatus(),order.getCompletedAt(),now);
-        // 锁内确认支付人、真实余额渠道和实付总额，拒绝仅凭订单状态对MOCK记录发钱。
+        BigDecimal payableAmount=order.getPayableAmount()==null?order.getTotalAmount():order.getPayableAmount();
+        // 锁内确认支付人、真实余额渠道和优惠后的实付总额，拒绝仅凭订单状态对MOCK记录发钱。
         var fact=payments.fact(orderId,token);
-        if(fact==null || !"COMMON_000".equals(fact.getCode()) || fact.getData()==null || !userId.equals(fact.getData().userId())
-                || !"BALANCE".equals(fact.getData().channelCode()) || fact.getData().paidAmount()==null || fact.getData().paidAmount().compareTo(order.getTotalAmount())!=0) throw bad("实际支付记录尚未确认，暂不能申请退款");
+        if(payableAmount==null || fact==null || !"COMMON_000".equals(fact.getCode()) || fact.getData()==null || !userId.equals(fact.getData().userId())
+                || !"BALANCE".equals(fact.getData().channelCode()) || fact.getData().paidAmount()==null || fact.getData().paidAmount().compareTo(payableAmount)!=0) throw bad("实际支付记录尚未确认，暂不能申请退款");
         OrderItemDO item=items.selectById(request.itemId());
         if(item==null || !orderId.equals(item.getOrderId())) throw missing();
         // 已支付就是未接单；与接单竞争时同一订单行锁和版本让先提交的状态决定分支。
@@ -67,7 +69,9 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         OrderRefundDO row=new OrderRefundDO();row.setRefundNo(UUID.randomUUID().toString().replace("-",""));
         row.setRequestKey(key);row.setOrderId(orderId);row.setUserId(userId);row.setItemId(item.getItemId());
         row.setProductId(item.getProductId());row.setProductName(item.getProductNameSnapshot());row.setQuantity(request.quantity());
-        row.setAmount(RefundRules.amount(item.getLineAmount(),item.getQuantity(),item.getRefundReservedQuantity(),refunds.committedAmount(item.getItemId()),request.quantity()));
+        // 部分退款以优惠后的明细实付快照为上限，优惠分摊额不会被当作已支付资金退回。
+        BigDecimal refundableLineAmount=item.getLinePayableAmount()==null?item.getLineAmount():item.getLinePayableAmount();
+        row.setAmount(RefundRules.amount(refundableLineAmount,item.getQuantity(),item.getRefundReservedQuantity(),refunds.committedAmount(item.getItemId()),request.quantity()));
         row.setReason(request.reason().trim());row.setOriginalStatus(order.getStatus());row.setStatus(direct?"APPROVED":"PENDING");
         row.setRestock(direct?1:0);row.setDueAt(now.plusHours(72));row.setNextAttemptAt(now);row.setAttempts(0);
         row.setCreatedAt(now);row.setUpdatedAt(now);row.setDecisionReason(direct?"未接单，平台直接退款":null);

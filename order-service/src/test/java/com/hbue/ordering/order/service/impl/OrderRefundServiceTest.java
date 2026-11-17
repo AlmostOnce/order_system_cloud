@@ -47,6 +47,29 @@ class OrderRefundServiceTest {
         order("制作中");when(items.reserveRefund(12L,9L,1,0)).thenReturn(1);
         var pending=service.apply(7L,9L,"request-two",request);assertEquals("PENDING",pending.status());assertFalse(pending.restock());
     }
+    /** 部分退款按优惠后的行实付额计算，不能把优惠金额再次作为现金退还。 */
+    @Test void partialRefundUsesDiscountedLinePayableAmount() {
+        order("已支付");
+        var discountedOrder = new OrderDO();
+        discountedOrder.setOrderId(9L); discountedOrder.setUserId(7L); discountedOrder.setWindowId(1L);
+        discountedOrder.setStatus("已支付"); discountedOrder.setTotalAmount(new BigDecimal("30.00"));
+        discountedOrder.setDiscountAmount(new BigDecimal("6.00")); discountedOrder.setPayableAmount(new BigDecimal("24.00"));
+        when(orders.lockRefundOrder(9L)).thenReturn(discountedOrder);
+        var discountedItem = new OrderItemDO();
+        discountedItem.setItemId(12L); discountedItem.setOrderId(9L); discountedItem.setProductId(2L);
+        discountedItem.setProductNameSnapshot("鸡肉饭"); discountedItem.setQuantity(3);
+        discountedItem.setRefundReservedQuantity(0); discountedItem.setLineAmount(new BigDecimal("30.00"));
+        discountedItem.setLineDiscountAmount(new BigDecimal("6.00"));
+        discountedItem.setLinePayableAmount(new BigDecimal("24.00"));
+        when(items.selectById(12L)).thenReturn(discountedItem);
+        when(payments.fact(9L,"internal-test")).thenReturn(ApiResponse.success(new PaymentRefundClient.Fact(7L,new BigDecimal("24.00"),"BALANCE")));
+        when(refunds.committedAmount(12L)).thenReturn(BigDecimal.ZERO);
+        when(items.reserveRefund(12L,9L,1,1)).thenReturn(1);
+
+        var refund = service.apply(7L,9L,"discount-partial",request);
+
+        assertEquals(new BigDecimal("8.00"), refund.amount());
+    }
     /** 重试返回原退款单，既不重复占用份数，也不依赖新的支付查询。 */
     @Test void sameApplicationIsIdempotentAndForeignAccountCannotReadIt() {
         order("已支付");var old=new OrderRefundDO();old.setRefundId(1L);old.setOrderId(9L);old.setItemId(12L);old.setQuantity(1);old.setReason("少一份");old.setRestock(1);

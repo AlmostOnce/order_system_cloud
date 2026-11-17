@@ -50,6 +50,20 @@ public interface OrderItemMapper extends BaseMapper<OrderItemDO> {
             @Param("orderId") Long orderId
     );
 
+    /** 将券优惠分摊写入指定订单明细；原价、订单归属和金额守恒条件均由 SQL 再次核对。 */
+    @Update("""
+        UPDATE order_items
+        SET line_discount_amount = #{discountAmount}, line_payable_amount = #{payableAmount}
+        WHERE item_id = #{itemId} AND order_id = #{orderId}
+          AND line_amount = #{grossAmount} AND line_discount_amount = 0
+          AND #{discountAmount} >= 0 AND #{discountAmount} <= line_amount
+          AND #{payableAmount} = line_amount - #{discountAmount}
+        """)
+    int applyCouponSnapshot(@Param("itemId") Long itemId, @Param("orderId") Long orderId,
+            @Param("grossAmount") java.math.BigDecimal grossAmount,
+            @Param("discountAmount") java.math.BigDecimal discountAmount,
+            @Param("payableAmount") java.math.BigDecimal payableAmount);
+
     /** 原子占用可申请份数；批准的未接单退款同时扣除可履约份数，仍由订单行锁保护状态分支。 */
     @Update("UPDATE order_items SET refund_reserved_quantity=refund_reserved_quantity+#{quantity},refund_approved_quantity=refund_approved_quantity+#{approved} WHERE item_id=#{id} AND order_id=#{orderId} AND quantity-refund_reserved_quantity>=#{quantity}")
     int reserveRefund(@Param("id") Long id,@Param("orderId") Long orderId,@Param("quantity") int quantity,@Param("approved") int approved);

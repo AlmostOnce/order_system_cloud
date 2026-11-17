@@ -29,6 +29,12 @@ public class OrderInternalDTO {
     /** 订单总金额。 */
     private java.math.BigDecimal totalAmount;
 
+    /** 服务端已确认的优惠金额快照。 */
+    private java.math.BigDecimal discountAmount;
+
+    /** 服务端已确认的应付金额快照，支付单必须使用该字段。 */
+    private java.math.BigDecimal payableAmount;
+
     /** 订单当前状态（数据库中文值）。 */
     private String status;
 }

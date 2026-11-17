@@ -28,6 +28,7 @@ import feign.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -128,6 +129,30 @@ class PaymentServiceImplTest {
         assertEquals("http://127.0.0.1:9101/mock/channel/checkout/x",
                 vo.getCheckoutUrl());
         verify(paymentMapper).insert(any(PaymentDO.class));
+    }
+
+    /** 支付单金额必须使用订单优惠后的应付快照，不能重新按商品原价扣款。 */
+    @Test
+    void shouldCreatePaymentUsingDiscountedPayableAmount() {
+        OrderInternalDTO discountedOrder = order("待支付", USER_ID);
+        discountedOrder.setDiscountAmount(new BigDecimal("3.50"));
+        discountedOrder.setPayableAmount(new BigDecimal("15.00"));
+        stubOrder(discountedOrder);
+        when(paymentMapper.selectActiveByOrderId(ORDER_ID)).thenReturn(null);
+        when(paymentMapper.insert(any(PaymentDO.class))).thenReturn(1);
+        when(paymentChannel.createPayment(any(PaymentDO.class)))
+                .thenReturn(new PaymentChannel.ChannelPaymentCreation(
+                        "MOCK001",
+                        "http://127.0.0.1:9101/mock/channel/checkout/x",
+                        "mockpay://pay?paymentNo=x"
+                ));
+
+        PaymentCreateVO vo = paymentService.createPayment(USER_ID, createRequest(null));
+
+        assertEquals(0, new BigDecimal("15.00").compareTo(vo.getAmount()));
+        ArgumentCaptor<PaymentDO> paymentCaptor = ArgumentCaptor.forClass(PaymentDO.class);
+        verify(paymentMapper).insert(paymentCaptor.capture());
+        assertEquals(0, new BigDecimal("15.00").compareTo(paymentCaptor.getValue().getAmount()));
     }
 
     @Test
@@ -576,6 +601,8 @@ class PaymentServiceImplTest {
         order.setOrderNo("ORD202610120001AABBCCDD");
         order.setUserId(userId);
         order.setTotalAmount(ORDER_AMOUNT);
+        // 无优惠测试默认应付等于原价；单独优惠用例会覆盖为更低的服务端快照。
+        order.setPayableAmount(ORDER_AMOUNT);
         order.setStatus(status);
         return order;
     }

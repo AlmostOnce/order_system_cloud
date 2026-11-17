@@ -143,6 +143,21 @@ spring:
               filters:
                 - RewritePath=/api/stocks/v3/api-docs, /v3/api-docs
 
+            # 优惠券服务同时承载学生和管理接口；本路由只负责转发，授权仍由服务端执行。
+            - id: coupon-service-docs
+              uri: lb://coupon-service
+              predicates:
+                - Path=/api/coupons/v3/api-docs
+              filters:
+                - RewritePath=/api/coupons/v3/api-docs, /v3/api-docs
+
+            - id: coupon-service
+              uri: lb://coupon-service
+              predicates:
+                - Path=/api/coupons,/api/coupons/**
+              filters:
+                - StripPrefix=1
+
             - id: order-service
               uri: lb://order-service
               predicates:

@@ -5,6 +5,9 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
+import com.hbue.ordering.coupon.api.client.CouponServiceClient;
+import com.hbue.ordering.coupon.api.dto.CouponLockRequest;
+import com.hbue.ordering.coupon.api.vo.CouponLockVO;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
@@ -37,6 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -78,6 +82,9 @@ class OrderServiceImplTest {
     @Mock
     private StockServiceClient stockServiceClient;
 
+    @Mock
+    private CouponServiceClient couponServiceClient;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -90,6 +97,7 @@ class OrderServiceImplTest {
                 dataScopeService,
                 auditLogger,
                 stockServiceClient,
+                couponServiceClient,
                 "test-internal-token"
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
@@ -152,6 +160,80 @@ class OrderServiceImplTest {
         assertEquals(0, new BigDecimal("10.50").compareTo(
                 itemsCaptor.getValue().getFirst().getLineAmount()
         ));
+    }
+
+    /** 优惠只接受券服务结果，并按明细原价比例分摊到分；尾差由最后一行承接。 */
+    @Test
+    void shouldLockCouponAndPersistProportionalDiscountSnapshot() {
+        stubQuotes(
+                new ProductQuoteVO(101L, "A101", "鸡肉饭", new BigDecimal("5.25")),
+                new ProductQuoteVO(202L, "B202", "豆浆", new BigDecimal("6.00"))
+        );
+        stubUser();
+        doAnswer(invocation -> {
+            OrderDO order = invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            List<OrderItemDO> items = invocation.getArgument(1);
+            order.setOrderId(503L);
+            items.forEach(item -> item.setOrderId(503L));
+            return order;
+        }).when(orderPersistenceService).saveOrderWithItems(any(OrderDO.class), any());
+        when(couponServiceClient.lock(eq("test-internal-token"), any(CouponLockRequest.class)))
+                .thenReturn(ApiResponse.success(new CouponLockVO(
+                        7001L, 9001L, "平台满减券", new BigDecimal("1.00"))));
+
+        OrderCreateRequest request = createRequest("少辣", item(101L, 2), item(202L, 1));
+        request.setUserCouponId(7001L);
+        OrderDetailVO response = orderService.createOrder(USER_ID, IDEMPOTENCY_KEY, request);
+
+        assertEquals(0, new BigDecimal("16.50").compareTo(response.getTotalAmount()));
+        assertEquals(0, new BigDecimal("1.00").compareTo(response.getDiscountAmount()));
+        assertEquals(0, new BigDecimal("15.50").compareTo(response.getPayableAmount()));
+        assertEquals(0, new BigDecimal("0.64").compareTo(response.getItems().getFirst().getLineDiscountAmount()));
+        assertEquals(0, new BigDecimal("0.36").compareTo(response.getItems().getLast().getLineDiscountAmount()));
+        assertEquals(0, new BigDecimal("9.86").compareTo(response.getItems().getFirst().getLinePayableAmount()));
+        assertEquals(0, new BigDecimal("5.64").compareTo(response.getItems().getLast().getLinePayableAmount()));
+
+        ArgumentCaptor<CouponLockRequest> requestCaptor = ArgumentCaptor.forClass(CouponLockRequest.class);
+        verify(couponServiceClient).lock(eq("test-internal-token"), requestCaptor.capture());
+        assertEquals(7001L, requestCaptor.getValue().getUserCouponId());
+        assertEquals(USER_ID, requestCaptor.getValue().getUserId());
+        assertEquals(3L, requestCaptor.getValue().getWindowId());
+        assertEquals(0, new BigDecimal("16.50").compareTo(requestCaptor.getValue().getEligibleAmount()));
+        verify(orderPersistenceService).applyCouponSnapshot(any(OrderDO.class), any());
+    }
+
+    /** 更换所选券会改变同一幂等键的请求摘要，避免重放成另一种金额意图。 */
+    @Test
+    void selectedCouponParticipatesInIdempotencyHash() {
+        OrderCreateRequest first = createRequest(null, item(101L, 1));
+        first.setUserCouponId(7001L);
+        OrderCreateRequest second = createRequest(null, item(101L, 1));
+        second.setUserCouponId(7002L);
+
+        String firstHash = ReflectionTestUtils.invokeMethod(orderService, "calculateRequestHash", first);
+        String secondHash = ReflectionTestUtils.invokeMethod(orderService, "calculateRequestHash", second);
+
+        org.junit.jupiter.api.Assertions.assertNotEquals(firstHash, secondHash);
+    }
+
+    /** 支付链路没有零元订单状态，锁券响应全额抵扣时订单必须拒绝应用该结果。 */
+    @Test
+    void shouldRejectCouponThatWouldCreateZeroPayableOrder() {
+        stubQuotes(new ProductQuoteVO(101L, "A101", "鸡肉饭", new BigDecimal("5.25")));
+        stubUser();
+        when(couponServiceClient.lock(eq("test-internal-token"), any(CouponLockRequest.class)))
+                .thenReturn(ApiResponse.success(new CouponLockVO(
+                        7001L, 9001L, "无效全额券", new BigDecimal("5.25"))));
+        OrderCreateRequest request = createRequest(null, item(101L, 1));
+        request.setUserCouponId(7001L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> orderService.createOrder(USER_ID, IDEMPOTENCY_KEY, request));
+
+        assertEquals(CommonErrorCode.CONFLICT.code(), exception.getErrorCode().code());
+        verify(orderPersistenceService, never()).applyCouponSnapshot(any(), any());
+        verify(stockServiceClient, never()).deduct(any(), any());
     }
 
     @Test

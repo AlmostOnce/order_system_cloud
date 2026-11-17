@@ -162,6 +162,25 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
             @Param("paidAt") java.time.LocalDateTime paidAt
     );
 
+    /**
+     * 仅允许待支付且尚未绑定优惠券的订单写入一次金额快照；SQL 再次核对原价、优惠与应付关系。
+     * 条件不符时返回零行，调用方回滚券锁定，避免重复或越界的优惠结果覆盖订单事实。
+     */
+    @Update("""
+        UPDATE orders
+        SET user_coupon_id = #{userCouponId}, coupon_title_snapshot = #{couponTitle},
+            discount_amount = #{discountAmount}, payable_amount = #{payableAmount},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE order_id = #{orderId} AND status = '待支付' AND user_coupon_id IS NULL
+          AND discount_amount = 0 AND total_amount = #{grossAmount}
+          AND #{discountAmount} > 0 AND #{discountAmount} < total_amount
+          AND #{payableAmount} = total_amount - #{discountAmount}
+        """)
+    int applyCouponSnapshot(@Param("orderId") Long orderId, @Param("userCouponId") Long userCouponId,
+            @Param("couponTitle") String couponTitle, @Param("grossAmount") java.math.BigDecimal grossAmount,
+            @Param("discountAmount") java.math.BigDecimal discountAmount,
+            @Param("payableAmount") java.math.BigDecimal payableAmount);
+
     /** 与接单/核销共用订单行及版本，申请按获取锁后的真实状态决定是否直接退款。 */
     @Select("SELECT * FROM orders WHERE order_id=#{id} FOR UPDATE")
     OrderDO lockRefundOrder(@Param("id") Long id);

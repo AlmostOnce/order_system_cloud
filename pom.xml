@@ -29,6 +29,8 @@
         <module>file-service</module>
         <module>stock-api</module>
         <module>stock-service</module>
+        <module>coupon-api</module>
+        <module>coupon-service</module>
         <module>comment-api</module>
         <module>comment-service</module>
         <module>search-service</module>
