@@ -17,6 +17,10 @@
     <file url="file://$PROJECT_DIR$/common-response/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-web/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/common-web/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/coupon-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/coupon-api/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/coupon-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/coupon-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/file-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/file-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/gateway-service/src/main/java" charset="UTF-8" />
