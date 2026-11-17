@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 顾客菜单中单个当前在售菜品的展示视图。
@@ -35,9 +36,23 @@ public class MenuProductVO {
     /** 菜品图片地址。 */
     private String imageUrl;
 
-    /** 当前售价。 */
+    /** 基础售价；实际单价由服务端累加所选规格的加价。 */
     private BigDecimal price;
 
     /** 窗口内排序值。 */
     private Integer sortOrder;
+    /** 启用规格组与选项；没有配置时始终为空数组，避免客户端判断null。 */
+    private List<ProductSpecificationGroupVO> specificationGroups = List.of();
+
+    /** 兼容原菜单组装与已有调用，规格由批量读取后填入。 */
+    public MenuProductVO(Long productId, String productCode, String productName, String description,
+            String imageUrl, BigDecimal price, Integer sortOrder) {
+        this.productId = productId;
+        this.productCode = productCode;
+        this.productName = productName;
+        this.description = description;
+        this.imageUrl = imageUrl;
+        this.price = price;
+        this.sortOrder = sortOrder;
+    }
 }

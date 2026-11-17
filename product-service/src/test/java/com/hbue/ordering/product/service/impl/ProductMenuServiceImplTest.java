@@ -9,6 +9,7 @@ import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
@@ -51,6 +52,10 @@ class ProductMenuServiceImplTest {
 
     @Mock
     private ProductCategoryMapper productCategoryMapper;
+
+    /** 规格服务独立mock，原有菜单和核价用例默认无规格配置。 */
+    @Mock
+    private ProductSpecificationService specifications;
 
     @Mock
     private ProductMapper productMapper;
@@ -249,7 +254,8 @@ class ProductMenuServiceImplTest {
     void shouldMarkAbsentWhenLockAcquiredAndWindowMissing() {
         DistributedLockService.LockHandle lockHandle =
                 mock(DistributedLockService.LockHandle.class);
-        when(distributedLockService.tryAcquire(anyString())).thenReturn(lockHandle);
+        // 测试真实菜单回源分支时模拟服务使用的窗口锁及其等待/租约参数。
+        when(distributedLockService.tryAcquire(anyString(), anyLong(), anyLong())).thenReturn(lockHandle);
         when(diningWindowMapper.selectById(3L)).thenReturn(null);
 
         BusinessException exception = assertThrows(
@@ -292,7 +298,8 @@ class ProductMenuServiceImplTest {
                 productMapper,
                 menuCacheService,
                 bloomFilterManager,
-                distributedLockService
+                distributedLockService,
+                specifications
         );
     }
 

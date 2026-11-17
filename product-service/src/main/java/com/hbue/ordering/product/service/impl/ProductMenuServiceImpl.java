@@ -18,6 +18,8 @@ import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
+import com.hbue.ordering.product.service.ProductSpecificationService;
+import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
 import com.hbue.ordering.product.service.WindowImageGallery;
 import com.hbue.ordering.product.vo.MenuProductVO;
 import com.hbue.ordering.product.vo.ProductCategoryMenuVO;
@@ -72,6 +74,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     /** 商品布隆过滤器管理器。 */
     private final ProductBloomFilterManager bloomFilterManager;
 
+    /** 规格批量读取服务，避免对菜单每个菜品逐一查询。 */
+    private final ProductSpecificationService specifications;
+
     /** 分布式锁组件。 */
     private final DistributedLockService distributedLockService;
 
@@ -84,6 +89,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
      * @param productMapper 菜品数据 Mapper
      * @param menuCacheService 商品菜单缓存读写组件
      * @param bloomFilterManager 商品布隆过滤器管理器
+     * @param specifications 规格批量查询服务
      * @param distributedLockService 分布式锁组件
      */
     public ProductMenuServiceImpl(
@@ -93,7 +99,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             ProductMapper productMapper,
             ProductMenuCacheService menuCacheService,
             ProductBloomFilterManager bloomFilterManager,
-            DistributedLockService distributedLockService
+            DistributedLockService distributedLockService,
+            ProductSpecificationService specifications
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.restaurantMapper = restaurantMapper;
@@ -102,6 +109,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         this.menuCacheService = menuCacheService;
         this.bloomFilterManager = bloomFilterManager;
         this.distributedLockService = distributedLockService;
+        this.specifications = specifications;
     }
 
     /** 批量读取顾客可见菜品图片，限制一次最多50项。 */
@@ -253,10 +261,10 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             return cached;
         }
 
-        // 抢互斥锁，只让一个实例回源数据库重建缓存。
+        // 抢互斥锁，只让一个实例回源并写缓存；30秒租约覆盖数据库读取与缓存写入，供提交后失效串行等待。
         try (DistributedLockService.LockHandle lock =
                      distributedLockService.tryAcquire(
-                             ProductCacheKeys.windowMenuLock(windowId)
+                             ProductCacheKeys.windowMenuLock(windowId), 3L, 30L
                      )) {
             if (lock == null) {
                 // 未抢到锁时降级直接查库返回，不写缓存，避免与持锁方竞争写入。
@@ -342,9 +350,13 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             productsByCategory.put(category.getCategoryId(), new ArrayList<>());
         }
 
+        // 两次批量查询即可拿到所有规格；无规格菜品填空数组，不混用缺少字段的旧缓存。
+        Map<Long, List<ProductSpecificationGroupVO>> specificationGroups = specifications.loadActive(
+                products.stream().map(ProductDO::getProductId).toList());
         List<MenuProductVO> uncategorizedProducts = new ArrayList<>();
         for (ProductDO product : products) {
             MenuProductVO menuProduct = toMenuProduct(product);
+            menuProduct.setSpecificationGroups(specificationGroups.getOrDefault(product.getProductId(), List.of()));
             if (product.getCategoryId() == null) {
                 uncategorizedProducts.add(menuProduct);
                 continue;

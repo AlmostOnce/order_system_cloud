@@ -25,6 +25,6 @@ public class ProductQuoteResponse {
     /** 请求窗口是否启用。 */
     private boolean windowActive;
 
-    /** 属于该窗口且当前在售的菜品；缺失的 ID 由调用方识别。 */
+    /** 属于该窗口且当前在售的规格行，使用productId与selectionKey匹配；缺失商品由调用方识别为不可售。 */
     private List<ProductQuoteVO> products;
 }

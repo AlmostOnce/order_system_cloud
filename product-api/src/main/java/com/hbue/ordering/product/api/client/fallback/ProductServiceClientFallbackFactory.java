@@ -5,6 +5,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
+import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.openfeign.FallbackFactory;
@@ -37,6 +38,13 @@ public class ProductServiceClientFallbackFactory
     @Override
     public ProductServiceClient create(Throwable cause) {
         log.error("调用 product-service 核价接口失败", cause);
+        if (cause instanceof FeignException feignException && feignException.status() == 400) {
+            // 规格失效或必选项缺失是顾客可修正的请求错误，不能被熔断降级改写为503。
+            return request -> ApiResponse.failure(
+                    CommonErrorCode.BAD_REQUEST,
+                    "规格选择无效，请刷新菜单后重试"
+            );
+        }
         return request -> ApiResponse.failure(
                 CommonErrorCode.SERVICE_UNAVAILABLE,
                 "商品服务暂时不可用"

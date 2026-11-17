@@ -62,3 +62,72 @@ SWAGGER_ENABLED=false
 - 网关文档路由：Nacos 配置 `gateway-service.yaml`（仓库镜像 [gateway-service.yaml](file:///e:/order_system_cloud/docs/nacos/gateway-service.yaml)）
 - 网关聚合列表：[application.yml](file:///e:/order_system_cloud/gateway-service/src/main/resources/application.yml) 的 `springdoc.swagger-ui.urls`
 - 版本管理：[pom.xml](file:///e:/order_system_cloud/pom.xml) 的 `springdoc-openapi-bom`
+
+
+## 菜品规格管理与核价（2026-11-17）
+
+规格由独立Vue管理端消费，uni-app只做学生选择。以下路径为商品服务路径；经Gateway调用管理接口时在前面加 `/api`。
+
+| 方法与路径 | 权限及行为 |
+|---|---|
+| `GET /products/admin/products/{productId}/specifications` | `STALL_MANAGER/RESTAURANT_MANAGER` JWT；校验所属窗口数据范围，返回启用组数组 |
+| `PUT /products/admin/products/{productId}/specifications` | 同上；请求包含完整 `groups` 数组，省略的原配置软停用，空数组清除全部 |
+| `GET /products/windows/{windowId}/menu` | 原学生菜单权限；每个菜品新增 `specificationGroups` 数组，无规格为 `[]` |
+| `POST /internal/products/quote` | 沿用CUSTOMER JWT透传鉴权；支持同菜多规格逐行核价，不接受客户端金额 |
+
+管理PUT示例（Postman的Bearer Token使用有该窗口权限的店主/餐厅经理JWT）：
+
+```http
+PUT {{gatewayBaseUrl}}/api/products/admin/products/101/specifications
+Authorization: Bearer {{managerAccessToken}}
+Content-Type: application/json
+
+{
+  "groups": [
+    {
+      "name": "份量",
+      "required": true,
+      "sortOrder": 0,
+      "options": [
+        { "name": "标准份", "additionalPrice": 0.00, "sortOrder": 0 },
+        { "name": "大份", "additionalPrice": 3.00, "sortOrder": 1 }
+      ]
+    }
+  ]
+}
+```
+
+GET/PUT成功时 `data` 为如下数组（示例编号以实际返回值为准）；编辑时必须带回已有的 `groupId` 与 `optionId`，无编号代表新建，不接受跨商品或跨组编号：
+
+```json
+[
+  {
+    "groupId": 11,
+    "name": "份量",
+    "required": true,
+    "sortOrder": 0,
+    "options": [
+      { "optionId": 21, "name": "标准份", "additionalPrice": 0.00, "sortOrder": 0 },
+      { "optionId": 22, "name": "大份", "additionalPrice": 3.00, "sortOrder": 1 }
+    ]
+  }
+]
+```
+
+组数最多10，每组1至20项；名称非空且最多50字符，同菜组名、同组选项名唯一。排序非负，选项加价非负、最多8位整数与2位小数；必选组至少含一个零加价选项。校验失败返回400，启用名称数据库唯一键冲突返回409，数据范围越权返回403。清除配置使用 `{ "groups": [] }`，不物理删除记录。
+
+内部核价Postman请求体示例（请求头使用原调用链透传的CUSTOMER Bearer JWT；该路径不经Gateway公开）：
+
+```json
+{
+  "windowId": 3,
+  "items": [
+    { "productId": 101, "selectedOptionIds": [22] },
+    { "productId": 101, "selectedOptionIds": [21] }
+  ]
+}
+```
+
+单行响应含 `productId/productCode/productName/price/selectionKey/selectedOptionIds/specificationText`。例如基础价12元、大份加3元返回 `price:15.00`、`selectionKey:"22"`、`selectedOptionIds:[22]`、`specificationText:"份量：大份"`。无选择返回 `base/[]/""`。同菜不同组合允许分行，同菜同组合重复、重复选项、跨菜品选项、已停用选项、同组选两项和缺失必选组均返回400；规格错误整体拒绝，不自动代选。窗口停用返回 `windowActive:false`；不可售菜品沿用原核价协议，从 `products` 结果中省略。
+
+兼容旧请求 `{ "windowId": 3, "productIds": [101] }`，其语义为无规格选择；新增必选规格后旧请求会因缺少选择被拒绝。新旧字段只能提交一个非空列表，每次最多100行，选择ID最多10个，服务端排序ID后用短横线生成稳定键。所有金额来自商品服务数据库，菜单只供预览，订单应保存规格文字和价格快照。
