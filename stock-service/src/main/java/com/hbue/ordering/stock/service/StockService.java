@@ -1,6 +1,7 @@
 package com.hbue.ordering.stock.service;
 
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import java.util.List;
@@ -15,6 +16,15 @@ import java.util.List;
  * @date 2026-10-19
  */
 public interface StockService {
+
+    /**
+     * 通过一次数据库查询复核推荐候选，最多50个不同档口菜品组合；内部调用同样校验边界。
+     * 缺失或逻辑删除的库存不返回，零库存行仍返回；此快照不构成下单库存保证。
+     *
+     * @param request 有界、非空且编号有效的复核请求
+     * @return 现存有效库存的数据库快照，不访问Redis预扣缓存
+     */
+    List<StockVO> getBatchStocks(StockBatchQueryRequest request);
 
     /** 批量读取窗口当前库存；无库存记录时返回空列表。 */
     List<StockVO> getWindowStocks(Long windowId);

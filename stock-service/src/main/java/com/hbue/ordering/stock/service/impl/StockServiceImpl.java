@@ -1,6 +1,8 @@
 package com.hbue.ordering.stock.service.impl;
 
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockItemRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
@@ -21,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 库存业务实现。
@@ -45,6 +49,36 @@ import java.util.List;
  */
 @Service
 public class StockServiceImpl implements StockService {
+
+    /**
+     * 推荐展示前的数据库库存复核；只读快照不使用Redis预扣数据，也不预留可售份数。
+     * 在服务层再次约束数量、空值、正整数和重复组合，避免内部调用绕过Controller校验形成全库查询。
+     *
+     * @param request 至少1项、至多50项不同的窗口菜品组合
+     * @return 现存未删除的库存事实；缺记录与售罄由推荐调用方保守排除，数据库异常直接传播
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<StockVO> getBatchStocks(StockBatchQueryRequest request) {
+        if (request == null || request.items() == null || request.items().isEmpty() || request.items().size() > 50) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "库存批量查询须包含1至50个菜品");
+        }
+        Set<String> identities = new HashSet<>();
+        for (StockBatchQueryRequest.Item item : request.items()) {
+            if (item == null || item.windowId() == null || item.windowId() <= 0
+                    || item.productId() == null || item.productId() <= 0
+                    || !identities.add(item.windowId() + ":" + item.productId())) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "库存查询的档口菜品编号必须为正且不能重复");
+            }
+        }
+        // 组合条件只提交一次，不逐菜查询；零库存如实返回，缺失行不当作无限库存补齐。
+        return stockMapper.selectByWindowProducts(request.items()).stream()
+                .map(stock -> StockVO.builder()
+                        .stockId(stock.getStockId()).windowId(stock.getWindowId())
+                        .productId(stock.getProductId()).totalQty(stock.getTotalQty())
+                        .availableQty(stock.getAvailableQty()).build())
+                .toList();
+    }
 
     @Override
     public List<StockVO> getWindowStocks(Long windowId) {

@@ -4,6 +4,7 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import org.slf4j.Logger;
@@ -42,6 +43,12 @@ public class StockServiceClientFallbackFactory
     public StockServiceClient create(Throwable cause) {
         log.error("调用 stock-service 库存内部接口失败", cause);
         return new StockServiceClient() {
+
+            /** 推荐复核失败必须显式不可用，不能把未知库存伪造成零库存或成功空集合。 */
+            @Override
+            public ApiResponse<List<StockVO>> getBatchStocks(String internalToken, StockBatchQueryRequest request) {
+                return serviceUnavailable();
+            }
 
             @Override
             public ApiResponse<List<StockVO>> getWindowStocks(Long windowId, String internalToken) {

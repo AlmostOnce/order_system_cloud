@@ -2,6 +2,7 @@ package com.hbue.ordering.stock.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hbue.ordering.stock.model.StockDO;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -11,7 +12,7 @@ import java.util.List;
 /**
  * 库存主表数据访问接口。
  *
- * <p>除基础 CRUD 外，提供按 (档口, 菜品) 定位库存的两条查询语句，以及两条原子更新语句：
+ * <p>除基础 CRUD 外，提供按 (档口, 菜品) 定位、窗口及有界组合批量读取，以及原子更新语句：
  * 扣减按版本号做乐观锁并附带「可售数量足够」条件，回补只做累加。
  * 判断与更新都写在同一条 SQL 中，由数据库保证并发下不会超卖。</p>
  *
@@ -19,6 +20,25 @@ import java.util.List;
  * @date 2026-10-19
  */
 public interface StockMapper extends BaseMapper<StockDO> {
+
+    /**
+     * 一次SQL精确匹配至多50对窗口与菜品，避免分别IN导致窗口、菜品交叉误配。
+     * 调用方必须先保证非空及数量上限；逻辑删除行不参与，读取不加行锁、不改变订单预留。
+     *
+     * @param items 已校验的唯一组合列表，禁止空列表或无限制条件
+     * @return 现存有效库存，包含当前可售数量为零的行，缺失组合不补造记录
+     */
+    @Select("""
+            <script>
+            SELECT stock_id, window_id, product_id, total_qty, available_qty
+            FROM stock WHERE is_deleted = 0 AND
+            <foreach collection="items" item="item" open="(" separator=" OR " close=")">
+                (window_id = #{item.windowId} AND product_id = #{item.productId})
+            </foreach>
+            ORDER BY window_id, product_id
+            </script>
+            """)
+    List<StockDO> selectByWindowProducts(@Param("items") List<StockBatchQueryRequest.Item> items);
 
     /** 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。 */
     @Select("SELECT * FROM stock WHERE window_id = #{windowId} AND is_deleted = 0 ORDER BY product_id")
