@@ -1,6 +1,6 @@
 # order-system-cloud 架构与模块规划
 
-> 文档性质：**架构规划与当前落地状态**；最近更新：**2026-11-16**（新增 user-service 学生收藏关系与学生端店铺/菜品收藏；user_db V11 已迁移并核验，服务运行验收待做）。
+> 文档性质：**架构规划与当前落地状态**；最近更新：**2026-11-17**（新增 coupon-api/coupon-service 与学生端优惠券接入源码；开发库迁移及运行验收状态见优惠券实施计划）。
 > 与进度日志的分工：`PROJECT_PROGRESS.md` 记录"已经做完了什么"（追加式）；
 > 本文档记录目标架构、当前实现和剩余工作（修订须更新第 13 节变更记录）。
 > 状态以当前源码、配置及已记录的验证结果为依据；存在模块或测试源码不等于已通过运行验收。
@@ -11,16 +11,17 @@
 
 ## 1. 结论
 
-| 维度 | 当前落地（2026-10-30） | 全部规划完成后 |
+| 维度 | 当前落地（2026-11-17） | 全部规划完成后 |
 |---|---|---|
-| 独立服务 | **13 个已有启动入口和业务源码**；不代表 13 个服务全部通过运行验收 | **13 个** |
-| 独立子模块 | **21 个**：12 个服务 + 4 个公共库 + 5 个契约库；不计根聚合工程 | 至少 22 个；统计契约库按实际服务调用需要决定 |
-| MySQL 业务 Schema | **9 个**：前述 8 个业务库及 `statistics_db` | 已新增订单销量事件事实及 ALL/MONTH 读模型 |
+| 独立服务 | **14 个有源码或新增实现中的启动入口**；不代表全部通过运行验收 | **14 个** |
+| 独立子模块 | **24 个**：14 个服务 + 4 个公共库 + 6 个契约库；不计根聚合工程 | 至少 24 个；后续契约模块按实际跨服务调用需要决定 |
+| MySQL 业务 Schema | **10 个**：前述 9 个业务库及 `coupon_db` | 新增平台券持券、资金和管理审计事实 |
 | 其他业务存储 | Redis、MongoDB 评论内容集合、Elasticsearch 菜品索引 | 在现有设施上继续演进 |
 
 - **阶段 A（6 个）**：`gateway` / `auth` / `user` / `order` / `product` / `payment` 已有实现，后续持续增强。
 - **阶段 B（4 个）**：`stock` / `cart` / `comment` / `file` 均已有实现；评论不再是未创建服务。
 - **阶段 C（3 个）**：`notification`、`search` 首期代码及学生端接入已实现；`statistics` 首期代码和学生端累计榜/月售展示已补，运行验收待做；商家与顾客聊天也尚未实现。
+- **优惠券首期（新增）**：`coupon-api`/`coupon-service` 与学生端领券、订单锁券/释放/支付核销源码已落地；仅平台预算满减券，开发库迁移和全链路运行验收待完成。
 - **基础设施配置已接入**：Nginx、RocketMQ、Seata、Elasticsearch、MongoDB、Redis、MySQL、Nacos。本文不据此断言当前容器或业务进程正在运行。
 - **交易一致性现状**：下单扣库存、待支付取消回补仍使用 Seata AT；取消通知通过 TCC Confirm 写 outbox；MQ 处理销量、库存快照失效、评分投影、搜索索引和订单通知。**未将全部业务改为 TCC，也未把核心库存扣减改成无确认的异步操作。**
 - **端侧边界**：uni-app 只作为普通学生端；商家及其他管理角色属于独立 Vue 管理端。已有非学生页面为临时调试入口，后续清理。
@@ -65,6 +66,7 @@
 | 11 | `notification-service` | 9107 | `notification_db` + Redis | C，第一阶段及学生端接入已实现 | MQ 幂等落库、游标分页、已读/未读、一次性票据 WebSocket、断线补查；聊天未实现 |
 | 12 | `search-service` | 9106 | Elasticsearch + Redis 同步锁 | C，首期及学生端接入已实现 | 中文搜索、店内筛选、单菜品增量/窗口刷新、别名切换全量重建、定时对账 |
 | 13 | `statistics-service` | 9111 | `statistics_db` + Redis | C，首期代码与开发库迁移已完成，待运行验收 | 学生端累计菜品榜、窗口与菜品月售；MySQL 读模型为重建来源，Redis ZSet 为榜单缓存；管理端经营报表后续规划 |
+| 14 | `coupon-service` | 9112 | `coupon_db` | B，首期源码已落地；开发库迁移待核验 | 平台预算满减券、学生领券、Seata 锁券/关单释放、支付 Outbox 核销；Vue 管理端尚未接入 |
 
 > “已有实现”表示源码与配置存在，不替代故障、并发、多实例及端到端验收。评论、搜索、通知的新能力仍需在各服务加载最新代码后验证。
 >
@@ -281,7 +283,7 @@
 | `search-service` | ES 索引 | 与 MySQL 的主从式关系：**MySQL 为准，索引可随时重建** |
 | `notification-service` | **已使用 `notification_db`** + Redis | 通知持久化与幂等、本人游标分页；Redis 票据与在线分发，WebSocket 不是消息事实源 |
 | `statistics-service` | `statistics_db` + Redis | RocketMQ 接收支付事实快照，MySQL 事件/明细及 ALL/MONTH 汇总可重建，Redis ZSet 只服务累计榜读取 |
-| Seata 参与库 | `order_db`、`stock_db` 的 `undo_log` | AT 全局回滚日志；`order_db` 另有取消通知 TCC 状态及通知 outbox |
+| Seata 参与库 | `order_db`、`stock_db`、`coupon_db` 的 `undo_log` | AT 全局回滚日志；下单锁券和已确认关单释放与订单、库存共享全局事务 |
 
 ## 9. 分期实施与风险
 
@@ -289,7 +291,7 @@
 
 ```text
 阶段 A：6 个服务均已有实现，交易及身份能力持续增强
-阶段 B：stock / cart / comment / file 均已有实现
+阶段 B：stock / cart / comment / file 均已有实现；coupon 首期源码已补，迁移和运行验收待做
 阶段 C：notification 第一阶段与 search 首期及学生端已实现
         statistics 首期源码与学生端调用已补，运行验收待做；商家与顾客订单聊天尚未实现
 ```
@@ -395,3 +397,4 @@
 | 2026-11-02 | 新增邮件找回登录密码：图片验证后发邮件，邮箱验证码换短期一次性授权，再设置新密码；密码与credential_version同库原子更新，旧Access/Refresh及通知连接增加版本校验。V7迁移、隔离SQL/Redis检查与前端检查已完成，Java运行和真实邮件联调待验收。 |
 | 2026-11-13 | 新增 `statistics-service`（9111）与 `statistics_db`，按支付服务真实 `success_time` 固化 `orders.paid_at`；累计榜使用 Redis ZSet，MySQL 保存可重建销量事实与 ALL/MONTH 汇总，MQ 新旧主题兼容消费，学生端首页/点餐页显示月售。迁移已执行情况及运行验收边界见 [销量统计读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)。 |
 | 2026-11-16 | `user-service` 新增 CUSTOMER 收藏 API 和 `user_db.user_favorites` V11 脚本；uni-app 首页支持收藏窗口、点餐页支持收藏菜品，“我的收藏”分店铺/菜品查看、游标分页、重试、移除及菜单定位。迁移前确认表不存在并生成开发库备份；V11 已执行，字段、引擎、排序规则、主键/唯一键/分页索引及初始空表均已核验。后端代码未运行 Maven/测试/启动，前端未构建或真机联调。详见 [学生收藏实施计划](superpowers/plans/2026-11-16-customer-favorites.md)。 |
+| 2026-11-17 | 新增 `coupon-api`/`coupon-service`，管理端仅允许具备平台范围的总经理创建平台预算满减券；学生端可领券、查看本人券和结算选券。订单按原价/优惠/应付保存金额快照，Seata 锁券及确认关单后释放；支付核销 Outbox 要等券服务提交核销后才确认，未确认事件按退避周期重投。支付服务使用应付金额、退款按明细优惠后实付金额核算。网关仓库配置与 Swagger 聚合已更新；Vue 管理端仓库未找到。迁移前的开发库检查/备份、迁移执行及核验仍待完成；未运行 Maven、测试或服务。详见 [优惠券实施计划](superpowers/plans/2026-11-17-coupon-service.md)。 |

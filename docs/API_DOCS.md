@@ -6,15 +6,16 @@
 
 | 入口 | 地址 | 说明 |
 |---|---|---|
-| 网关聚合入口 | `http://localhost:9090/swagger-ui/index.html` | 一个页面查看全部 6 个服务，右上角下拉框切换分组 |
+| 网关聚合入口 | `http://localhost:9090/swagger-ui/index.html` | 一个页面查看已配置的服务，右上角下拉框切换分组 |
 | 认证服务 | `http://localhost:9094/swagger-ui/index.html` | 直连查看 |
 | 订单服务 | `http://localhost:9091/swagger-ui/index.html` | 直连查看 |
 | 用户服务 | `http://localhost:9092/swagger-ui/index.html` | 直连查看 |
 | 商品服务 | `http://localhost:9093/swagger-ui/index.html` | 直连查看 |
 | 支付服务 | `http://localhost:9101/swagger-ui/index.html` | 直连查看 |
 | 购物车服务 | `http://localhost:9103/swagger-ui/index.html` | 七个业务接口：增删改查、核价与下单后快照清理，示例见 CART_API.md |
+| 优惠券服务 | `http://localhost:9112/swagger-ui/index.html` | 学生领券、我的券、平台券管理；代码端口配置完成后可直连 |
 
-2026-10-17 新增购物车 Swagger 分组（第 6 个服务）：本机 Nacos 路由已发布并验证文档转发，重启 Gateway 后聚合页加载新增分组。旧静态 Postman 导出仍为原 5 个服务，购物车请实时导出 `/api/cart/v3/api-docs`。
+2026-10-17 新增购物车 Swagger 分组。本优惠券实现新增 `/api/coupons/v3/api-docs` 文档路由和聚合项；仓库 Nacos 配置尚需按当前环境发布，旧静态 Postman 导出不包含优惠券服务，联调时请从运行中的网关实时导出。
 
 > 无论从聚合页还是直连页点 "Try it out"，请求都会发往网关 `http://localhost:9090`（由 `springdoc.gateway-base-url` + `springdoc.gateway-path` 决定），因此调用前需保证网关已启动。
 
@@ -33,9 +34,11 @@
 
 导入方式：Postman → **Import** → 选择上述 JSON。导入后先调「认证服务 · 认证接口」的登录接口获取 Access Token，填到集合 Authorization 的 Bearer 中。
 
-也可以实时导出：打开 `http://localhost:9090/api/{svc}/v3/api-docs`（`{svc}` 取 `auth` / `users` / `orders` / `products` / `payments`）保存 JSON；或直连 `http://localhost:{port}/v3/api-docs`。
+也可以实时导出：打开 `http://localhost:9090/api/{svc}/v3/api-docs`（`{svc}` 取 `auth` / `users` / `orders` / `products` / `payments` / `coupons`）保存 JSON；或直连 `http://localhost:{port}/v3/api-docs`。
 
-> 地址约定：网关路由使用 `StripPrefix=1`，只剥离 `/api` 一段，因此对外地址 = `http://localhost:9090/api` + 各服务自身路径。例如认证服务的 `/auth/login` 对外即 `http://localhost:9090/api/auth/login`。
+> 地址约定：网关路由使用 `StripPrefix=1`，只剥离 `/api` 一段，因此对外地址 = `http://localhost:9090/api` + 各服务自身路径。例如学生优惠券的 `/coupons/claimable` 对外为 `http://localhost:9090/api/coupons/claimable`。
+
+优惠券学生接口仅允许 CUSTOMER；`/coupons/admin/templates/**` 还要求 GENERAL_MANAGER 及平台数据范围。`/internal/coupons/**` 使用服务间共享令牌，不配置网关业务路由。
 
 ## 四、开关
 

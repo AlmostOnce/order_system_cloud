@@ -81,6 +81,7 @@ flowchart LR
     Gateway --> Cart[购物车服务]
     Gateway --> Order[订单服务]
     Gateway --> Payment[支付服务]
+    Gateway --> Coupon[优惠券服务]
     Gateway --> Comment[评论服务]
     Gateway --> Search[搜索服务]
     Gateway --> Statistics[统计服务]
@@ -98,7 +99,10 @@ flowchart LR
     Comment --> Mongo[(MongoDB)]
     Search --> ES[(Elasticsearch)]
     Order -->|已支付快照 / RocketMQ| Statistics
+    Order -->|下单锁券 / Seata| Coupon
+    Order -->|支付成功 / Outbox + RocketMQ| Coupon
     Statistics --> StatsDB[(statistics_db)]
+    Coupon --> CouponDB[(coupon_db)]
     Statistics --> Redis
 ```
 
@@ -127,6 +131,7 @@ flowchart LR
 | `search-service` | 9106 | 菜品搜索、索引更新与重建 |
 | `notification-service` | 9107 | 订单通知、未读管理及 WebSocket 推送；完整链路仍需联调 |
 | `statistics-service` | 9111 | 已支付销量事实、累计菜品榜、窗口与菜品月售读模型 |
+| `coupon-service` | 9112 | 平台预算满减券、学生领券、订单锁券与支付核销 |
 
 统计服务仅向 CUSTOMER 提供学生端销量查询；商家与顾客的聊天和管理端经营报表仍属后续工作。`9108` 继续由 Seata 控制台占用，统计服务使用 `9111`。
 
@@ -138,7 +143,7 @@ flowchart LR
 | `common-response` | 统一响应结构，避免把 Servlet 依赖带入网关 |
 | `common-web` | Servlet 服务共用的 Web 支持和异常处理 |
 | `common-redis` | Redis 常用操作、脚本执行、锁及布隆过滤器等公共能力 |
-| `user-api`、`product-api`、`order-api`、`stock-api`、`comment-api` | 被其他模块复用的接口契约、请求或响应对象 |
+| `user-api`、`product-api`、`order-api`、`stock-api`、`comment-api`、`coupon-api` | 被其他模块复用的接口契约、请求或响应对象 |
 
 `*-api` 不负责启动独立服务。跨服务调用应使用公开契约，不直接访问其他服务的数据库。
 
@@ -505,6 +510,14 @@ Lua 执行具有原子性，但脚本中已经执行的写入不会因后续报�
 
 库存 MySQL 与流水是事实依据，Redis 缓存和 MQ 事件用于提高访问效率及异步协作。库存事件链路、全局回滚隔离及故障恢复仍需在目标环境做完整验收。
 
+### 优惠券、订单金额与核销
+
+首期优惠券由总经理（且具备平台数据范围）创建为平台预算承担的满减券，学生主动领取；模板可限定全校或指定窗口。窗口出资券、折扣券、多券叠加和自动派券未纳入首期。`coupon-service` 独占 `coupon_db`，其他服务只通过 `coupon-api` 访问券状态。
+
+下单时 `order-service` 重新核价并在现有 Seata AT 全局事务中锁券、扣库存和保存订单。订单保留 `totalAmount` 原价，并快照保存优惠额、应付额、券标题及明细优惠分摊；锁券服务故障或拒绝时整笔选券订单失败。支付只按 `payableAmount` 扣款。支付确认事务写入券核销 Outbox，RocketMQ 至少一次通知优惠券服务幂等核销；券服务提交本地核销后回执确认 Outbox，未确认事件按退避周期重发，确认关单后才释放锁券，退款按明细优惠后实付金额核算。
+
+学生端仅由 CUSTOMER 访问领券、我的券和结算选券。后端管理接口已按总经理角色及平台数据范围保护；专门 Vue 管理端仓库尚未在已知工作区找到，因此本次没有将管理页面加入 uni-app。详细服务边界、接口、状态、迁移和验证范围见[优惠券服务说明](docs/COUPON_SERVICE.md)。
+
 ### 销量排行榜
 
 排行榜按**已支付菜品累计份数**统计，待支付和已取消订单不计入。订单服务在支付状态事务内写销量 outbox，RocketMQ 将事件交给统计服务；统计服务先幂等保存 `statistics_db` 的销量事实和汇总，再更新 Redis ZSet 排行榜缓存。Redis 可从 MySQL 读模型重建，MQ 重复投递不会重复累计。
@@ -543,6 +556,7 @@ Lua 执行具有原子性，但脚本中已经执行的写入不会因后续报�
 | `comment_db`（MongoDB） | 菜品评价的文档内容 |
 | `notification_db` | 用户站内通知 |
 | `statistics_db` | 已支付销量事件事实、订单菜品快照、窗口与菜品累计/月度汇总 |
+| `coupon_db` | 优惠券模板、学生持券、锁券/核销/释放流水及管理审计 |
 | Redis | 购物车、登录状态、缓存、分布式锁、销量榜等 |
 | Elasticsearch | 可重建的菜品搜索索引 |
 
@@ -558,6 +572,7 @@ Compose 中的 `mq` profile 提供 NameServer、Broker、权限初始化和主�
 | `order-paid-sales-v2` | 携带支付时间、窗口及菜品快照的新销量事件；统计服务同时消费 V1 兼容旧消息 |
 | `product-rating-changed-v1` | 菜品评分变化及商品评分投影 |
 | `stock-changed-v1` | 库存变化及缓存失效 |
+| `order-coupon-paid-v1` | 支付成功后通知优惠券服务核销订单锁定券 |
 | `product-search-refresh-v1` | 商品搜索索引刷新 |
 | `order-status-notification-v1` | 订单状态通知 |
 
@@ -818,6 +833,10 @@ Nginx 将用户端的 `unpackage/dist/build/nginx-web` 目录只读挂载为站�
 | user_id | bigint unsigned | 关联用户内部主键，引用用户服务的用户记录 |
 | window_id | bigint unsigned | 所属窗口内部主键，关联商品服务窗口记录 |
 | total_amount | decimal(12,2) | 服务端核算的订单总金额，单位元 |
+| user_coupon_id | bigint unsigned | 下单锁定的用户券 ID，无跨库外键 |
+| coupon_title_snapshot | varchar(120) | 下单时的券标题快照，无券时为空 |
+| discount_amount | decimal(12,2) | 订单优惠总额；历史订单为 0 |
+| payable_amount | decimal(12,2) | 下单后应付金额；历史订单回填为原总额 |
 | status | varchar(32) | 订单状态：待支付、已支付、制作中、待取货、已完成、已取消 |
 | remark | varchar(255) | 顾客下单备注 |
 | pickup_code | varchar(16) | 订单取餐码 |
@@ -839,7 +858,30 @@ Nginx 将用户端的 `unpackage/dist/build/nginx-web` 目录只读挂载为站�
 | unit_price_snapshot | decimal(10,2) | 下单时的菜品单价快照，单位元 |
 | quantity | int unsigned | 本次购买的菜品份数 |
 | line_amount | decimal(12,2) | 该明细的单价乘数量金额，单位元 |
+| line_discount_amount | decimal(12,2) | 按商品金额比例分摊的优惠金额 |
+| line_payable_amount | decimal(12,2) | 优惠后的明细实付快照，退款按此金额核算 |
 | created_at | datetime | 记录创建时间 |
+
+## coupon_db：优惠券模板、学生持券、资金流水与管理审计
+
+首期 `coupon-service` 独占此库。`coupon_template` 固化满减规则、领取/有效时间、平台发行与出资方、适用范围及库存上限；`coupon_template_window` 保存窗口范围；`user_coupon` 保存学生领取时的有效期快照和 AVAILABLE/LOCKED/USED/EXPIRED/REVOKED 状态；`coupon_use_record` 按订单唯一记录锁定、核销、释放及平台承担金额；`coupon_admin_action_record` 追踪模板创建、发布和停领/停用操作。各库之间不建跨服务外键。
+
+领取数量通过条件更新原子递增，每人每模板唯一索引防止重复领取；下单锁券、取消释放参与 Seata AT，因此 `coupon_db` 也需要 `undo_log`。订单优惠、应付及明细快照由 `order_db` 持有，支付金额以 `payable_amount` 为准。
+
+## order_db.order_coupon_consume_outbox：支付成功后可靠通知核销优惠券
+
+| 字段 | 类型 | 中文说明 |
+|---|---|---|
+| event_id | varchar(64) | 事件唯一 ID，按订单号生成 |
+| order_no | varchar(64) | 已确认支付的订单号 |
+| user_coupon_id | bigint unsigned | 本订单锁定的用户券 ID |
+| payload | mediumtext | RocketMQ JSON 事件快照 |
+| status | varchar(16) | PENDING、PUBLISHED 或 CONFIRMED |
+| attempts | int | 已尝试发送次数 |
+| next_attempt_at | datetime | 下次重试时间 |
+| last_error | varchar(255) | 最近发送失败摘要 |
+| published_at | datetime | 首次进入 Broker 的时间 |
+| confirmed_at | datetime | 券服务提交核销事务后确认 Outbox 的时间 |
 
 ## order_db.sales_event_outbox：订单销量事件本地消息表，保障支付销量事件可靠投递
 
