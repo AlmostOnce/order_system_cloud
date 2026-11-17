@@ -1,0 +1,98 @@
+server:
+  # 避开现有业务服务端口；端口仅用于本地开发，部署时可由运行配置覆盖。
+  port: 9112
+
+spring:
+  profiles:
+    # 无论使用默认环境还是显式 prod 等 profile，都必须订阅支付后的券核销消息。
+    include:
+      - coupon-mq
+  application:
+    name: coupon-service
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # DATETIME 会话时区固定为 UTC+8；JDBC 参数本身不会修改 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
+      initial-size: 1
+      min-idle: 1
+      max-active: 10
+      max-wait: 3000
+      validation-query: SELECT 1
+      validation-query-timeout: 2
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      stat-view-servlet:
+        enabled: false
+      web-stat-filter:
+        enabled: false
+    # 优惠券服务只连接自己的库；账号仅被授予 coupon_db 权限。
+    url: ${COUPON_DB_URL:jdbc:mysql://127.0.0.1:9095/coupon_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${COUPON_DB_USERNAME:coupon_service}
+    password: ${COUPON_DB_PASSWORD:coupon_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      # 仅供 JWT 注销黑名单校验，不保存优惠券库存或状态事实。
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+internal:
+  scope:
+    # 与订单服务使用相同的内部共享令牌；不要作为外部用户权限凭据使用。
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+seata:
+  # 锁券和取消释放需要在订单全局事务回滚时恢复本地券状态。
+  enabled: true
+  application-id: coupon-service
+  tx-service-group: ${SEATA_TX_SERVICE_GROUP:order-system-tx-group}
+  service:
+    vgroup-mapping:
+      order-system-tx-group: default
+    grouplist:
+      default: ${SEATA_TC_GROUPLIST:127.0.0.1:9109}
+  registry:
+    type: file
+  config:
+    type: file
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 优惠券服务接口文档
+  service-description: 学生优惠券、平台券管理和订单内部券状态接口。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
