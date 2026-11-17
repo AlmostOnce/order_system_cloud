@@ -32,6 +32,12 @@ public interface OrderPersistenceService {
     );
 
     /**
+     * 在本地事务内固化券使用信息及逐行优惠分摊；任一明细未命中条件都回滚整组快照。
+     * 调用方应在下单 Seata 全局事务中使用，保证优惠券远程锁定与订单金额共同提交或回滚。
+     */
+    void applyCouponSnapshot(OrderDO order, List<OrderItemDO> items);
+
+    /**
      * 仅当订单状态和版本号都未变化时更新状态。
      *
      * @param orderId 订单 ID
@@ -48,7 +54,7 @@ public interface OrderPersistenceService {
     );
 
     /**
-     * 支付确认专用事务：原子更新订单状态与 paid_at，并写入销量、状态通知 outbox。
+     * 支付确认专用事务：原子更新订单状态与 paid_at，并写入销量、状态通知及优惠券核销 outbox。
      *
      * @param orderId 订单主键
      * @param expectedVersion 支付服务回调前读取的订单版本

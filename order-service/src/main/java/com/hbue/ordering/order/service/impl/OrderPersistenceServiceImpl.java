@@ -8,6 +8,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.enums.OrderStatus;
@@ -85,6 +86,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
     /** 订单明细表 Mapper。 */
     private final OrderItemMapper orderItemMapper;
     private final SalesOutboxWriter salesOutbox;
+    private final CouponConsumeOutboxWriter couponConsumeOutbox;
     private OrderNotificationOutboxWriter notificationOutbox;
     @Value("${notification.order-events.enabled:false}")
     private boolean notificationsEnabled;
@@ -96,17 +98,22 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
      *
      * @param orderMapper 订单表 Mapper
      * @param orderItemMapper 订单明细表 Mapper
+     * @param salesOutbox 支付成功销量事件 Outbox 写入器
+     * @param timeoutOutbox 待支付订单超时关单事件 Outbox 写入器
+     * @param couponConsumeOutbox 支付成功券核销事件 Outbox 写入器
      */
     public OrderPersistenceServiceImpl(
             OrderMapper orderMapper,
             OrderItemMapper orderItemMapper,
             SalesOutboxWriter salesOutbox,
-            com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox
+            com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox,
+            CouponConsumeOutboxWriter couponConsumeOutbox
     ) {
         this.timeoutOutbox=timeoutOutbox;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.salesOutbox = salesOutbox;
+        this.couponConsumeOutbox = couponConsumeOutbox;
     }
 
     /** {@inheritDoc} */
@@ -140,6 +147,41 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         timeoutOutbox.record(com.hbue.ordering.order.dto.OrderTimeoutEvent.of(order.getOrderId(),
                 com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(order)));
         return order;
+    }
+
+    /**
+     * 在订单本地事务中写入订单级优惠和逐行分摊；金额条件或任一行更新失败都会回滚全部快照。
+     * @param order 已保存并绑定券 ID 的订单金额快照
+     * @param items 已计算分摊金额且具有数据库主键的订单行
+     * @throws BusinessException 参数不完整、订单不匹配或任一明细保存失败时回滚本地事务
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void applyCouponSnapshot(OrderDO order, List<OrderItemDO> items) {
+        if (order == null || order.getOrderId() == null || order.getUserCouponId() == null
+                || order.getTotalAmount() == null || order.getDiscountAmount() == null
+                || order.getPayableAmount() == null || items == null || items.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "优惠券订单快照不完整");
+        }
+        if (orderMapper.applyCouponSnapshot(order.getOrderId(), order.getUserCouponId(),
+                order.getCouponTitleSnapshot(), order.getTotalAmount(), order.getDiscountAmount(),
+                order.getPayableAmount()) != 1) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单金额已变化，无法应用优惠券");
+        }
+        for (OrderItemDO item : items) {
+            if (item == null || item.getItemId() == null || item.getLineAmount() == null
+                    || item.getLineDiscountAmount() == null || item.getLinePayableAmount() == null) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "订单明细金额已变化，无法应用优惠券");
+            }
+            // 未分到优惠的行仍保留初始的“优惠为零、实付等于原价”快照；跳过无变化 UPDATE，
+            // 避免 MySQL 按 changed rows 返回 0 而把合法的低额券误判成并发冲突。
+            if (item.getLineDiscountAmount().signum() == 0
+                    && item.getLinePayableAmount().compareTo(item.getLineAmount()) == 0) continue;
+            if (orderItemMapper.applyCouponSnapshot(item.getItemId(), order.getOrderId(),
+                    item.getLineAmount(), item.getLineDiscountAmount(), item.getLinePayableAmount()) != 1) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "订单明细金额已变化，无法应用优惠券");
+            }
+        }
     }
 
     /** {@inheritDoc} */
@@ -180,6 +222,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
         // outbox writer 使用 MANDATORY 加入当前本地事务；任一快照或事件写入失败都会回滚支付状态。
         salesOutbox.recordPaid(orderId, paidAt);
+        // 核销事件在本地订单事务内可靠落库；后续 Broker 故障由独立发布任务重试，不阻塞支付确认。
+        couponConsumeOutbox.recordPaid(orderId);
         recordStatusNotification(orderId, expectedVersion, OrderStatus.PAID.getLabel());
         return true;
     }
