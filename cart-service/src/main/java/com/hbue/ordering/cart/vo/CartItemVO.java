@@ -1,6 +1,7 @@
 package com.hbue.ordering.cart.vo;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 一项菜品的购物车展示结果；价格只用于预览，创建订单时重新核价。
@@ -15,10 +16,22 @@ import java.math.BigDecimal;
  * @param unavailableReason 不可结算原因，可售时为 null
  * @param unitPrice 当前单价；不可售时为 null，不能伪造为零元菜品
  * @param lineAmount 当前行金额；不可售时为 null
+ * @param selectionKey 规格组合的规范身份
+ * @param selectedOptionIds 从规范身份还原的选项编号，避免 Lua/cjson 处理大整数数组
+ * @param specificationText 当前商品服务生成的规格文字；失效时回退到加入时保存的文字快照
  * @author order-system
  * @date 2026-10-17
  */
 public record CartItemVO(Long productId, String productName, String productCode,
                          int quantity, boolean checked, String revision, boolean available,
-                         String unavailableReason, BigDecimal unitPrice, BigDecimal lineAmount) {
+                         String unavailableReason, BigDecimal unitPrice, BigDecimal lineAmount,
+                         String selectionKey, List<Long> selectedOptionIds, String specificationText) {
+
+    /** 保留旧构造参数，旧调用方创建的条目按无规格菜品处理。 */
+    public CartItemVO(Long productId, String productName, String productCode, int quantity, boolean checked,
+                      String revision, boolean available, String unavailableReason,
+                      BigDecimal unitPrice, BigDecimal lineAmount) {
+        this(productId, productName, productCode, quantity, checked, revision, available,
+                unavailableReason, unitPrice, lineAmount, "base", List.of(), "");
+    }
 }

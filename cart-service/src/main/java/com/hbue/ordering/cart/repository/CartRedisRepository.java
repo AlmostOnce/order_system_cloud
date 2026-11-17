@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.cart.config.CartProperties;
 import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
 import com.hbue.ordering.cart.model.CartItemDO;
+import com.hbue.ordering.cart.model.CartSelectionKey;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.RedisOperationsService;
@@ -79,21 +80,33 @@ public class CartRedisRepository {
             List<CartItemDO> items = new ArrayList<>();
             for (Map.Entry<Object, Object> entry : values.entrySet()) {
                 CartItemDO item = objectMapper.readValue(entry.getValue().toString(), CartItemDO.class);
-                // 校验 Field 与内容一致，避免坏数据被当成其它窗口或菜品展示。
+                // 老 JSON 没有规格字段时绑定到 base；新 Field 和 JSON 必须同时标识同一规格行。
+                if (item != null) {
+                    item.setSelectionKey(CartSelectionKey.normalize(item.getSelectionKey()));
+                    if (item.getSpecificationTextSnapshot() == null) {
+                        item.setSpecificationTextSnapshot("");
+                    }
+                }
+                // 校验 Field 与内容一致，避免坏数据被当成其它窗口、菜品或规格展示。
                 if (item == null || item.getWindowId() == null || item.getWindowId() < 1
                         || item.getProductId() == null || item.getProductId() < 1
                         || item.getQuantity() == null || item.getQuantity() < 1 || item.getChecked() == null
                         || item.getRevision() == null || item.getRevision().isBlank()
-                        || !field(item.getWindowId(), item.getProductId()).equals(entry.getKey())) {
+                        || !field(item.getWindowId(), item.getProductId(), item.getSelectionKey()).equals(entry.getKey())) {
                     throw unavailable("购物车数据异常，请稍后重试");
                 }
                 items.add(item);
             }
-            items.sort(Comparator.comparing(CartItemDO::getWindowId).thenComparing(CartItemDO::getProductId));
+            items.sort(Comparator.comparing(CartItemDO::getWindowId).thenComparing(CartItemDO::getProductId)
+                    .thenComparing(CartItemDO::getSelectionKey));
             return items;
         } catch (DataAccessException | JsonProcessingException exception) {
             log.error("读取购物车失败，userId={}", userId, exception);
             throw unavailable("购物车暂时不可用，请稍后重试");
+        } catch (IllegalArgumentException exception) {
+            // Redis 中的规格键不符合规范时按损坏数据处理，不能把异常冒泡成 500。
+            log.error("购物车规格键损坏，userId={}", userId, exception);
+            throw unavailable("购物车数据异常，请稍后重试");
         }
     }
 
@@ -109,7 +122,24 @@ public class CartRedisRepository {
      * @throws BusinessException 数量或容量超限时返回 400，Redis 故障时返回 503
      */
     public void add(Long userId, Long windowId, Long productId, int quantity, String productName, String productCode) {
-        mutate(userId, windowId, productId, "add", String.valueOf(quantity), productName, productCode);
+        add(userId, windowId, productId, CartSelectionKey.BASE, quantity, productName, productCode, "");
+    }
+
+    /**
+     * 加入指定规格行；同菜不同规格落入不同 Hash Field，名称、编码和规格文字来自商品服务。
+     * @param userId 当前顾客
+     * @param windowId 窗口编号
+     * @param productId 菜品编号
+     * @param selectionKey 商品服务核价返回的规范规格键
+     * @param quantity 本次新增数量
+     * @param productName 已核验商品名称
+     * @param productCode 已核验商品编码
+     * @param specificationText 已核验规格展示文字
+     */
+    public void add(Long userId, Long windowId, Long productId, String selectionKey, int quantity,
+                    String productName, String productCode, String specificationText) {
+        mutate(userId, windowId, productId, selectionKey, "add", String.valueOf(quantity),
+                productName, productCode, specificationText);
     }
 
     /**
@@ -121,7 +151,12 @@ public class CartRedisRepository {
      * @param quantity 目标数量
      */
     public void updateQuantity(Long userId, Long windowId, Long productId, int quantity) {
-        mutate(userId, windowId, productId, "quantity", String.valueOf(quantity), "", "");
+        updateQuantity(userId, windowId, productId, CartSelectionKey.BASE, quantity);
+    }
+
+    /** 设置指定规格行数量；旧接口重载只会修改 base 行。 */
+    public void updateQuantity(Long userId, Long windowId, Long productId, String selectionKey, int quantity) {
+        mutate(userId, windowId, productId, selectionKey, "quantity", String.valueOf(quantity), "", "", "");
     }
 
     /**
@@ -133,7 +168,12 @@ public class CartRedisRepository {
      * @param checked 目标勾选状态
      */
     public void updateChecked(Long userId, Long windowId, Long productId, boolean checked) {
-        mutate(userId, windowId, productId, "checked", String.valueOf(checked), "", "");
+        updateChecked(userId, windowId, productId, CartSelectionKey.BASE, checked);
+    }
+
+    /** 更新指定规格行勾选状态；旧接口重载只会修改 base 行。 */
+    public void updateChecked(Long userId, Long windowId, Long productId, String selectionKey, boolean checked) {
+        mutate(userId, windowId, productId, selectionKey, "checked", String.valueOf(checked), "", "", "");
     }
 
     /**
@@ -144,7 +184,12 @@ public class CartRedisRepository {
      * @param productId 菜品 ID
      */
     public void remove(Long userId, Long windowId, Long productId) {
-        mutate(userId, windowId, productId, "remove", "", "", "");
+        remove(userId, windowId, productId, CartSelectionKey.BASE);
+    }
+
+    /** 删除指定规格行，不会触碰同一菜品的其它规格。 */
+    public void remove(Long userId, Long windowId, Long productId, String selectionKey) {
+        mutate(userId, windowId, productId, selectionKey, "remove", "", "", "", "");
     }
 
     /**
@@ -154,7 +199,7 @@ public class CartRedisRepository {
      * @param windowId 窗口 ID
      */
     public void clearWindow(Long userId, Long windowId) {
-        mutate(userId, windowId, 0L, "clearWindow", "", "", "");
+        mutate(userId, windowId, 0L, CartSelectionKey.BASE, "clearWindow", "", "", "", "");
     }
 
     /**
@@ -171,7 +216,8 @@ public class CartRedisRepository {
             for (CartSubmittedItemRequest item : submitted) {
                 // ID 明确编码成字符串，避免 Lua cjson 将 BIGINT 转成双精度数丢失精度。
                 snapshots.add(Map.of("productId", item.productId().toString(),
-                        "quantity", item.quantity(), "revision", item.revision()));
+                        "quantity", item.quantity(), "revision", item.revision(),
+                        "selectionKey", CartSelectionKey.normalize(item.selectionKey())));
             }
             Long removed = redis.executeScript(CLEANUP_SCRIPT, List.of(key(userId)), windowId.toString(),
                     objectMapper.writeValueAsString(snapshots));
@@ -208,12 +254,14 @@ public class CartRedisRepository {
      * @param code 编码快照，非添加操作时为空
      * @throws BusinessException 业务约束拒绝或 Redis 不可用时抛出
      */
-    private void mutate(Long userId, Long windowId, Long productId, String action,
-                        String value, String name, String code) {
+    private void mutate(Long userId, Long windowId, Long productId, String selectionKey, String action,
+                        String value, String name, String code, String specificationText) {
         try {
+            String normalizedSelectionKey = CartSelectionKey.normalize(selectionKey);
             // UUID 每次重新生成，后续删除重建也不会出现旧版本被误认为新版本的情况。
-            Long result = redis.executeScript(MUTATE_SCRIPT, List.of(key(userId)), action, field(windowId, productId),
-                    windowId.toString(), productId.toString(), value, UUID.randomUUID().toString(), name, code,
+            Long result = redis.executeScript(MUTATE_SCRIPT, List.of(key(userId)), action,
+                    field(windowId, productId, normalizedSelectionKey), windowId.toString(), productId.toString(),
+                    normalizedSelectionKey, value, UUID.randomUUID().toString(), name, code, specificationText,
                     String.valueOf(properties.maxItems()), String.valueOf(properties.maxQuantity()),
                     String.valueOf(properties.timeToLive().toMillis()));
             if (result == null || result == CORRUPT) {
@@ -252,10 +300,14 @@ public class CartRedisRepository {
      *
      * @param windowId 窗口 ID
      * @param productId 菜品 ID
-     * @return 带分隔符的窗口与菜品组合标识
+     * @param selectionKey 规格组合键；base 保持旧版 Field 格式
+     * @return base 为 window:product，规格行追加 :selectionKey
      */
-    private String field(Long windowId, Long productId) {
-        return windowId + ":" + productId;
+    private String field(Long windowId, Long productId, String selectionKey) {
+        String baseField = windowId + ":" + productId;
+        String normalizedSelectionKey = CartSelectionKey.normalize(selectionKey);
+        return CartSelectionKey.BASE.equals(normalizedSelectionKey)
+                ? baseField : baseField + ":" + normalizedSelectionKey;
     }
 
     /**

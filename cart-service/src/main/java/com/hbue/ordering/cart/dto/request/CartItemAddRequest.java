@@ -2,7 +2,10 @@ package com.hbue.ordering.cart.dto.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * 添加菜品请求 DTO，仅接收菜品 ID 和增加的数量，不接受价格或用户 ID。
@@ -20,4 +23,7 @@ public class CartItemAddRequest {
     @NotNull(message = "增加数量不能为空")
     @Positive(message = "增加数量必须大于零")
     private Integer quantity;
+    /** 用户选择的规格选项编号；商品服务会核实选项归属、启用状态、必选组及单选规则。 */
+    @Size(max = 10, message = "规格选项不能超过 10 个")
+    private List<@NotNull(message = "规格选项编号不能为空") @Positive(message = "规格选项编号必须大于零") Long> selectedOptionIds;
 }
