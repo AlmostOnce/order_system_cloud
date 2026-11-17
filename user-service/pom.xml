@@ -19,6 +19,11 @@
     <name>user-service</name>
 
     <dependencies>
+        <!-- 收藏变更通过项目现有 RocketMQ Binder 同步确认后发布。 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rocketmq</artifactId>
+        </dependency>
         <!-- QQ 邮箱 SMTP 发送验证码，版本由 Spring Boot BOM 管理。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

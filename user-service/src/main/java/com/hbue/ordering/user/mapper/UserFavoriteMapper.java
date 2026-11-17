@@ -13,8 +13,8 @@ import java.util.List;
 /**
  * 用户收藏关系的数据访问接口。
  *
- * <p>关系唯一性由数据库唯一键最终保障；新增 SQL 使用幂等 upsert，
- * 并发重复点击不会因为唯一键冲突暴露为用户错误。</p>
+ * <p>关系唯一性由数据库唯一键最终保障；新增使用普通 INSERT，
+ * 重复键交由服务层处理，避免驱动影响行数配置将重复收藏误判为新关系。</p>
  */
 @Mapper
 public interface UserFavoriteMapper extends BaseMapper<UserFavoriteDO> {
@@ -25,12 +25,11 @@ public interface UserFavoriteMapper extends BaseMapper<UserFavoriteDO> {
      * @param userId 当前用户内部 ID
      * @param targetType 收藏目标类型
      * @param targetId 窗口或菜品 ID
-     * @return 插入或幂等命中的数据库影响行数
+     * @return 新增关系的数据库影响行数；重复键由调用方转为幂等成功
      */
     @Insert("""
         INSERT INTO user_favorites (user_id, target_type, target_id)
         VALUES (#{userId}, #{targetType}, #{targetId})
-        ON DUPLICATE KEY UPDATE favorite_id = favorite_id
         """)
     int insertIfAbsent(@Param("userId") Long userId,
                        @Param("targetType") String targetType,

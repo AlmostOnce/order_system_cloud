@@ -3,6 +3,9 @@ server:
   port: 9092
 
 spring:
+  profiles:
+    # 收藏事件独立绑定；发件箱与收藏关系始终同事务，发布配置只控制异步投递。
+    include: user-favorite-mq
   config:
     # IDEA 在项目根目录或 user-service 目录运行时读取本机配置；不会提交凭据。
     import: optional:file:./user-service/email-local.properties,optional:file:./email-local.properties

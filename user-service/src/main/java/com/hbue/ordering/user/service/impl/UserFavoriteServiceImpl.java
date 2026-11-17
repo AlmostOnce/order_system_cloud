@@ -3,6 +3,7 @@ package com.hbue.ordering.user.service.impl;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.user.mapper.UserFavoriteMapper;
+import com.hbue.ordering.user.mapper.FavoriteEventOutboxMapper;
 import com.hbue.ordering.user.model.FavoriteTargetType;
 import com.hbue.ordering.user.model.UserFavoriteDO;
 import com.hbue.ordering.user.service.UserFavoriteService;
@@ -10,6 +11,8 @@ import com.hbue.ordering.user.vo.FavoriteStatusVO;
 import com.hbue.ordering.user.vo.UserFavoriteItemVO;
 import com.hbue.ordering.user.vo.UserFavoritePageVO;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +21,7 @@ import java.util.List;
  * 用户收藏关系的业务实现。
  *
  * <p>收藏只维护用户库内关系，不同步复制商品目录；目标下架后关系仍可读取和删除。
- * 去重与并发安全由数据库唯一键和 Mapper 的幂等 upsert 共同保证。</p>
+ * 去重由数据库唯一键保障；真实关系变更与推荐事件在同一本地事务中提交。</p>
  */
 @Service
 public class UserFavoriteServiceImpl implements UserFavoriteService {
@@ -29,14 +32,18 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
 
     /** 收藏关系唯一数据访问入口。 */
     private final UserFavoriteMapper favoriteMapper;
+    /** 事务内登记可重试的收藏变更事件，不直接访问消息队列。 */
+    private final FavoriteEventOutboxMapper outboxMapper;
 
     /**
-     * 注入 MyBatis-Plus Mapper，所有收藏写入都落到 user_db 的单一事实表。
+     * 注入收藏事实和本地发件箱访问接口，确保两者使用同一用户库事务。
      *
      * @param favoriteMapper 收藏关系数据访问接口
+     * @param outboxMapper 收藏变更发件箱接口
      */
-    public UserFavoriteServiceImpl(UserFavoriteMapper favoriteMapper) {
+    public UserFavoriteServiceImpl(UserFavoriteMapper favoriteMapper, FavoriteEventOutboxMapper outboxMapper) {
         this.favoriteMapper = favoriteMapper;
+        this.outboxMapper = outboxMapper;
     }
 
     /**
@@ -47,10 +54,22 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
      * @param targetId 商品服务的窗口或菜品 ID
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void add(Long userId, FavoriteTargetType targetType, Long targetId) {
         validateIdentityAndTarget(userId, targetType, targetId);
-        // 唯一键由数据库并发裁决；upsert 对重复请求保持成功，避免客户端重试产生重复关系。
-        favoriteMapper.insertIfAbsent(userId, targetType.name(), targetId);
+        try {
+            // 普通 INSERT 的唯一键冲突用于识别重复请求，不受 MySQL affected/found rows 设置影响。
+            if (favoriteMapper.insertIfAbsent(userId, targetType.name(), targetId) != 1) {
+                throw new IllegalStateException("收藏关系写入失败");
+            }
+        } catch (DuplicateKeyException exception) {
+            // 现有唯一键限定用户、类型、目标；重复点击视为成功，不重复发布变化。
+            return;
+        }
+        // 发件箱失败向外抛出，使关系写入一起回滚；持锁到提交保证同一目标的事件 ID 与状态顺序一致。
+        if (outboxMapper.insert(userId, targetType.name(), targetId, true) != 1) {
+            throw new IllegalStateException("收藏变更事件登记失败");
+        }
     }
 
     /**
@@ -61,10 +80,15 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
      * @param targetId 商品服务的窗口或菜品 ID
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void remove(Long userId, FavoriteTargetType targetType, Long targetId) {
         validateIdentityAndTarget(userId, targetType, targetId);
         // 删除条件同时限定 user_id，伪造其他用户的目标 ID 也不能触及他人收藏。
-        favoriteMapper.deleteFavorite(userId, targetType.name(), targetId);
+        int deleted = favoriteMapper.deleteFavorite(userId, targetType.name(), targetId);
+        // 仅实际删除才登记取消墓碑；重复删除不触发下游刷新。
+        if (deleted == 1 && outboxMapper.insert(userId, targetType.name(), targetId, false) != 1) {
+            throw new IllegalStateException("取消收藏事件登记失败");
+        }
     }
 
     /**

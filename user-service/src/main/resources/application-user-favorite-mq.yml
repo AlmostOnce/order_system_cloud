@@ -1,0 +1,26 @@
+user:
+  favorite-messaging:
+    # 默认启用定时投递；关闭时仍在事务中写发件箱，恢复后继续发布。
+    enabled: true
+    publish-delay-ms: 1000
+
+spring:
+  cloud:
+    stream:
+      output-bindings: favoriteChanged-out-0
+      bindings:
+        favoriteChanged-out-0:
+          destination: user-favorite-changed-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          favoriteChanged-out-0:
+            producer:
+              group: user-favorite-outbox-v1
+              # 只有同步发送得到 Broker 确认后才标记已发布。
+              send-type: Sync
+              send-msg-timeout: 3000
