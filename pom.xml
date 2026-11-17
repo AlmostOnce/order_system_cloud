@@ -34,6 +34,7 @@
         <module>search-service</module>
         <module>notification-service</module>
         <module>statistics-service</module>
+        <module>recommendation-service</module>
     </modules>
 
     <properties>
