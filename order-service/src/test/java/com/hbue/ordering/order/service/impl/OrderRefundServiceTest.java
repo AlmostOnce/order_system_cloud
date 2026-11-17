@@ -9,6 +9,7 @@ import com.hbue.ordering.order.feign.PaymentRefundClient;
 import com.hbue.ordering.order.mapper.*;
 import com.hbue.ordering.order.model.*;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
+import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ class OrderRefundServiceTest {
     private final RefundActionMapper actions=mock(RefundActionMapper.class);
     private final DataScopeService scopes=mock(DataScopeService.class);
     private final PaymentRefundClient payments=mock(PaymentRefundClient.class);
-    private final OrderRefundServiceImpl service=new OrderRefundServiceImpl(orders,items,refunds,actions,scopes,payments,mock(OrderNotificationOutboxWriter.class),"internal-test",false);
+    private final OrderRefundServiceImpl service=new OrderRefundServiceImpl(orders,items,refunds,actions,scopes,payments,mock(OrderNotificationOutboxWriter.class),"internal-test",false,mock(RecommendationPurchaseOutboxWriter.class));
     private final RefundApplyRequest request=new RefundApplyRequest(12L,1,"少一份");
     /** 最小实付快照，所有金额来自订单和支付事实，客户端没有金额字段。 */
     private void order(String status) {

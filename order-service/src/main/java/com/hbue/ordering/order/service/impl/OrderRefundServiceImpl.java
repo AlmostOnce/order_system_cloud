@@ -9,6 +9,7 @@ import com.hbue.ordering.order.feign.PaymentRefundClient;
 import com.hbue.ordering.order.mapper.*;
 import com.hbue.ordering.order.model.*;
 import com.hbue.ordering.order.notification.*;
+import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import com.hbue.ordering.order.service.*;
 import com.hbue.ordering.order.vo.*;
 import java.time.LocalDateTime;
@@ -29,11 +30,17 @@ public class OrderRefundServiceImpl implements OrderRefundService {
     private final OrderMapper orders; private final OrderItemMapper items; private final OrderRefundMapper refunds;
     private final RefundActionMapper actions; private final DataScopeService scopes; private final PaymentRefundClient payments;
     private final OrderNotificationOutboxWriter notifications; private final String token; private final boolean notifyEnabled;
+    /** 仅成功退款时生成净购买快照，拒绝、批准和处理中均不能提前撤销购买兴趣。 */
+    private final RecommendationPurchaseOutboxWriter recommendationOutbox;
+
+    /** 注入订单本地事实、远程退款能力及Outbox；推荐写入失败会回滚本次订单确认，资金由原退款号幂等核对。 */
     public OrderRefundServiceImpl(OrderMapper orders,OrderItemMapper items,OrderRefundMapper refunds,RefundActionMapper actions,
             DataScopeService scopes,PaymentRefundClient payments,OrderNotificationOutboxWriter notifications,
-            @Value("${internal.scope.token:}") String token,@Value("${notification.order-events.enabled:false}") boolean notifyEnabled) {
+            @Value("${internal.scope.token:}") String token,@Value("${notification.order-events.enabled:false}") boolean notifyEnabled,
+            RecommendationPurchaseOutboxWriter recommendationOutbox) {
         this.orders=orders;this.items=items;this.refunds=refunds;this.actions=actions;this.scopes=scopes;
         this.payments=payments;this.notifications=notifications;this.token=token;this.notifyEnabled=notifyEnabled;
+        this.recommendationOutbox=recommendationOutbox;
     }
 
     /** 先验证本人，再在锁内确认未接单/已接单分支；同一幂等键携带不同内容返回冲突。 */
@@ -159,6 +166,8 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         if(!Set.of("PROCESSING","APPROVED").contains(row.getStatus())) throw bad("退款状态不允许确认到账");
         requireOne(items.finishRefund(row.getItemId(),row.getQuantity()));row.setStatus("SUCCESS");save(row);
         if(orders.finishRefundedOrder(order.getOrderId())==0) requireOne(orders.bumpRefundVersion(order.getOrderId()));
+        // 必须在成功份数和源版本更新后写全订单快照；若落盘失败，本地SUCCESS和计数一起回滚供幂等重试。
+        recommendationOutbox.recordCurrent(order.getOrderId());
         audit(row,null,"SUCCESS","资金及所需库存步骤已确认");signal(order.getOrderId(),"退款成功");
     }
 

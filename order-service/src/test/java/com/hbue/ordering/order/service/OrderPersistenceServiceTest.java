@@ -8,6 +8,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.impl.OrderPersistenceServiceImpl;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -47,6 +48,10 @@ class OrderPersistenceServiceTest {
 
     @Mock
     private SalesOutboxWriter salesOutbox;
+
+    /** 新增推荐写入器仅补齐既有构造依赖，不新增或运行测试场景。 */
+    @Mock
+    private RecommendationPurchaseOutboxWriter recommendationOutbox;
     @Mock
     private OrderNotificationOutboxWriter notificationOutbox;
 
@@ -63,7 +68,7 @@ class OrderPersistenceServiceTest {
         when(orderItemMapper.insert(any(OrderItemDO.class))).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox, timeoutOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox
         );
         List<OrderItemDO> items = List.of(new OrderItemDO(), new OrderItemDO());
 
@@ -86,7 +91,7 @@ class OrderPersistenceServiceTest {
         when(orderMapper.insert(any(OrderDO.class))).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox, timeoutOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox
         );
 
         BusinessException exception = assertThrows(
@@ -114,7 +119,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox, timeoutOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -146,7 +151,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox, timeoutOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -171,7 +176,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void onlyWinningPaidTransitionWritesOutbox() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1, 0);
         assertTrue(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
         assertFalse(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
@@ -180,7 +185,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void outboxFailurePropagatesSoPaymentStateTransactionRollsBack() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1);
         org.mockito.Mockito.doThrow(new IllegalStateException("write failed"))
                 .when(salesOutbox).recordPaid(81L, PAID_AT);
@@ -189,7 +194,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void writesNotificationOnlyForWinningNonCancelTransition() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
         var current = new OrderDO(); current.setOrderId(81L); current.setUserId(7L); current.setVersion(4); current.setStatus("制作中");
@@ -202,7 +207,7 @@ class OrderPersistenceServiceTest {
 
     @Test
     void pickupCompletionConsumesCodeAndNotifiesOnlyWinningTransition() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
         var completed = new OrderDO(); completed.setOrderId(81L); completed.setUserId(7L);
@@ -227,7 +232,7 @@ class OrderPersistenceServiceTest {
     }
     @Test
     void pickupCodeCollisionRetriesWithoutReplacingAnotherOrdersCode() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         var order = new OrderDO(); order.setOrderId(81L); order.setUserId(7L);
         order.setStatus("待取货"); order.setPickupCode("012345");
         when(orderMapper.assignPickupCodeIfMissing(eq(81L), eq(7L), anyString()))
@@ -241,7 +246,7 @@ class OrderPersistenceServiceTest {
 
     /** 全部份数获批退款时，即使旧取餐码仍未清理也不能继续返回。 */
     @Test void approvedRefundHidesPreviouslyIssuedPickupCode() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox);
         var order = new OrderDO(); order.setOrderId(81L); order.setUserId(7L);
         order.setStatus("待取货"); order.setPickupCode("012345");
         var item = new OrderItemDO(); item.setQuantity(1); item.setRefundApprovedQuantity(1);

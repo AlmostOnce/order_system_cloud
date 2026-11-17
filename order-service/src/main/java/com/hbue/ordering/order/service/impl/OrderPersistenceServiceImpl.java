@@ -8,6 +8,7 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.enums.OrderStatus;
@@ -85,6 +86,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
     /** 订单明细表 Mapper。 */
     private final OrderItemMapper orderItemMapper;
     private final SalesOutboxWriter salesOutbox;
+    /** 推荐购买快照与支付状态同事务保存，异步派发失败不要求重新支付。 */
+    private final RecommendationPurchaseOutboxWriter recommendationOutbox;
     private OrderNotificationOutboxWriter notificationOutbox;
     @Value("${notification.order-events.enabled:false}")
     private boolean notificationsEnabled;
@@ -96,17 +99,22 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
      *
      * @param orderMapper 订单表 Mapper
      * @param orderItemMapper 订单明细表 Mapper
+     * @param salesOutbox 既有累计销量事件写入器，不变更其业务口径
+     * @param timeoutOutbox 超时关单事实写入器
+     * @param recommendationOutbox 支付/退款推荐快照写入器，必须参与同一本地事务
      */
     public OrderPersistenceServiceImpl(
             OrderMapper orderMapper,
             OrderItemMapper orderItemMapper,
             SalesOutboxWriter salesOutbox,
-            com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox
+            com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox,
+            RecommendationPurchaseOutboxWriter recommendationOutbox
     ) {
         this.timeoutOutbox=timeoutOutbox;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.salesOutbox = salesOutbox;
+        this.recommendationOutbox = recommendationOutbox;
     }
 
     /** {@inheritDoc} */
@@ -180,6 +188,8 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
         // outbox writer 使用 MANDATORY 加入当前本地事务；任一快照或事件写入失败都会回滚支付状态。
         salesOutbox.recordPaid(orderId, paidAt);
+        // 重读CAS之后的订单版本和全部规格明细，消息先后次序由消费端源版本裁决。
+        recommendationOutbox.recordCurrent(orderId);
         recordStatusNotification(orderId, expectedVersion, OrderStatus.PAID.getLabel());
         return true;
     }

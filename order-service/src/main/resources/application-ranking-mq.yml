@@ -2,6 +2,10 @@
 ranking:
   messaging:
     enabled: true
+# 推荐仅复用现有Broker，不复用销量契约；关停派发时本地Outbox仍持续记录，恢复后补发。
+recommendation:
+  messaging:
+    enabled: ${RECOMMENDATION_MESSAGING_ENABLED:true}
 notification:
   order-events:
     enabled: ${NOTIFICATION_ORDER_EVENTS_ENABLED:true}
@@ -14,8 +18,13 @@ spring:
         size: 2
   cloud:
     stream:
-      output-bindings: salesPaid-out-0
+      output-bindings: salesPaid-out-0;recommendationPurchase-out-0
       bindings:
+        recommendationPurchase-out-0:
+          destination: recommendation-purchase-snapshot-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
         salesPaid-out-0:
           destination: order-paid-sales-v2
           content-type: application/json
@@ -30,6 +39,11 @@ spring:
         binder:
           name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
         bindings:
+          recommendationPurchase-out-0:
+            producer:
+              group: order-recommendation-purchase-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000
           salesPaid-out-0:
             producer:
               group: order-sales-outbox-v1
