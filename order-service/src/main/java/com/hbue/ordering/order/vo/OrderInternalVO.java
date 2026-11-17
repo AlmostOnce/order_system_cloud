@@ -36,6 +36,12 @@ public class OrderInternalVO {
     /** 订单总金额。 */
     private BigDecimal totalAmount;
 
+    /** 订单优惠总额，提供给可信支付调用方核对。 */
+    private BigDecimal discountAmount;
+
+    /** 订单应付金额；不得由支付服务用原价重新推算优惠。 */
+    private BigDecimal payableAmount;
+
     /** 订单当前状态（数据库中文值）。 */
     private String status;
 
@@ -53,6 +59,8 @@ public class OrderInternalVO {
                 .orderNo(orderDO.getOrderNo())
                 .userId(orderDO.getUserId())
                 .totalAmount(orderDO.getTotalAmount())
+                .discountAmount(orderDO.getDiscountAmount() == null ? BigDecimal.ZERO : orderDO.getDiscountAmount())
+                .payableAmount(orderDO.getPayableAmount() == null ? orderDO.getTotalAmount() : orderDO.getPayableAmount())
                 .status(orderDO.getStatus())
                 .build();
     }

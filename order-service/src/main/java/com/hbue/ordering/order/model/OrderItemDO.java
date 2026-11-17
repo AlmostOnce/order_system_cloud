@@ -60,6 +60,14 @@ public class OrderItemDO {
     @TableField("line_amount")
     private BigDecimal lineAmount;
 
+    /** 订单级优惠分摊到本明细的金额；退款时不得按原价返还这部分优惠。 */
+    @TableField("line_discount_amount")
+    private BigDecimal lineDiscountAmount;
+
+    /** 本明细优惠后的实付金额，按份退款以此金额快照为基数。 */
+    @TableField("line_payable_amount")
+    private BigDecimal linePayableAmount;
+
     @TableField("created_at")
     /** 明细创建时间。 */
     private LocalDateTime createdAt;

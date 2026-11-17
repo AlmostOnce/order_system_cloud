@@ -54,6 +54,15 @@ public class OrderDetailVO {
     /** 服务端计算的订单总金额。 */
     private BigDecimal totalAmount;
 
+    /** 下单时保存的优惠券名称；无券订单为空。 */
+    private String couponTitle;
+
+    /** 订单优惠总额快照；旧订单或无券订单为零。 */
+    private BigDecimal discountAmount;
+
+    /** 用户实际应付金额；支付端以该快照为准。 */
+    private BigDecimal payableAmount;
+
     /** 订单状态。 */
     private String status;
 
@@ -148,6 +157,9 @@ public class OrderDetailVO {
                 .username(userBasicVO == null ? null : userBasicVO.getUsername())
                 .windowId(order.getWindowId())
                 .totalAmount(order.getTotalAmount())
+                .couponTitle(order.getCouponTitleSnapshot())
+                .discountAmount(order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount())
+                .payableAmount(order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount())
                 .status(order.getStatus())
                 .remark(order.getRemark())
                 .createdAt(order.getCreatedAt())

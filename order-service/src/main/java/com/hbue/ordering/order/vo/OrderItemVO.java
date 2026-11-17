@@ -47,6 +47,12 @@ public class OrderItemVO {
     /** 下单时的行金额。 */
     private BigDecimal lineAmount;
 
+    /** 本明细承担的订单优惠金额。 */
+    private BigDecimal lineDiscountAmount;
+
+    /** 本明细优惠后实付金额，退款计算使用该快照而非原价。 */
+    private BigDecimal linePayableAmount;
+
     /**
      * 从订单明细持久化对象构造响应视图。
      *
@@ -67,6 +73,8 @@ public class OrderItemVO {
                 .unitPrice(item.getUnitPriceSnapshot())
                 .quantity(item.getQuantity())
                 .lineAmount(item.getLineAmount())
+                .lineDiscountAmount(item.getLineDiscountAmount() == null ? BigDecimal.ZERO : item.getLineDiscountAmount())
+                .linePayableAmount(item.getLinePayableAmount() == null ? item.getLineAmount() : item.getLinePayableAmount())
                 .build();
     }
 }
