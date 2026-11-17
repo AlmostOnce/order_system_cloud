@@ -8,12 +8,16 @@ server:
 
 spring:
   profiles:
-    # 本机已完成超时关单迁移与MQ配置；默认启用销量、通知及订单超时收发。
+    # 本机默认启用销量、通知、订单超时收发和优惠券核销发布。
     default: order-timeout
+    # 显式启用 prod 等环境 profile 时，优惠券核销发布仍须保持启用。
+    include:
+      - coupon-mq
     group:
       order-timeout:
         - ranking-mq
         - order-timeout-mq
+        - coupon-mq
   data:
     redis:
       # IDEA 本机启动连接本机 Redis；容器启动时通过 REDIS_HOST 指向 redis 服务。

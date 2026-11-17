@@ -4,7 +4,9 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.model.OrderDO;
+import com.hbue.ordering.order.api.dto.CouponConsumeConfirmationRequest;
 import com.hbue.ordering.order.security.InternalTokenVerifier;
+import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
@@ -14,16 +16,17 @@ import org.springframework.web.bind.annotation.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 订单服务内部接口，仅供支付服务经服务发现调用。
+ * 订单服务内部接口，仅供支付与优惠券服务经服务发现调用。
  *
  * <p>鉴权说明：与代表用户的 /internal/products/quote（透传用户 JWT）不同，
- * 支付回调驱动的订单推进没有用户上下文，属于"系统事件"调用，
+ * 支付状态推进和券核销回执没有用户上下文，属于"系统事件"调用，
  * 因此使用共享密钥（X-Internal-Token）认证。两种模式并存是刻意设计。
  * 内部接口不依赖用户角色或用户 JWT，但每个请求仍须通过本控制器的共享密钥校验；
  * Gateway 不暴露该路径，服务发现地址也不应被视为认证措施。</p>
@@ -45,6 +48,9 @@ public class OrderInternalController {
     /** 内部令牌校验器。 */
     private final InternalTokenVerifier internalTokenVerifier;
 
+    /** 支付后优惠券核销 Outbox 回执处理器。 */
+    private final CouponConsumeOutboxWriter couponConsumeOutboxWriter;
+
     /**
      * 创建订单服务内部接口。
      *
@@ -53,10 +59,12 @@ public class OrderInternalController {
      */
     public OrderInternalController(
             OrderService orderService,
-            InternalTokenVerifier internalTokenVerifier
+            InternalTokenVerifier internalTokenVerifier,
+            CouponConsumeOutboxWriter couponConsumeOutboxWriter
     ) {
         this.orderService = orderService;
         this.internalTokenVerifier = internalTokenVerifier;
+        this.couponConsumeOutboxWriter = couponConsumeOutboxWriter;
     }
 
     /**
@@ -120,6 +128,22 @@ public class OrderInternalController {
     ) {
         verifyInternalToken(token);
         return ApiResponse.success(orderService.getPaidSalesSnapshot(orderId));
+    }
+
+    /**
+     * 接收券服务在本地核销事务提交后的回执，使 Outbox 不会仅凭 Broker 接收就永久结案。
+     * @param token 服务间共享令牌
+     * @param request 已核销事件的身份快照
+     * @return 同一事件首次确认或安全重放时均返回成功
+     */
+    @PostMapping("/coupon-consume/confirmed")
+    public ApiResponse<Void> confirmCouponConsumed(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
+            @RequestBody CouponConsumeConfirmationRequest request
+    ) {
+        verifyInternalToken(token);
+        couponConsumeOutboxWriter.confirm(request);
+        return ApiResponse.success(null);
     }
 
     /**
