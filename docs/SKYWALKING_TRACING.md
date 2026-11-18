@@ -55,27 +55,29 @@ docker compose --profile skywalking ps
 
 ## 3. 启动 Java 服务
 
-在 IDEA 中选择共享运行配置 `SkyWalking - <service-name>`。15 个配置均加载 `.local/skywalking-agent/agent/skywalking-agent.jar`，并设置独立服务名与本机 Collector 地址。服务端口以当前各服务配置为准：
+在本机当前工作区，选择平时使用的原有 IDEA 配置启动服务。15 个原有配置已在本机自动加入 SkyWalking Agent、各自的服务名、Collector 地址，以及从根目录 `.env` 填入的 Nacos 用户名和密码；这些凭据保存在被忽略的 `.idea/workspace.xml` 中。服务端口以当前各服务配置为准：
 
-| 服务 | 端口 | SkyWalking 服务名 |
-|---|---:|---|
-| Gateway | 9090 | `gateway-service` |
-| 订单 | 9091 | `order-service` |
-| 用户 | 9092 | `user-service` |
-| 商品 | 9093 | `product-service` |
-| 认证 | 9094 | `auth-service` |
-| 支付 | 9101 | `payment-service` |
-| 文件 | 9102 | `file-service` |
-| 购物车 | 9103 | `cart-service` |
-| 库存 | 9104 | `stock-service` |
-| 评论 | 9105 | `comment-service` |
-| 搜索 | 9106 | `search-service` |
-| 通知 | 9107 | `notification-service` |
-| 统计 | 9111 | `statistics-service` |
-| 推荐 | 9112 | `recommendation-service` |
-| 优惠券 | 9113 | `coupon-service` |
+| 服务 | 端口 | 本机 IDEA 配置名 | SkyWalking 服务名 |
+|---|---:|---|---|
+| Gateway | 9090 | `GatewayServiceApplication` | `gateway-service` |
+| 订单 | 9091 | `OrderServiceApplication` | `order-service` |
+| 用户 | 9092 | `UserServiceApplication` | `user-service` |
+| 商品 | 9093 | `ProductServiceApplication` | `product-service` |
+| 认证 | 9094 | `AuthServiceApplication` | `auth-service` |
+| 支付 | 9101 | `PaymentServiceApplication` | `payment-service` |
+| 文件 | 9102 | `FileServiceApplication` | `file-service` |
+| 购物车 | 9103 | `CartServiceApplication` | `cart-service` |
+| 库存 | 9104 | `StockServiceApplication` | `stock-service` |
+| 评论 | 9105 | `CommentServiceApplication` | `comment-service` |
+| 搜索 | 9106 | `SearchServiceApplication` | `search-service` |
+| 通知 | 9107 | `NotificationServiceApplication` | `notification-service` |
+| 统计 | 9111 | `StatisticsServiceApplication` | `statistics-service` |
+| 推荐 | 9112 | `RecommendationServiceApplication` | `recommendation-service` |
+| 优惠券 | 9113 | `CouponServiceApplication` | `coupon-service` |
 
-共享运行配置不包含 `.idea/workspace.xml` 中的本机环境变量。若某服务需要现有私有变量才能启动，继续使用原来的 IDEA 配置，只把共享配置的 `-javaagent` VM 参数和 `SW_AGENT_NAME`、`SW_AGENT_COLLECTOR_BACKEND_SERVICES=127.0.0.1:11800` 两个环境变量复制过去。
+这些配置仍启动原来的 15 个业务服务，并没有创建业务服务副本。名称带 `SkyWalking -` 的 `.run` 配置是可共享的备用启动项，不会继承本机 `.idea/workspace.xml` 中的变量。当前只有 `SkyWalking - gateway-service` 配置通过 IDEA 的环境变量文件功能读取 `$PROJECT_DIR$/.env`；其余共享配置未加载 Nacos 凭据，本机启动这些服务时应使用原有 IDEA 配置。
+
+本机凭据和 Agent 参数保存在被 Git 忽略的 `.idea/workspace.xml` 中，不会提交密码。若删除或重新生成该 IDEA 本机配置，需恢复本机的 Nacos 凭据和上述 Agent 设置；不要把 `.env` 中的凭据复制到可提交的 `.run` 文件。每个业务服务只启动一个配置，不能同时启动原配置和对应的 `SkyWalking - ...` 配置，否则会争用同一端口。
 
 ### 使用 Compose Gateway
 
