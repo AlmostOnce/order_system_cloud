@@ -43,7 +43,7 @@ public class ProductRecommendationSourceController {
     @GetMapping("/windows/{windowId}/documents")
     public ApiResponse<List<ProductRecommendationDocument>> documents(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @PathVariable Long windowId) {
+            @PathVariable("windowId") Long windowId) {
         verifier.verify(token);
         return ApiResponse.success(source.documents(windowId));
     }
@@ -54,7 +54,7 @@ public class ProductRecommendationSourceController {
     @GetMapping("/windows/{windowId}/products/{productId}")
     public ApiResponse<List<ProductRecommendationDocument>> product(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @PathVariable Long windowId, @PathVariable Long productId) {
+            @PathVariable("windowId") Long windowId, @PathVariable("productId") Long productId) {
         verifier.verify(token);
         return ApiResponse.success(source.document(windowId, productId));
     }

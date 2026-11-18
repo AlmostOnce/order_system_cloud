@@ -30,7 +30,7 @@ public class SalesStatisticsInternalController {
     @GetMapping("/rankings/sales")
     public ApiResponse<SalesRankingVO> ranking(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @RequestParam(defaultValue = "50") int limit) {
+            @RequestParam(name = "limit", defaultValue = "50") int limit) {
         verifier.verify(token);
         return ApiResponse.success(statistics.listRanking(limit));
     }

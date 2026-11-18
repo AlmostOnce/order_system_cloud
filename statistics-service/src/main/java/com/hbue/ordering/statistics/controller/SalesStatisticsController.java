@@ -48,7 +48,8 @@ public class SalesStatisticsController {
      */
     @GetMapping("/windows/{windowId}/monthly-sales")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<WindowProductMonthlySalesVO> monthlyWindowProducts(@PathVariable Long windowId) {
+    public ApiResponse<WindowProductMonthlySalesVO> monthlyWindowProducts(
+            @PathVariable("windowId") Long windowId) {
         return ApiResponse.success(statistics.getWindowMonthlySales(windowId));
     }
 }
