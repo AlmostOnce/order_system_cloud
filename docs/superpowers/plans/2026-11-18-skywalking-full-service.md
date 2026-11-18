@@ -63,13 +63,13 @@
 - Produces: Gateway 容器挂载目录 `.local/skywalking-agent/agent/`。
 - Produces: IDEA JVM 参数 `-javaagent:$PROJECT_DIR$/.local/skywalking-agent/agent/skywalking-agent.jar`。
 
-- [ ] 在 `.gitignore` 忽略 `.local/skywalking-agent/`。
-- [ ] 从 Apache 官方下载 `apache-skywalking-java-agent-9.8.0.tgz` 及 `.sha512` 到该忽略目录。
-- [ ] 使用 Apache 提供的 SHA-512 文件核验发行包，核验失败时停止解压并记录问题。
-- [ ] 检查归档路径后解压，使 Agent JAR 位于约定路径；不把归档或 JAR 添加到 Git。
-- [ ] 检查 Agent 9.8.0 的 `optional-plugins` 实际文件名，只将 Spring MVC 6 与 Spring Cloud Gateway 4.x 所需插件复制到 `plugins`；Gateway 使用时不额外复制 WebFlux 6 插件。
-- [ ] 静态核对 Agent JAR 和所选可选插件均在本机忽略目录，且 `git status` 不列出二进制文件。
-- [ ] 提交：`chore: 忽略本机 SkyWalking Agent 文件`
+- [x] 在 `.gitignore` 忽略 `.local/skywalking-agent/`。
+- [x] 从 Apache 官方下载 `apache-skywalking-java-agent-9.8.0.tgz` 及 `.sha512` 到该忽略目录。
+- [x] 使用 Apache 提供的 SHA-512 文件核验发行包，校验通过后才解压。
+- [x] 检查归档路径后解压，使 Agent JAR 位于约定路径；归档与 JAR 均未添加到 Git。
+- [x] 检查 Agent 9.8.0 的 `optional-plugins` 实际文件名，只将 Spring MVC 6 与 Spring Cloud Gateway 4.x 插件复制到 `plugins`；未复制 WebFlux 6 插件。
+- [x] 静态核对 Agent JAR 和所选可选插件均在本机忽略目录，且 `git status` 不列出二进制文件。
+- [x] 提交：`chore: 忽略本机 SkyWalking Agent 文件`
 
 ### Task 3：接入 15 个 IDEA 运行配置与可选 Gateway 容器
 
