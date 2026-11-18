@@ -117,9 +117,9 @@
 - Verify: `docker-compose.yml`、`.run/`、`.gitignore`、`.env.example` 和本计划涉及的 Markdown。
 - Modify: `docs/superpowers/plans/2026-11-18-skywalking-full-service.md`（勾选完成项）
 
-- [ ] 运行 `docker compose config --quiet`，只验证 Compose 文件解析，不启动或重启容器。
-- [ ] 使用 PowerShell XML 解析确认 15 份 IDEA 配置结构有效、服务名唯一、模块名和主类对应。
-- [ ] 使用 `git diff --check` 加未跟踪文件空白核对；确认 `.env` 与 Agent 发行包仍被忽略，未进入 Git 改动清单。
-- [ ] 搜索 README 与相关服务文档，确认优惠券端口为 `9113`、推荐服务端口为 `9112`。
-- [ ] 不运行 Maven、测试或 Java 服务；在进度记录中保留这些未验证项及 RocketMQ 上下文传播风险。
-- [ ] 提交：`docs: 记录 SkyWalking 静态验收范围`
+- [ ] 运行 `docker compose config --quiet`：本机没有 Docker CLI（`docker` 命令不可用），Compose 解析未能验收；没有启动或重启容器。
+- [x] 静态解析 15 份 IDEA XML，确认配置结构有效、服务名唯一、模块和主类对应，Agent 参数及 Collector 地址准确。
+- [x] 使用 `git diff --check`；确认 `.env` 与 Agent 发行包均被忽略且未进入 Git 改动清单。
+- [x] 搜索 README 与相关服务文档，确认推荐服务端口为 `9112`、优惠券服务端口为 `9113`。
+- [x] 未运行 Maven、测试或 Java 服务；进度文档已保留容器、HTTP/MQ Trace 未验收和 RocketMQ 上下文传播风险。
+- [x] 提交：`docs: 记录 SkyWalking 静态验收范围`
