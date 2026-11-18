@@ -16,16 +16,20 @@
 
 ## 接口约定
 
-- `GET /api/statistics/rankings/sales?limit=50`：累计销量榜，响应沿用 `{updatedAt, items:[{rank,productId,windowId,productName,sales}]}`。
+- `GET /api/statistics/rankings/sales?limit=50`：累计销量榜，响应沿用
+  `{updatedAt, items:[{rank,productId,windowId,productName,sales}]}`。
 - `GET /api/statistics/windows/monthly-sales`：当前月窗口汇总 `{items:[{windowId,sales}]}`，供首页一次批量读取。
-- `GET /api/statistics/windows/{windowId}/monthly-sales`：当前窗口与菜品当前月销量 `{windowId,sales,products:[{productId,sales}]}`，供点餐页一次读取。
+- `GET /api/statistics/windows/{windowId}/monthly-sales`：当前窗口与菜品当前月销量
+  `{windowId,sales,products:[{productId,sales}]}`，供点餐页一次读取。
 
 ## 一致性和兼容
 
 - 支付服务从支付表读取数据库写定的 `success_time`，通过内部接口传给订单服务；空值不能用订单更新时间或当前时间猜测。
 - 订单状态、`paid_at` 和销量 outbox 在订单库同一本地事务提交。重复支付通知只允许首次状态迁移产生事件。
-- 消费者以稳定 `order-paid-sales:{orderId}` 作为事件幂等键；事件事实、明细和 MySQL 汇总本地原子写入。Redis Lua 按订单去重，失败时允许 RocketMQ 重投；周期重建以 MySQL 汇总和事件集合为准。
-- 新消息携带支付时间、窗口和下单时菜品快照。旧消息若只有订单 ID，消费者可调用订单服务受内部令牌保护的只读快照接口；历史记录由迁移脚本按 `payments.success_time` 回填。
+- 消费者以稳定 `order-paid-sales:{orderId}` 作为事件幂等键；事件事实、明细和 MySQL 汇总本地原子写入。Redis Lua 按订单去重，失败时允许
+  RocketMQ 重投；周期重建以 MySQL 汇总和事件集合为准。
+- 新消息携带支付时间、窗口和下单时菜品快照。旧消息若只有订单 ID，消费者可调用订单服务受内部令牌保护的只读快照接口；历史记录由迁移脚本按
+  `payments.success_time` 回填。
 
 ## 学生端月售刷新
 
@@ -35,4 +39,5 @@
 
 ## 数据保留
 
-统计事实仅保存订单 ID、窗口 ID、支付时间和订单菜品快照，不复制用户身份、支付凭证或退款敏感信息。该模型在首期提供 ALL 与当前 MONTH 汇总；不提前实现未确认的排行榜切换 UI、财务报表和管理界面。
+统计事实仅保存订单 ID、窗口 ID、支付时间和订单菜品快照，不复制用户身份、支付凭证或退款敏感信息。该模型在首期提供 ALL 与当前
+MONTH 汇总；不提前实现未确认的排行榜切换 UI、财务报表和管理界面。

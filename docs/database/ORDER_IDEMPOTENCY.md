@@ -24,14 +24,20 @@
 }
 ```
 
-订单服务调用商品服务的 `POST /internal/products/quote` 批量核价。商品服务只返回启用窗口中属于该窗口且在售的菜品；缺少任一菜品或规格选择失效时，订单创建返回 HTTP 400。订单金额由服务端按基础售价加规格选项加价后乘数量计算，创建响应和订单详情包含下单时的菜品名称、编码、单价、规格文字、数量及行金额快照。
+订单服务调用商品服务的 `POST /internal/products/quote` 批量核价。商品服务只返回启用窗口中属于该窗口且在售的菜品；缺少任一菜品或规格选择失效时，订单创建返回
+HTTP 400。订单金额由服务端按基础售价加规格选项加价后乘数量计算，创建响应和订单详情包含下单时的菜品名称、编码、单价、规格文字、数量及行金额快照。
 
-同一菜品不同规格可以分行，相同菜品与规格组合必须由调用方合并成一行；每单最多 100 行。库存仍按菜品粒度计算，下单扣减和待支付取消回补会先把同菜的不同规格份数合并。核价接口要求有效的 CUSTOMER JWT，并校验 Access Token 黑名单。
+同一菜品不同规格可以分行，相同菜品与规格组合必须由调用方合并成一行；每单最多 100
+行。库存仍按菜品粒度计算，下单扣减和待支付取消回补会先把同菜的不同规格份数合并。核价接口要求有效的 CUSTOMER JWT，并校验
+Access Token 黑名单。
 
-订单明细规格快照由 `order_db/V9__add_order_item_specification_snapshot.sql` 新增的 `selection_key_snapshot` 与 `specification_text_snapshot` 保存。历史订单默认 `base` 和空规格文字，不按当前商品配置回填。
+订单明细规格快照由 `order_db/V9__add_order_item_specification_snapshot.sql` 新增的 `selection_key_snapshot` 与
+`specification_text_snapshot` 保存。历史订单默认 `base` 和空规格文字，不按当前商品配置回填。
 
 ## 应用数据库迁移
 
-当前项目没有自动执行数据库迁移的依赖。现有 `order_db` 已有 `orders` 表时，按需执行 `V2__add_order_idempotency.sql` 和 `V3__create_order_items_table.sql`。全新数据库则按顺序执行 `V1__create_orders_table.sql`、`V2__add_order_idempotency.sql` 和 `V3__create_order_items_table.sql`。
+当前项目没有自动执行数据库迁移的依赖。现有 `order_db` 已有 `orders` 表时，按需执行 `V2__add_order_idempotency.sql` 和
+`V3__create_order_items_table.sql`。全新数据库则按顺序执行 `V1__create_orders_table.sql`、`V2__add_order_idempotency.sql`
+和 `V3__create_order_items_table.sql`。
 
 迁移完成后再启动新版 `order-service`。`idempotency_key` 和 `request_hash` 对历史订单保留为 `NULL`；新订单由服务写入这两个字段。

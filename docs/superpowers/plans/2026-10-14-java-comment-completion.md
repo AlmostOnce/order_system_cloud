@@ -4,7 +4,9 @@
 
 **Goal:** 为所有生产 Java 源码补充准确、易读的中文类与方法注释，并说明关键业务步骤，不改变任何运行逻辑。
 
-**Architecture:** 按共享组件、网关认证、用户订单、商品支付四个边界分批处理 `src/main/java`。类、接口、枚举使用中文 Javadoc；公共及非平凡方法说明用途、参数、返回值和异常；方法内部只在关键业务步骤、分支、并发、幂等、远程调用与异常转换处添加有解释价值的中文 `//` 注释。
+**Architecture:** 按共享组件、网关认证、用户订单、商品支付四个边界分批处理 `src/main/java`。类、接口、枚举使用中文
+Javadoc；公共及非平凡方法说明用途、参数、返回值和异常；方法内部只在关键业务步骤、分支、并发、幂等、远程调用与异常转换处添加有解释价值的中文
+`//` 注释。
 
 **Tech Stack:** Java 21、Spring Boot、Spring Cloud Alibaba、Maven。
 
@@ -32,7 +34,9 @@
 ### Task 1: 共享组件与远程契约
 
 **Files:**
-- Modify all Java files under `common-core/src/main/java`, `common-response/src/main/java`, `common-web/src/main/java`, `common-redis/src/main/java`, `user-api/src/main/java`, and `product-api/src/main/java`.
+
+- Modify all Java files under `common-core/src/main/java`, `common-response/src/main/java`, `common-web/src/main/java`,
+  `common-redis/src/main/java`, `user-api/src/main/java`, and `product-api/src/main/java`.
 - Modify `docs/JAVA_CODING_STANDARDS.md` to make the requested comment-depth expectations explicit.
 
 - [x] 补齐类型、公共方法和关键方法体的中文注释；保留既有行为。
@@ -42,6 +46,7 @@
 ### Task 2: Gateway 与认证服务
 
 **Files:**
+
 - Modify all Java files under `gateway-service/src/main/java` and `auth-service/src/main/java`。
 
 - [x] 补齐中文类、方法及关键步骤注释，重点解释认证、JWT、刷新、注销、限流和安全失败路径。
@@ -51,6 +56,7 @@
 ### Task 3: 用户与订单服务
 
 **Files:**
+
 - Modify all Java files under `user-service/src/main/java` and `order-service/src/main/java`。
 
 - [x] 补齐中文类、方法及关键步骤注释，重点解释权限、数据范围、余额、订单状态与幂等边界。
@@ -60,6 +66,7 @@
 ### Task 4: 商品与支付服务及全量检查
 
 **Files:**
+
 - Modify all Java files under `product-service/src/main/java` and `payment-service/src/main/java`。
 - Modify `docs/PROJECT_PROGRESS.md` to record completed comment work.
 

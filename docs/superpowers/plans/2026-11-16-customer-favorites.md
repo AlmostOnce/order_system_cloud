@@ -4,9 +4,11 @@
 
 **目标：**让学生能够收藏窗口和菜品，在独立列表中管理并重新进入对应点餐页。
 
-**架构：**`user-service` 在 `user_db` 保存按用户隔离的收藏关系，使用 CUSTOMER JWT 限制所有接口。uni-app x 复用商品服务现有窗口、菜单和图片接口丰富收藏条目，不跨服务查库或新增目录服务接口。
+**架构：**`user-service` 在 `user_db` 保存按用户隔离的收藏关系，使用 CUSTOMER JWT 限制所有接口。uni-app x
+复用商品服务现有窗口、菜单和图片接口丰富收藏条目，不跨服务查库或新增目录服务接口。
 
-**技术栈：**Spring Boot、MyBatis-Plus、MySQL、Spring Security JWT；uni-app x / UTS、现有 `common/http.uts`、商品 API 与 `business-image`。
+**技术栈：**Spring Boot、MyBatis-Plus、MySQL、Spring Security JWT；uni-app x / UTS、现有 `common/http.uts`、商品 API 与
+`business-image`。
 
 **设计说明：**`docs/superpowers/specs/2026-11-16-customer-favorites-design.md`
 
@@ -32,31 +34,40 @@
 
 ### 后端 `E:/order_system_cloud`
 
-- 新建 `user-service/src/main/java/com/hbue/ordering/user/controller/UserFavoriteController.java`：CUSTOMER HTTP 边界、JWT 用户 ID 和参数绑定。
-- 新建 `user-service/src/main/java/com/hbue/ordering/user/service/UserFavoriteService.java`、`service/impl/UserFavoriteServiceImpl.java`：收藏幂等写入、删除、批量状态与游标分页。
-- 新建 `user-service/src/main/java/com/hbue/ordering/user/model/UserFavoriteDO.java`、`mapper/UserFavoriteMapper.java`：MyBatis-Plus 持久化映射和有界 SQL。
-- 新建 `user-service/src/main/java/com/hbue/ordering/user/dto/request/FavoriteStatusRequest.java`、`vo/UserFavoriteItemVO.java`、`vo/UserFavoritePageVO.java`、`vo/FavoriteStatusVO.java`：明确接口输入输出。
+- 新建 `user-service/src/main/java/com/hbue/ordering/user/controller/UserFavoriteController.java`：CUSTOMER HTTP 边界、JWT
+  用户 ID 和参数绑定。
+- 新建 `user-service/src/main/java/com/hbue/ordering/user/service/UserFavoriteService.java`、
+  `service/impl/UserFavoriteServiceImpl.java`：收藏幂等写入、删除、批量状态与游标分页。
+- 新建 `user-service/src/main/java/com/hbue/ordering/user/model/UserFavoriteDO.java`、`mapper/UserFavoriteMapper.java`
+  ：MyBatis-Plus 持久化映射和有界 SQL。
+- 新建 `user-service/src/main/java/com/hbue/ordering/user/dto/request/FavoriteStatusRequest.java`、
+  `vo/UserFavoriteItemVO.java`、`vo/UserFavoritePageVO.java`、`vo/FavoriteStatusVO.java`：明确接口输入输出。
 - 新建 `docs/database/migrations/user_db/V11__create_user_favorites.sql`：新增收藏表、唯一键和用户分页索引。
-- 修改 `docs/ARCHITECTURE.md`、`docs/PROJECT_PROGRESS.md`、`docs/superpowers/plans/2026-11-02-student-client-next-steps.md`：记录归属、迁移与计划状态。
+- 修改 `docs/ARCHITECTURE.md`、`docs/PROJECT_PROGRESS.md`、
+  `docs/superpowers/plans/2026-11-02-student-client-next-steps.md`：记录归属、迁移与计划状态。
 
 ### 学生端 `E:/order_system_cloud_user`
 
 - 新建 `api/favorites.uts`：封装新增、删除、状态与游标查询及响应解析。
 - 修改 `pages/home/home.uvue`：首页窗口卡片只保留进入点餐动作，不承载收藏操作。
-- 修改 `pages/menu/menu.uvue` 与 `components/review-list/review-list.uvue`：点餐页头部右侧承载店铺收藏；点击菜品打开评价弹层后，在标题栏右侧收藏当前菜品，菜品图片与本店搜索结果不放收藏角标。
+- 修改 `pages/menu/menu.uvue` 与 `components/review-list/review-list.uvue`
+  ：点餐页头部右侧承载店铺收藏；点击菜品打开评价弹层后，在标题栏右侧收藏当前菜品，菜品图片与本店搜索结果不放收藏角标。
 - 修改 `pages/mine/mine.uvue`、`pages.json`：CUSTOMER“我的收藏”入口和列表路由。
 - 新建 `pages/favorites/list.uvue`：店铺/菜品标签、游标加载、刷新、下架占位、移除和点餐定位。
-- 新建 `static/favorites/bookmark-outline.svg`、`static/favorites/bookmark-filled.svg`；在 `styles/account.css` 增加收藏页共享视觉类，沿用已维护的 DESIGN/UX 约定。
+- 新建 `static/favorites/bookmark-outline.svg`、`static/favorites/bookmark-filled.svg`；在 `styles/account.css`
+  增加收藏页共享视觉类，沿用已维护的 DESIGN/UX 约定。
 - 修改 `UX-CONTRACT.md`：记录收藏动作、列表导航、错误和下架行为。
 
 ## 执行步骤
 
 ### 任务1：实现 user-service 收藏 API 与持久化
 
-- 在 V11 迁移中建立 `user_favorites`：自增 `favorite_id`、`user_id`、`target_type`、`target_id`、`created_at`；唯一键 `(user_id,target_type,target_id)`，列表索引 `(user_id,target_type,favorite_id)`。
+- 在 V11 迁移中建立 `user_favorites`：自增 `favorite_id`、`user_id`、`target_type`、`target_id`、`created_at`；唯一键
+  `(user_id,target_type,target_id)`，列表索引 `(user_id,target_type,favorite_id)`。
 - 使用 MyBatis-Plus DO/Mapper；新增 SQL 使用 MySQL upsert 保证收藏幂等；删除不存在记录按成功处理。
 - 暴露设计说明中的四个接口。校验允许类型、正数 ID、批量最多100项、分页默认20且最多50、游标为正数。
-- 用 SQL `favorite_id < beforeId ORDER BY favorite_id DESC LIMIT limit+1` 实现稳定游标；服务层去掉探测行并返回 `hasMore/nextCursor`。
+- 用 SQL `favorite_id < beforeId ORDER BY favorite_id DESC LIMIT limit+1` 实现稳定游标；服务层去掉探测行并返回
+  `hasMore/nextCursor`。
 - Controller 仅从 JWT `sub` 取用户 ID，并在类/方法层限制 CUSTOMER；响应不包含其他用户信息。
 
 ### 任务2：执行并核验 user_db 迁移
@@ -68,8 +79,10 @@
 
 - 用新 `api/favorites.uts` 管理收藏关系；状态查询只提交当前页面可见的 ID，列表按游标读取。
 - 首页卡片和点餐卡片的图标操作与父级点击分离；操作等待服务端成功后更新状态，错误保留原值并显示 Toast。
-- “我的收藏”只对 CUSTOMER 显示，两个标签分别查询窗口和菜品。窗口数据用现有 `listActiveWindows()`；菜品详情用新增的 `fetchProductImages()` 区分目录缺项和网络错误，再按当前页涉及的窗口调用 `fetchWindowMenu()`，不对每个收藏菜品逐条请求。
-- 当前目录中不存在的目标显示“暂不可用”并保留删除入口。可用窗口跳转菜单页；可用菜品跳转时携带现有 `windowId`、`productId` 参数。
+- “我的收藏”只对 CUSTOMER 显示，两个标签分别查询窗口和菜品。窗口数据用现有 `listActiveWindows()`；菜品详情用新增的
+  `fetchProductImages()` 区分目录缺项和网络错误，再按当前页涉及的窗口调用 `fetchWindowMenu()`，不对每个收藏菜品逐条请求。
+- 当前目录中不存在的目标显示“暂不可用”并保留删除入口。可用窗口跳转菜单页；可用菜品跳转时携带现有 `windowId`、`productId`
+  参数。
 - 页面包含首屏加载、空状态、错误重试、下拉刷新、加载更多、重复请求保护及离页请求失效保护。
 
 ### 任务4：更新文档并静态复核
@@ -89,6 +102,9 @@
 ## 执行记录（2026-11-16）
 
 - 迁移前检查：开发库可连、版本 MySQL 8.0.46，`user_favorites` 不存在，现有4张表；使用 user-service 配置账号完成备份。
-- 迁移备份位于系统临时目录：`C:\Users\DELL\AppData\Local\Temp\order_system_cloud_user_db_before_favorites_v11_20261116.sql`，17,905 字节；SHA-256：`B18554B34C0EBC25C8396D66B1ECDD88C72B3F193A2DD2869E0D5D36F3EE6E43`。
-- V11 执行成功；核验 InnoDB、`utf8mb4_unicode_ci`、`favorite_id/user_id/target_type/target_id/created_at` 五列、主键、`(user_id,target_type,target_id)` 唯一键、`(user_id,target_type,favorite_id)` 分页索引及0条初始记录。
+- 迁移备份位于系统临时目录：
+  `C:\Users\DELL\AppData\Local\Temp\order_system_cloud_user_db_before_favorites_v11_20261116.sql`，17,905 字节；SHA-256：
+  `B18554B34C0EBC25C8396D66B1ECDD88C72B3F193A2DD2869E0D5D36F3EE6E43`。
+- V11 执行成功；核验 InnoDB、`utf8mb4_unicode_ci`、`favorite_id/user_id/target_type/target_id/created_at` 五列、主键、
+  `(user_id,target_type,target_id)` 唯一键、`(user_id,target_type,favorite_id)` 分页索引及0条初始记录。
 - 仅做源码静态审阅与 SQL/迁移核验；未运行 Maven、构建、测试、服务重启、HBuilder 编译或真机联调。

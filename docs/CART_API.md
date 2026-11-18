@@ -6,14 +6,18 @@
 ## 实现边界
 
 - 已实现按用户隔离的 Redis 购物车、按窗口分组、数量与种类限制、勾选、删除，以及商品实时核验。
-- 一条购物车明细由菜品 ID 与规格选择键共同标识；同菜不同规格分行，相同规格合并数量。旧无规格明细继续使用 `base`，保持原 Redis Field 兼容。
+- 一条购物车明细由菜品 ID 与规格选择键共同标识；同菜不同规格分行，相同规格合并数量。旧无规格明细继续使用 `base`，保持原
+  Redis Field 兼容。
 - 请求中不接收价格，用户 ID 仅从 JWT sub 读取；同一用户多个设备共享 Redis 状态。
-- 新增默认勾选；同窗口同菜品重复 POST 会累加，POST 本身不承诺请求幂等。不要对结果未知的添加请求自动重试，可先查询确认数量，或用 PUT 设定明确目标值。
+- 新增默认勾选；同窗口同菜品重复 POST 会累加，POST 本身不承诺请求幂等。不要对结果未知的添加请求自动重试，可先查询确认数量，或用
+  PUT 设定明确目标值。
 - 修改数量和勾选只更新对应字段，Lua 原子执行，避免并发请求互相覆盖。默认每项最多 99 份、每个用户最多 100 类菜品（所有窗口合计）。
 - Redis 的 30 天 TTL 在发生修改后续期，GET 不续期；删除不存在的条目不续期，也不会创建空购物车。
-- 查询时每个窗口调用一次商品批量核价。若其中一行规格已失效，购物车会逐行隔离该行并保留其它可售行的实时报价；失效项 `available=false`，不计入可结算合计，也仍可删除。
+- 查询时每个窗口调用一次商品批量核价。若其中一行规格已失效，购物车会逐行隔离该行并保留其它可售行的实时报价；失效项
+  `available=false`，不计入可结算合计，也仍可删除。
 - 商品服务故障返回 HTTP 503，不把整批菜品误标成下架，不退回旧价格。删除、清空、数量与勾选修改只依赖 Redis，允许用户清理失效项。
-- 价格仅用于预览，不做库存预占。已提供下单后的安全清理接口，调用方需显式串联；并非创建订单后自动触发。Redis 是唯一业务存储，不建设 MySQL 备份，也不支持游客购物车及登录合并。
+- 价格仅用于预览，不做库存预占。已提供下单后的安全清理接口，调用方需显式串联；并非创建订单后自动触发。Redis 是唯一业务存储，不建设
+  MySQL 备份，也不支持游客购物车及登录合并。
 
 ## 请求示例
 
@@ -106,20 +110,21 @@ false 为有效值；不传 checked 返回 400。不可售条目即使勾选也�
 
 ### 删除与清空
 
-- `DELETE /api/cart/windows/1/items/11`：只删除无规格 `base` 行；有规格行使用 `DELETE /api/cart/windows/1/items/11/selections/22`。
+- `DELETE /api/cart/windows/1/items/11`：只删除无规格 `base` 行；有规格行使用
+  `DELETE /api/cart/windows/1/items/11/selections/22`。
 - `DELETE /api/cart/windows/1`：只清空当前用户窗口 1，不影响窗口 10 或其它窗口。
 - 两者均幂等，成功返回 HTTP 200 和 `data=null`。
 
 ## 错误约定
 
-| HTTP | 业务码 | 场景 |
-|---|---|---|
-| 400 | COMMON_400 | 缺失或非法参数、容量超限、数量超限、路径 ID 不是数字 |
-| 401 | COMMON_401 | 无效或注销 Token、非法 JWT 用户身份 |
-| 403 | COMMON_403 | 缺少 CUSTOMER 角色 |
-| 404 | COMMON_404 | 添加不可售菜品、修改不存在的购物车条目 |
-| 409 | COMMON_409 | 清理快照的窗口、商品或数量与实际订单不一致 |
-| 503 | COMMON_503 | Redis 故障、购物车数据损坏、商品服务故障或核价响应异常 |
+| HTTP | 业务码     | 场景                                                   |
+|------|------------|--------------------------------------------------------|
+| 400  | COMMON_400 | 缺失或非法参数、容量超限、数量超限、路径 ID 不是数字   |
+| 401  | COMMON_401 | 无效或注销 Token、非法 JWT 用户身份                    |
+| 403  | COMMON_403 | 缺少 CUSTOMER 角色                                     |
+| 404  | COMMON_404 | 添加不可售菜品、修改不存在的购物车条目                 |
+| 409  | COMMON_409 | 清理快照的窗口、商品或数量与实际订单不一致             |
+| 503  | COMMON_503 | Redis 故障、购物车数据损坏、商品服务故障或核价响应异常 |
 
 Redis 若在 JWT 黑名单检查阶段已经不可用，会沿用资源服务器的失败关闭规则返回 401；
 503 指通过身份校验后，在购物车业务存储或商品调用阶段发生的故障。
@@ -133,7 +138,8 @@ Redis 若在 JWT 黑名单检查阶段已经不可用，会沿用资源服务器
 
 调用顺序：
 
-1. `GET /api/cart` 后，在下单前保存本次窗口内选中且可售明细的 productId、selectionKey、quantity、revision 和 selectedOptionIds。
+1. `GET /api/cart` 后，在下单前保存本次窗口内选中且可售明细的 productId、selectionKey、quantity、revision 和
+   selectedOptionIds。
 2. 使用原有 `POST /api/orders` 创建订单，提交同一窗口及同一批菜品规格与数量，携带 `Idempotency-Key`。
 3. 收到成功的订单 ID 后，用第一步保存的快照调用清理接口，不重新查询并替换 revision。
 4. 清理失败只重试清理，不重新下单；若下单本身超时、结果未知，先用原幂等键与相同订单请求重放，确认订单成功后再清理。
@@ -171,7 +177,8 @@ Redis 若在 JWT 黑名单检查阶段已经不可用，会沿用资源服务器
 - `repository/CartRedisRepository`、`resources/redis/cart-mutate.lua`：Hash 存取、并发限制、版本与 TTL。
 - `model/CartItemDO`：Redis 持久化对象；`dto/request` 与 `vo` 分别管理请求、展示对象。
 - `config/CartFeignConfiguration`：代表当前顾客调用商品服务时透传 Authorization。
-- `controller/CartCleanupController` → `service/CartCleanupService` → `service/impl/CartCleanupServiceImpl`：单独编排订单事实校验及清理；复用 order-api，只读调用订单服务，不依赖其实现模块。
+- `controller/CartCleanupController` → `service/CartCleanupService` → `service/impl/CartCleanupServiceImpl`
+  ：单独编排订单事实校验及清理；复用 order-api，只读调用订单服务，不依赖其实现模块。
 - `resources/redis/cart-cleanup.lua`：按提交快照原子比较与删除，不影响其它用户、窗口或后续修改。
 - 不建设购物车 MySQL 表，因此不使用 MyBatis-Plus 的 IService/ServiceImpl；Redis 持久化由 AOF 与 Docker 数据卷承担，不承诺极端故障零数据丢失。
 

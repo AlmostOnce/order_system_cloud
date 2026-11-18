@@ -1,10 +1,12 @@
 # Docker Development Environment Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 为当前 Spring Cloud 项目建立不与旧项目冲突的 MySQL、Nacos、Gateway Docker 开发环境。
 
-**Architecture:** Docker Compose 管理 MySQL 和 Nacos 基础设施，Gateway 使用 `app` profile 单独构建和启动。通过命名卷保存基础设施数据，通过环境变量让 Gateway 同时支持 IDEA 本地启动和 Compose 内启动。
+**Architecture:** Docker Compose 管理 MySQL 和 Nacos 基础设施，Gateway 使用 `app` profile 单独构建和启动。通过命名卷保存基础设施数据，通过环境变量让
+Gateway 同时支持 IDEA 本地启动和 Compose 内启动。
 
 **Tech Stack:** Docker Compose、MySQL 8.0、Nacos 3.0.3、Java 21、Spring Boot Maven Plugin。
 
@@ -23,6 +25,7 @@
 ### Task 1: Add environment documentation
 
 **Files:**
+
 - Create: `docs/PROJECT_PROGRESS.md`
 - Create: `docs/DOCKER_DEV_ENV.md`
 - Modify: `.gitignore`
@@ -34,16 +37,19 @@
 ### Task 2: Add Compose infrastructure
 
 **Files:**
+
 - Create: `.env.example`
 - Create: `docker-compose.yml`
 
 - [x] **Step 1: Define MySQL 8.0 with host port `3307`, named data volume, UTF-8 settings, and a health check.**
-- [x] **Step 2: Define Nacos 3.0.3 in standalone mode with auth token, server identity, named data/log volumes, and host ports `8082`, `8850`, `9850`, `9851`.**
+- [x] **Step 2: Define Nacos 3.0.3 in standalone mode with auth token, server identity, named data/log volumes, and host
+  ports `8082`, `8850`, `9850`, `9851`.**
 - [x] **Step 3: Put Gateway in the `app` profile with host port `8083` and the Compose DNS address `nacos:8848`.**
 
 ### Task 3: Containerize Gateway
 
 **Files:**
+
 - Create: `Dockerfile`
 - Create: `.dockerignore`
 - Modify: `gateway-service/src/main/resources/application.yml`
@@ -56,6 +62,7 @@
 ### Task 4: Verify the environment
 
 **Files:**
+
 - Verify: `docker-compose.yml`
 - Verify: Maven project and Docker build inputs
 

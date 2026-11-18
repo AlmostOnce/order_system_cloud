@@ -1,12 +1,14 @@
 # 注册邮箱验证与旧账号强制补验证
 
-2026-11-05：代码、V9迁移脚本及学生端页面已完成；实际用户表已备份并执行V9；本次未启停服务、未运行Maven。用户服务用户查询已由HTTP 500恢复为200。本轮Web产物位于用户端 unpackage/dist/build/email-ownership-web，暂未覆盖Nginx，避免旧后端没有新增匿名接口而导致注册不可用。
+2026-11-05：代码、V9迁移脚本及学生端页面已完成；实际用户表已备份并执行V9；本次未启停服务、未运行Maven。用户服务用户查询已由HTTP
+500恢复为200。本轮Web产物位于用户端 unpackage/dist/build/email-ownership-web，暂未覆盖Nginx，避免旧后端没有新增匿名接口而导致注册不可用。
 
 ## 已确认业务规则
 
 新注册必须先通过图片验证码及邮件验证码，再提交昵称、密码和一次性邮箱授权创建账号。验证邮箱不会提前创建待验证用户。
 
-旧账号也必须验证后才能继续使用。正确账号密码与登录图片验证码通过后，仅返回10分钟有效的邮箱补验凭据，不发Access Token或Refresh Token。旧账号可输入本人能够收信的新邮箱，再完成图片与邮件验证码；即使旧账号无邮箱或示例邮箱不可收信也有恢复入口。新邮箱不能属于其他账号。
+旧账号也必须验证后才能继续使用。正确账号密码与登录图片验证码通过后，仅返回10分钟有效的邮箱补验凭据，不发Access
+Token或Refresh Token。旧账号可输入本人能够收信的新邮箱，再完成图片与邮件验证码；即使旧账号无邮箱或示例邮箱不可收信也有恢复入口。新邮箱不能属于其他账号。
 
 补验成功将邮箱、email_verified_at、credential_version+1在同一个数据库事务中更新。用户随后重新登录；补验之前的旧Token不会因为邮箱已验证而恢复有效。
 
@@ -16,18 +18,19 @@
 
 公开接口经网关加 `/api`。验证码相关调用不携带Bearer，不要求旧账号先登录，也不触发Token续期。
 
-| 接口 | 请求字段 | 成功结果 |
-|---|---|---|
-| POST /auth/registration/code | email、captchaId、captchaCode | 发送注册用途邮件验证码 |
-| POST /auth/registration/verify | email、code（六位字符串） | verificationToken、expiresIn=300 |
-| POST /auth/register | username、email、password、emailVerificationToken | 创建已验证CUSTOMER并返回用户号，不自动登录 |
-| POST /auth/login | 原有account、password、captchaId、captchaCode | 已验证账号正常发Token；未验证返回emailVerificationRequired=true、emailVerificationToken、emailVerificationExpiresIn=600、roleCode，不含登录Token |
-| POST /auth/email-enrollment/code | authorizationToken（登录返回的补验凭据）、email、captchaId、captchaCode | 向新邮箱发送补验用途验证码 |
-| POST /auth/email-enrollment/confirm | authorizationToken、email、code | 绑定并验证邮箱，撤销旧凭据版本，之后重新登录 |
+| 接口                                | 请求字段                                                                | 成功结果                                                                                                                                         |
+|-------------------------------------|-------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| POST /auth/registration/code        | email、captchaId、captchaCode                                           | 发送注册用途邮件验证码                                                                                                                           |
+| POST /auth/registration/verify      | email、code（六位字符串）                                               | verificationToken、expiresIn=300                                                                                                                 |
+| POST /auth/register                 | username、email、password、emailVerificationToken                       | 创建已验证CUSTOMER并返回用户号，不自动登录                                                                                                       |
+| POST /auth/login                    | 原有account、password、captchaId、captchaCode                           | 已验证账号正常发Token；未验证返回emailVerificationRequired=true、emailVerificationToken、emailVerificationExpiresIn=600、roleCode，不含登录Token |
+| POST /auth/email-enrollment/code    | authorizationToken（登录返回的补验凭据）、email、captchaId、captchaCode | 向新邮箱发送补验用途验证码                                                                                                                       |
+| POST /auth/email-enrollment/confirm | authorizationToken、email、code                                         | 绑定并验证邮箱，撤销旧凭据版本，之后重新登录                                                                                                     |
 
 受限凭据是64位随机十六进制串，不是JWT，不能用作Authorization Bearer访问业务接口。注册与补验的凭据、验证码及Redis命名空间分别隔离，也不能拿密码找回、已登录换绑的凭据来替代。
 
-内部API归用户服务 `/internal/users/email-ownership/...`，每个请求验证X-Internal-Token。其中enrollment/challenge只供认证服务在正确密码校验之后传入可信内部用户ID与凭据版本，不公开匿名用户ID授权接口。
+内部API归用户服务 `/internal/users/email-ownership/...`
+，每个请求验证X-Internal-Token。其中enrollment/challenge只供认证服务在正确密码校验之后传入可信内部用户ID与凭据版本，不公开匿名用户ID授权接口。
 
 ## 数据模型与身份链
 
@@ -50,7 +53,8 @@
 ## 迁移与发布顺序（V9已执行，其余发布步骤仍需确认）
 
 1. 确认所有账号都会变为待补验，尤其7个无邮箱、8个示例/测试邮箱的历史账号；准备可收信邮箱及账号密码。不得批量将历史验证时间填为当前时间绕过确认规则。
-2. 暂停旧业务入口并备份user_db，执行 docs/database/migrations/user_db/V9__email_verified_at.sql；该ALTER为单次迁移，重复执行前核对字段是否已存在。
+2. 暂停旧业务入口并备份user_db，执行
+   docs/database/migrations/user_db/V9__email_verified_at.sql；该ALTER为单次迁移，重复执行前核对字段是否已存在。
 3. 用户服务、认证服务、网关以及使用common-web身份解析的全部资源服务都必须加载新代码；user-api调用方同步更新。只更新前端或只更新认证服务不能阻止所有旧会话。
 4. 全部服务具备新接口及校验后，再发布本轮用户端Web产物到Nginx。切换期间不应混跑仍允许未验证旧Token的实例。
 5. 验证新注册、历史无邮箱补绑、同邮箱并发争抢、旧Access/Refresh Token拒绝、补验后重新登录及原换绑/找回回归。
@@ -59,7 +63,8 @@
 
 ## 验证记录
 
-已运行：前端邮箱验证/补验交互、注册与会话导航回归、Vue模板/原生CSS约束、Web构建；Redis验证码TTL、错误计数与并发一次消费脚本检查；隔离MySQL验证V9历史默认未验证、真实补验UPDATE只提升一次凭据版本且余额/昵称不变。隔离库已删除。随后实际user_db已执行V9，18个用户保持不变，邮箱已验证数量为0；迁移前备份位于 C:/Users/DELL/.codex/backups/order_system_cloud/email_ownership_20261105_111839/users_before_v9.sql。
+已运行：前端邮箱验证/补验交互、注册与会话导航回归、Vue模板/原生CSS约束、Web构建；Redis验证码TTL、错误计数与并发一次消费脚本检查；隔离MySQL验证V9历史默认未验证、真实补验UPDATE只提升一次凭据版本且余额/昵称不变。隔离库已删除。随后实际user_db已执行V9，18个用户保持不变，邮箱已验证数量为0；迁移前备份位于
+C:/Users/DELL/.codex/backups/order_system_cloud/email_ownership_20261105_111839/users_before_v9.sql。
 
 已补但未运行Java测试：注册授权与邮箱绑定、凭据一次性/跨用途、邮箱改变不能消费、密码变化失效、已验证账号不能补验、没有授权不能建号、未验证不签发或续期Token、共享身份链拒绝旧会话、人机验证失败不发送邮件。
 

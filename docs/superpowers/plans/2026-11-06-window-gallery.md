@@ -2,7 +2,8 @@
 
 **Goal:** 每个店铺保存0至5张有序图片，第一张为首页封面，点餐页手动滑动并点击预览。
 
-**Architecture:** 复用文件服务的WINDOW_IMAGE文件键及归属校验；窗口新增JSON图片键数组，原封面字段同步保存第一张。一次提交完整列表，数据库限制数组长度，避免并发追加突破数量上限。旧数据回填原图，不删除上传文件。
+**Architecture:**
+复用文件服务的WINDOW_IMAGE文件键及归属校验；窗口新增JSON图片键数组，原封面字段同步保存第一张。一次提交完整列表，数据库限制数组长度，避免并发追加突破数量上限。旧数据回填原图，不删除上传文件。
 
 **Tech Stack:** Spring、MyBatis-Plus、MySQL JSON、uni-app x原生swiper。
 
@@ -29,13 +30,15 @@ Ruling: 保留旧封面列以兼容首页及搜索读取，所有窗口图片写
 
 ## 接口与发布
 
-PUT /api/products/admin/windows/{windowId}/images，JSON请求体为fileKeys字符串数组。上传沿用文件服务，bizType=WINDOW_IMAGE、bizRef=windowId。响应同时返回imageFileKeys及imageUrls。空数组清空；完整列表决定展示顺序，第一张为首页封面。
+PUT
+/api/products/admin/windows/{windowId}/images，JSON请求体为fileKeys字符串数组。上传沿用文件服务，bizType=WINDOW_IMAGE、bizRef=windowId。响应同时返回imageFileKeys及imageUrls。空数组清空；完整列表决定展示顺序，第一张为首页封面。
 
 先执行product_db/V11迁移，再更新商品服务，最后更新学生端；避免旧商品服务继续写旧单图列。菜单缓存前缀升为v3，旧缓存自然过期。商家Vue管理页未接入，uni-app仅提供学生展示。
 
 ## 2026-11-06业务库迁移结果
 
-用户明确要求确认无误的迁移默认直接执行。已先备份order_db.orders及product_db.dining_windows，备份与结果记录：`C:/Users/DELL/.codex/backups/order-system-cloud/20261106-101122`。
+用户明确要求确认无误的迁移默认直接执行。已先备份order_db.orders及product_db.dining_windows，备份与结果记录：
+`C:/Users/DELL/.codex/backups/order-system-cloud/20261106-101122`。
 
 - 已执行order_db/V6，两个索引列顺序核验为user_id,order_id及user_id,status,order_id。
 - 已执行product_db/V11，9个窗口均完成图片数组回填，未回填、非法数组及封面不一致计数均为0；CHECK约束ENFORCED=YES。

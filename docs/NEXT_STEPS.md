@@ -2,22 +2,28 @@
 
 ## 学生端功能补齐（按重要性排序）
 
-详细任务、依赖与验收见 [学生端功能补齐待执行计划](superpowers/plans/2026-11-02-student-client-next-steps.md)，任务状态以该计划中的最新记录为准。订单详情实时状态同步已接入共享通知 WebSocket；代码回归检查已完成，真实服务推送和 Android 真机流转仍待验收。
+详细任务、依赖与验收见 [学生端功能补齐待执行计划](superpowers/plans/2026-11-02-student-client-next-steps.md)
+，任务状态以该计划中的最新记录为准。订单详情实时状态同步已接入共享通知 WebSocket；代码回归检查已完成，真实服务推送和 Android
+真机流转仍待验收。
 
 近期工作以已完成能力的运行联调和正式发布收口为主；学生端仍不得接入商家管理功能。登录后主动修改登录密码及候选便利功能，按主计划继续安排。
 
 ## 销量统计首期：运行验收
 
-`statistics-service`、已支付销量读模型、学生端累计榜/窗口月售/菜品月售及开发库迁移已完成。迁移数据核验、备份和口径记录见 [销量读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)。下一步在不改写现有统计数据的前提下：
+`statistics-service`
+、已支付销量读模型、学生端累计榜/窗口月售/菜品月售及开发库迁移已完成。迁移数据核验、备份和口径记录见 [销量读模型计划](superpowers/plans/2026-11-13-statistics-sales-read-model.md)
+。下一步在不改写现有统计数据的前提下：
 
 - 发布 Nacos 中 `/api/statistics/**` 路由配置，并确认 Gateway 路由到 `statistics-service`。
-- 启动最新的 MySQL、Redis、Nacos、RocketMQ、Gateway、statistics-service、order-service、payment-service；检查 V2 新消息与 V1 兼容消费组是否订阅成功。
+- 启动最新的 MySQL、Redis、Nacos、RocketMQ、Gateway、statistics-service、order-service、payment-service；检查 V2 新消息与 V1
+  兼容消费组是否订阅成功。
 - 通过 CUSTOMER 身份验证累计榜、窗口月售和单窗口菜品月售；确认 Redis 缓存丢失时可从 MySQL 汇总恢复。
 - 使用正常测试订单验证支付时间、outbox、RocketMQ、统计库与 Redis 的异步更新，再用 Android 真机检查月售显示和接口失败时页面可用性。
 
 ## 前后端联调边界
 
-用户于 2026-10-30 明确：uni-app 仅作为普通学生端，商家与其他管理角色使用专门的 Vue 管理端。后续联调遵守该划分，不继续扩展 uni-app 的管理能力。
+用户于 2026-10-30 明确：uni-app 仅作为普通学生端，商家与其他管理角色使用专门的 Vue 管理端。后续联调遵守该划分，不继续扩展
+uni-app 的管理能力。
 
 - [ ] 确认现有 Vue 管理端仓库及其接口封装、登录与角色机制。
 - [ ] 学生端联调：本人订单、取餐码展示、支付及取消、订单通知、评价；只使用 CUSTOMER 身份。

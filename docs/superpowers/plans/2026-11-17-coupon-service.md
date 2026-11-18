@@ -2,7 +2,8 @@
 
 > **执行方式：**当前会话逐任务实现，按本计划顺序推进。
 > **目标：**实现首期平台预算承担的满减券，覆盖领取、订单锁券、支付核销/取消释放、退款金额和学生端选券。
-> **架构：**新增 coupon-api 与 coupon-service，服务使用独立 coupon_db；订单服务核价和分摊优惠，Seata 覆盖下单锁券与取消释放，支付成功由订单 Outbox 可靠通知券服务核销。
+> **架构：**新增 coupon-api 与 coupon-service，服务使用独立 coupon_db；订单服务核价和分摊优惠，Seata 覆盖下单锁券与取消释放，支付成功由订单
+> Outbox 可靠通知券服务核销。
 > **技术栈：**Java 21、Spring Boot/Cloud、MyBatis-Plus、MySQL、Seata AT、RocketMQ；学生端沿用 uni-app x / UTS。
 > **方案：**docs/superpowers/specs/2026-11-17-coupon-service-design.md
 
@@ -27,6 +28,7 @@
 ### Task 1：模块契约、服务骨架与数据库结构
 
 **Files:**
+
 - Create: coupon-api/pom.xml
 - Create: coupon-api/src/main/java/com/hbue/ordering/coupon/api/client/CouponServiceClient.java
 - Create: coupon-api/src/main/java/com/hbue/ordering/coupon/api/client/fallback/CouponServiceClientFallbackFactory.java
@@ -45,19 +47,22 @@
 > `docker-compose.yml` 仅承载共享基础设施，不编排单个 Java 业务服务；复用现有 MySQL、Seata 和 RocketMQ 容器，因此本次不增加业务容器定义。
 
 **Interfaces:**
+
 - CouponLockRequest: userCouponId、userId、orderNo、windowId、eligibleAmount。
 - CouponReleaseRequest: orderNo；只能释放此订单已锁定的券。
 - CouponLockVO: userCouponId、templateId、title、discountAmount。
 
 - [x] 在根 pom 登记两个模块；API POM 复用 stock-api 的依赖模式，service POM 复用 stock-service 并添加 Seata。
 - [x] 建立 coupon_db 的模板、模板窗口关联、用户券、用券流水和 undo_log；为订单主表/明细增加优惠、应付与标题快照字段。
-- [x] 为历史订单回填 discount_amount=0、payable_amount=total_amount；历史明细回填 line_discount_amount=0、line_payable_amount=line_amount。
+- [x] 为历史订单回填 discount_amount=0、payable_amount=total_amount；历史明细回填
+  line_discount_amount=0、line_payable_amount=line_amount。
 - [x] 配好独立 coupon_db、Nacos service name、Seata transaction group、JWT 校验与 X-Internal-Token 内部接口安全边界。
 - [x] 静态核对 XML 和 SQL 字段/索引与模型命名；不得运行 Maven。
 
 ### Task 2：领取、查询、管理与锁券生命周期
 
 **Files:**
+
 - Create: coupon-service/src/main/java/com/hbue/ordering/coupon/controller/CouponController.java
 - Create: coupon-service/src/main/java/com/hbue/ordering/coupon/controller/CouponManagementController.java
 - Create: coupon-service/src/main/java/com/hbue/ordering/coupon/controller/CouponInternalController.java
@@ -71,10 +76,12 @@
 - Test: coupon-service/src/test/java/com/hbue/ordering/coupon/service/impl/CouponServiceImplTest.java
 
 **Interfaces:**
+
 - CUSTOMER: list claimable templates, claim once, and list own coupons.
 - GENERAL_MANAGER with platform scope: create platform-funded template, stop new claims, stop unconsumed use.
 - Internal API: lock userCouponId for orderNo/windowId/eligibleAmount; release by orderNo.
-- First phase requires threshold and fixed discount, one per customer per template, no stacking, and no window-funded coupon.
+- First phase requires threshold and fixed discount, one per customer per template, no stacking, and no window-funded
+  coupon.
 
 - [x] 先为领取库存上限、重复领取、券归属、有效期和锁券状态转换写测试断言。
 - [x] 用数据库条件更新及唯一索引实现领取上限和每人限领；不使用 Redis 锁替代数据库约束。
@@ -85,6 +92,7 @@
 ### Task 3：订单金额、支付、取消、核销与退款
 
 **Files:**
+
 - Modify: order-service/src/main/java/com/hbue/ordering/order/dto/request/OrderCreateRequest.java
 - Modify: order-service/src/main/java/com/hbue/ordering/order/service/impl/OrderServiceImpl.java
 - Modify: order-service/src/main/java/com/hbue/ordering/order/service/impl/OrderPersistenceServiceImpl.java
@@ -105,11 +113,16 @@
 - Test: payment-service/src/test/java/com/hbue/ordering/payment/service/impl/PaymentServiceImplTest.java
 
 **Interfaces:**
+
 - OrderCreateRequest adds optional userCouponId; request hash includes it.
-- OrderInternalVO and payment OrderInternalDTO expose totalAmount, discountAmount, payableAmount; PaymentServiceImpl uses payableAmount.
+- OrderInternalVO and payment OrderInternalDTO expose totalAmount, discountAmount, payableAmount; PaymentServiceImpl
+  uses payableAmount.
 - Each order item persists lineDiscountAmount and linePayableAmount; refund calculation uses linePayableAmount.
-- Coupon consume Outbox stores orderNo and userCouponId in the same local transaction that confirms payment; coupon-service confirms only after its local use transaction commits, and the publisher retries unconfirmed deliveries with backoff.
-- cancelPendingOrder releases only after payment service confirms CLOSED and order cancellation succeeds inside the existing Seata transaction.
+- Coupon consume Outbox stores orderNo and userCouponId in the same local transaction that confirms payment;
+  coupon-service confirms only after its local use transaction commits, and the publisher retries unconfirmed deliveries
+  with backoff.
+- cancelPendingOrder releases only after payment service confirms CLOSED and order cancellation succeeds inside the
+  existing Seata transaction.
 
 - [x] 为同一幂等键换券冲突、金额守恒、尾差分摊、PAID/UNKNOWN 不释放、Outbox 重复投递、部分退款实付上限编写测试断言。
 - [x] 正式下单重新核价并锁券，按适用商品金额比例分摊到明细，分币舍入尾差固定分配，订单与明细均保存不可变快照。
@@ -121,6 +134,7 @@
 ### Task 4：学生端领取与结算选券
 
 **Files:**
+
 - Create: order_system_cloud_user/api/coupons.uts
 - Create: order_system_cloud_user/pages/coupons/list.uvue
 - Modify: order_system_cloud_user/pages.json
@@ -130,6 +144,7 @@
 - Modify: order_system_cloud_user/api/order.uts
 
 **Interfaces:**
+
 - 学生端只调用 CUSTOMER 的可领券、领取、我的券接口；订单请求仅发送 userCouponId。
 - 结算页展示服务器确认的原价、优惠、应付金额及券门槛/范围/有效期。
 
@@ -142,10 +157,15 @@
 ### Task 5：运行配置、文档与开发库迁移
 
 **Files:**
-- Modify: README.md, docs/ARCHITECTURE.md, docs/API_DOCS.md, .env.example, gateway-service/src/main/resources/application.yml, docs/nacos/gateway-service.yaml
-- Create/Modify: docs/database/migrations/coupon_db/V1__create_coupon_tables.sql and docs/database/migrations/order_db/V10__add_coupon_amount_snapshots.sql
+
+- Modify: README.md, docs/ARCHITECTURE.md, docs/API_DOCS.md, .env.example,
+  gateway-service/src/main/resources/application.yml, docs/nacos/gateway-service.yaml
+- Create/Modify: docs/database/migrations/coupon_db/V1__create_coupon_tables.sql and
+  docs/database/migrations/order_db/V10__add_coupon_amount_snapshots.sql
 
 - [x] 更新服务目录、端口、coupon_db、外部接口清单、架构与数据字段说明；注明 Vue 管理端仓库待接入。
-- [ ] 检查脚本目标库、当前表/列/索引、重复执行风险及备份；只为已确认的本地开发数据库迁移。当前开发库端口不可连接、Windows MySQL 服务已停止且未提供本地 `.env`，因此无法检查现有 schema 或备份。
-- [ ] 执行并查询 coupon_db 与 order_db 迁移结果，记录表、列、约束和 undo_log。需先恢复项目开发 MySQL `127.0.0.1:9095` 并提供客户端工具，不能仅凭脚本静态检查擅自迁移。
+- [ ] 检查脚本目标库、当前表/列/索引、重复执行风险及备份；只为已确认的本地开发数据库迁移。当前开发库端口不可连接、Windows
+  MySQL 服务已停止且未提供本地 `.env`，因此无法检查现有 schema 或备份。
+- [ ] 执行并查询 coupon_db 与 order_db 迁移结果，记录表、列、约束和 undo_log。需先恢复项目开发 MySQL `127.0.0.1:9095`
+  并提供客户端工具，不能仅凭脚本静态检查擅自迁移。
 - [x] 执行 git diff --check、POM XML 语法解析及源码静态调用面检查；因 AGENTS.md 限制，不运行 Maven、测试、构建或服务重启。

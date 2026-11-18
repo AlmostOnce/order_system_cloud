@@ -6,13 +6,14 @@
 
 `GET /api/orders/list?status=active&limit=20`，认证身份决定user_id，不接收其他用户编号。
 
-| 参数 | 规则 |
-| --- | --- |
-| status | all、pending、active、completed、cancelled，默认all；未知值拒绝 |
-| limit | 默认20，范围1至50；数据层最多读取limit+1条 |
+| 参数   | 规则                                                             |
+|--------|------------------------------------------------------------------|
+| status | all、pending、active、completed、cancelled，默认all；未知值拒绝  |
+| limit  | 默认20，范围1至50；数据层最多读取limit+1条                       |
 | cursor | 上一页的nextCursor字符串，首屏不传；必须为本人的合法Long订单编号 |
 
-active由服务端映射为已支付、制作中、待取货；其他状态分别为待支付、已完成、已取消。响应data为`{"items":[],"nextCursor":null,"hasMore":false}`。有更多时nextCursor为本页末条订单编号字符串。
+active由服务端映射为已支付、制作中、待取货；其他状态分别为待支付、已完成、已取消。响应data为
+`{"items":[],"nextCursor":null,"hasMore":false}`。有更多时nextCursor为本页末条订单编号字符串。
 
 ## 查询与边界
 
@@ -24,7 +25,9 @@ Controller从JWT取得用户编号，Service校验状态、条数、Long溢出�
 
 ## 索引及启用
 
-已只读检查开发库：存在(user_id,created_at)及用户幂等键等索引，缺少本次分页组合。提供V6__order_list_pagination_indexes.sql，新增(user_id,order_id)与(user_id,status,order_id)，保留原索引。执行前备份并重新核查SHOW INDEX，有等价索引则跳过对应ADD；脚本不可重复执行。2026-11-06已备份并执行V6，两个新增索引及列顺序核验通过，订单原数据逐行一致。
+已只读检查开发库：存在 (user_id,created_at)及用户幂等键等索引，缺少本次分页组合。提供V6__order_list_pagination_indexes.sql，新增
+(user_id,order_id)与 (user_id,status,order_id)，保留原索引。执行前备份并重新核查SHOW
+INDEX，有等价索引则跳过对应ADD；脚本不可重复执行。2026-11-06已备份并执行V6，两个新增索引及列顺序核验通过，订单原数据逐行一致。
 
 tools/test-order-pagination-sql.py只在单连接临时表上运行1200条固定样本，连接关闭自动销毁临时数据。五筛选、不同用户、归属、大小上限和顶部插入后翻页检查通过。临时表自然EXPLAIN中：待支付选中新状态索引，全部状态仍可能选择旧索引并filesort；指定新索引可证明其支持倒序，但生产SQL不强制索引。不能把临时小样本宣称为生产性能验收，迁移后须用真实规模核查自然查询计划，active多状态也可能需要排序。
 
@@ -32,7 +35,8 @@ tools/test-order-pagination-sql.py只在单连接临时表上运行1200条固定
 
 ## 2026-11-06业务库迁移结果
 
-用户明确要求确认无误的迁移默认直接执行。已先备份order_db.orders及product_db.dining_windows，备份与结果记录：`C:/Users/DELL/.codex/backups/order-system-cloud/20261106-101122`。
+用户明确要求确认无误的迁移默认直接执行。已先备份order_db.orders及product_db.dining_windows，备份与结果记录：
+`C:/Users/DELL/.codex/backups/order-system-cloud/20261106-101122`。
 
 - 已执行order_db/V6，两个索引列顺序核验为user_id,order_id及user_id,status,order_id。
 - 已执行product_db/V11，9个窗口均完成图片数组回填，未回填、非法数组及封面不一致计数均为0；CHECK约束ENFORCED=YES。

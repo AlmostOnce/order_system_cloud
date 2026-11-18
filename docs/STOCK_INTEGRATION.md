@@ -5,7 +5,8 @@
 ## 业务链路
 
 - 创建订单继续调用 `StockServiceClient.deduct`，使用订单号做幂等标识；现有 Seata AT 全局事务负责订单和库存一起成功或一起回滚。
-- `cancelOrder` 增加全局事务：校验归属及待支付状态 → 带版本号竞争取消状态 → 读取订单明细快照 → 按同一订单号回补库存。回补失败抛异常，取消状态随全局事务回滚，不能返回取消成功。
+- `cancelOrder` 增加全局事务：校验归属及待支付状态 → 带版本号竞争取消状态 → 读取订单明细快照 →
+  按同一订单号回补库存。回补失败抛异常，取消状态随全局事务回滚，不能返回取消成功。
 - 已取消订单重试直接返回已取消，不再次回补；支付或其他状态变更赢得竞争时，不调用回补。已支付及履约中的订单不允许通过顾客取消接口回补。
 - 库存侧继续通过行锁及 `ORDER_RESTORE` 唯一流水防止重复回补。缺少原扣减流水的历史订单沿用库存服务现有处理：不凭空增加库存。
 - 本次不引入支付退款、订单自动超时取消或库存后台维护页面。
@@ -26,9 +27,11 @@
 }
 ```
 
-商品服务通过现有 `stock-api` 调用新增的 `GET /internal/stocks/windows/{windowId}`。该接口验证 `X-Internal-Token`，单次数据库查询批量读取窗口库存，不新增库存业务网关路由，也不让商品服务跨库查库存。
+商品服务通过现有 `stock-api` 调用新增的 `GET /internal/stocks/windows/{windowId}`。该接口验证 `X-Internal-Token`
+，单次数据库查询批量读取窗口库存，不新增库存业务网关路由，也不让商品服务跨库查库存。
 
-库存不写入菜单缓存。库存服务不可用、返回无效数据或调用异常时，商品服务返回 503，而不是把故障误报为零库存。启用商品服务的 Feign 扫描和现有库存客户端降级工厂。
+库存不写入菜单缓存。库存服务不可用、返回无效数据或调用异常时，商品服务返回 503，而不是把故障误报为零库存。启用商品服务的
+Feign 扫描和现有库存客户端降级工厂。
 
 用户端点单页在进入页面和点击刷新时查询库存，区分加载、失败、未备货、售罄及剩余数量；失败时可重试，未能确认库存时禁止增加购物车数量。菜单和购物车清单的加号共用限制，旧请求响应不能覆盖新一轮库存查询。
 
@@ -38,8 +41,10 @@
 
 脚本：[stock_initialization.sql](database/seeds/stock_initialization.sql)。本次未执行。
 
-1. 根据真实菜品数据，在脚本输入区填写窗口 ID、菜品 ID 和用户确认的初始数量，并取消对应 INSERT 的注释。可先用 `SELECT window_id, product_id, product_name FROM product_db.products ORDER BY window_id, product_id` 核对 ID。
-2. 开放销售前，用具备 `product_db` 只读、`stock_db` 写入及临时表权限的账号在同一连接执行完整脚本；不要忽略 SQL 错误，不要和下单、库存维护并发执行。
+1. 根据真实菜品数据，在脚本输入区填写窗口 ID、菜品 ID 和用户确认的初始数量，并取消对应 INSERT 的注释。可先用
+   `SELECT window_id, product_id, product_name FROM product_db.products ORDER BY window_id, product_id` 核对 ID。
+2. 开放销售前，用具备 `product_db` 只读、`stock_db` 写入及临时表权限的账号在同一连接执行完整脚本；不要忽略 SQL
+   错误，不要和下单、库存维护并发执行。
 3. 空输入、负数或菜品所属窗口不匹配会被校验拒绝；初始化写入还需通过校验表，避免客户端继续执行后误写数据。
 4. 只新增没有库存记录的菜品，已有记录（包括逻辑删除记录）保持原样，重复执行不覆盖已发生销售的数量。
 5. 同时设置初始基线 `total_qty` 和 `available_qty`，不另外写入初始变动流水，保持现有「初始基线 + 流水累计 = 可售数量」的对账规则。
@@ -48,29 +53,45 @@
 
 用户于 2026-10-22 指定：先完成销量榜 MQ 改造，再实施本节。
 
-2026-10-28 已实现库存 outbox、Seata undo-log 门控、RocketMQ 发布与快照失效消费，具体见下方“库存事件 MQ 接入”。V2 数据库迁移已执行；库存服务运行期验收仍待完成。
+2026-10-28 已实现库存 outbox、Seata undo-log 门控、RocketMQ 发布与快照失效消费，具体见下方“库存事件 MQ 接入”。V2
+数据库迁移已执行；库存服务运行期验收仍待完成。
 
 - 保留 Seata AT 同步下单扣库存和待支付取消回补，不将库存预占的成功判定迁移为无确认的异步调用。
-- stock_db 本地事务同步保存库存流水和 outbox；发布器仅投递已提交且 Seata 全局事务确认提交的库存事件。分支已提交不等于全局已提交，必须实现全局提交确认或补偿协议后才能发送，不能直接套用普通本地 afterCommit。
+- stock_db 本地事务同步保存库存流水和 outbox；发布器仅投递已提交且 Seata
+  全局事务确认提交的库存事件。分支已提交不等于全局已提交，必须实现全局提交确认或补偿协议后才能发送，不能直接套用普通本地
+  afterCommit。
 - RocketMQ + Spring Cloud Stream 承载缓存失效、库存预警和统计等副作用。优先消费后失效并回源数据库，避免乱序事件直接写旧数量覆盖新库存。
 - 消费按库存业务流水唯一键幂等；同库存版本比较，消费者失败重试、死信人工处理，定时对账/补发和缓存重建。
-- 验收：重复扣减/回补不重记账；支付与取消并发；库存不足触发全局回滚且无有效事件外泄；消息乱序/重复/断网/重启；Redis 故障与恢复；数据库、流水和缓存最终一致。
+- 验收：重复扣减/回补不重记账；支付与取消并发；库存不足触发全局回滚且无有效事件外泄；消息乱序/重复/断网/重启；Redis
+  故障与恢复；数据库、流水和缓存最终一致。
 - 仍以库存 MySQL 和流水为事实源，Redis 为快照，MQ 为事件传递渠道。
 
 ## 库存事件 MQ 接入
 
-实现采用 `stock_db.stock_event_outbox` 本地消息表。扣减/回补事务在写入 `stock_flow` 后，将事件及 Seata XID 一并写入 outbox；outbox 插入失败会使库存事务失败，避免出现库存已提交但事件永久缺失。
+实现采用 `stock_db.stock_event_outbox` 本地消息表。扣减/回补事务在写入 `stock_flow` 后，将事件及 Seata XID 一并写入
+outbox；outbox 插入失败会使库存事务失败，避免出现库存已提交但事件永久缺失。
 
-发布器每秒扫描待发布记录，使用 RocketMQ 同步发送确认；Broker 不可用时按指数退避重试，最长间隔 256 秒。对于带 XID 的事件，查询条件会等待 `stock_db.undo_log` 中对应全局事务记录消失后才允许发布：全局回滚会一起撤销库存流水和 outbox；全局提交则保留 outbox 并清理 undo log。无 XID 的本地库存事务在本地提交后即可发送。
+发布器每秒扫描待发布记录，使用 RocketMQ 同步发送确认；Broker 不可用时按指数退避重试，最长间隔 256 秒。对于带 XID 的事件，查询条件会等待
+`stock_db.undo_log` 中对应全局事务记录消失后才允许发布：全局回滚会一起撤销库存流水和 outbox；全局提交则保留 outbox 并清理
+undo log。无 XID 的本地库存事务在本地提交后即可发送。
 
-主题为 `stock-changed-v1`，消费组为 `stock-cache-invalidator-v1`。事件消费者校验稳定事件键，按键幂等处理并删除 `stock:available:{windowId}:{productId}` 快照。消费失败会传播给 RocketMQ，最多重试 16 次，随后进入消费组死信队列。消费者不把事件携带的数量写回 Redis，后续下单仍以数据库条件更新为准。
+主题为 `stock-changed-v1`，消费组为 `stock-cache-invalidator-v1`。事件消费者校验稳定事件键，按键幂等处理并删除
+`stock:available:{windowId}:{productId}` 快照。消费失败会传播给 RocketMQ，最多重试 16 次，随后进入消费组死信队列。消费者不把事件携带的数量写回
+Redis，后续下单仍以数据库条件更新为准。
 
-库存服务默认使用 `stock-mq` profile；Nameserver 默认 `127.0.0.1:9876`，可用 `ROCKETMQ_NAMESERVER` 覆盖。数据库迁移 [V2__stock_event_outbox.sql](database/migrations/stock_db/V2__stock_event_outbox.sql) 已于 2026-10-28 执行。执行前逻辑备份位于 `C:\Users\DELL\.codex\backups\order_system_cloud\stock_mq_20261028_111528\stock_db-before.sql`，SHA-256 为 `6166d646e55f24ae7a660c17fb0020b7c07617d39bc436a7403f8cf8a5bbaba0`。验证得到 outbox 14 列、消费幂等表 2 列，库存服务账号拥有 `stock_db.*` 全部权限；原有 stock 77 行、stock_flow 13 行保持不变，新表均为空。发布成功的 outbox 记录与消费幂等记录当前不自动清理，后续可按保留期制定归档策略。
+库存服务默认使用 `stock-mq` profile；Nameserver 默认 `127.0.0.1:9876`，可用 `ROCKETMQ_NAMESERVER`
+覆盖。数据库迁移 [V2__stock_event_outbox.sql](database/migrations/stock_db/V2__stock_event_outbox.sql) 已于 2026-10-28
+执行。执行前逻辑备份位于 `C:\Users\DELL\.codex\backups\order_system_cloud\stock_mq_20261028_111528\stock_db-before.sql`
+，SHA-256 为 `6166d646e55f24ae7a660c17fb0020b7c07617d39bc436a7403f8cf8a5bbaba0`。验证得到 outbox 14 列、消费幂等表 2
+列，库存服务账号拥有 `stock_db.*` 全部权限；原有 stock 77 行、stock_flow 13 行保持不变，新表均为空。发布成功的 outbox
+记录与消费幂等记录当前不自动清理，后续可按保留期制定归档策略。
 
-本次已完成源码、迁移和部署配置；未运行 Maven、Java 测试、构建或启动服务。静态契约检查和数据库结构核对不代表 Seata/RocketMQ 端到端消息已通过；库存服务更新启动后，仍需用下单和取消验证发布、缓存失效、重复消费、回滚隔离及 DLQ。
+本次已完成源码、迁移和部署配置；未运行 Maven、Java 测试、构建或启动服务。静态契约检查和数据库结构核对不代表 Seata/RocketMQ
+端到端消息已通过；库存服务更新启动后，仍需用下单和取消验证发布、缓存失效、重复消费、回滚隔离及 DLQ。
 
 ## 原接入验证记录
 
-已补取消回补、失败传播、重复取消、库存批量查询、菜单过滤和库存故障的回归用例。遵守项目约束，本次只进行源码静态检查，未运行 Maven、未执行单元测试、未启动或重启服务、未执行数据库脚本。
+已补取消回补、失败传播、重复取消、库存批量查询、菜单过滤和库存故障的回归用例。遵守项目约束，本次只进行源码静态检查，未运行
+Maven、未执行单元测试、未启动或重启服务、未执行数据库脚本。
 
 因此 Seata 实际回滚、支付与取消并发、真实库存查询和页面显示仍需在具备运行条件后验证；不能将源码检查视为运行验证通过。前端结算页原本仍是占位，本次没有实现新的支付或结算页面。

@@ -4,9 +4,11 @@
 
 **Goal:** 新建统计服务承接累计菜品销量榜和学生端月售展示，并用支付成功时间建立可追溯的销量读模型。
 
-**Architecture:** 支付服务传递不可变的支付成功时间，订单服务与支付状态在同库事务中写入 paid_at 和 outbox。统计服务消费 RocketMQ，持久化订单销量事实与 ALL/MONTH 汇总，再以 Redis ZSet 提供榜单；历史数据由开发库迁移从支付成功记录回填。学生端只读统计接口。
+**Architecture:** 支付服务传递不可变的支付成功时间，订单服务与支付状态在同库事务中写入 paid_at 和 outbox。统计服务消费
+RocketMQ，持久化订单销量事实与 ALL/MONTH 汇总，再以 Redis ZSet 提供榜单；历史数据由开发库迁移从支付成功记录回填。学生端只读统计接口。
 
-**Tech Stack:** Spring Boot、Spring Security JWT、MyBatis-Plus Mapper、Druid、MySQL、RocketMQ、`common-redis` 封装、Redisson 分布式锁、uni-app x。
+**Tech Stack:** Spring Boot、Spring Security JWT、MyBatis-Plus Mapper、Druid、MySQL、RocketMQ、`common-redis` 封装、Redisson
+分布式锁、uni-app x。
 
 **Spec:** [统计服务销量读模型约定](../specs/2026-11-13-statistics-sales-read-model.md)
 
@@ -32,6 +34,7 @@
 ### Task 1: 新服务边界与数据库迁移
 
 **Files:**
+
 - Create: `statistics-service/pom.xml`、启动类、`application.yml`、`application-mq.yml`
 - Modify: 根 `pom.xml`
 - Create: `docs/database/migrations/order_db/V8__order_paid_at.sql`
@@ -46,6 +49,7 @@
 ### Task 2: 精确支付时间与事件快照
 
 **Files:**
+
 - Modify: 支付 Mapper、支付服务、内部关闭支付结果接口
 - Modify: `order-api` 内部支付命令/销量快照契约
 - Modify: 订单 DO、Mapper、Persistence Service、Order Service、内部 Controller、销量 Outbox Writer
@@ -58,6 +62,7 @@
 ### Task 3: 统计服务投影、榜单与读取接口
 
 **Files:**
+
 - Create: `statistics-service` 的 Controller、Service、Mapper、DO/VO、MQ Consumer、Security、Redis Lua
 - Modify: `docs/nacos/gateway-service.yaml`
 - Modify: 订单服务旧排行榜路由/消费者，避免继续维护第二份活动榜数据
@@ -70,6 +75,7 @@
 ### Task 4: 学生端月售显示
 
 **Files:**
+
 - Modify/Create in `E:/order_system_cloud_user`: `api/ranking.uts`、统计 API、首页与菜单页
 
 - [x] 累计榜改读 `/statistics/rankings/sales`，保留现有菜品定位行为。
@@ -86,8 +92,17 @@
 
 ## 执行记录
 
-- 2026-11-13：开发 MySQL 预检确认 18 笔订单、12 笔成功支付可关联，涉及 14 条订单明细、共 28 份；MySQL 容器健康。迁移前备份 `order_db` 和 `payment_db`，gzip 完整性检查通过：`C:\Users\DELL\.codex\backups\order_system_cloud\statistics_sales_20261113\order-payment-before-statistics-171302.sql.gz`，SHA-256 `aa5c7af1ee08c74ddf86ca685333bffb02a142fcae94de0548347ab001f1c4d2`。
-- 2026-11-13：首次执行发现 MySQL CLI 字符集没有固定，导致中文状态条件未命中；当时 DDL 已成功，但销量事实为空，未写入错误数据。两份脚本加入 `SET NAMES utf8mb4` 后，以 `utf8mb4` 客户端重新执行幂等迁移。
-- 2026-11-13：迁移核验通过：`orders=18`、`paid_at` 非空 12、与 `payments.success_time` 不一致 0、未支付订单误写 `paid_at` 0；统计事件 12、明细 14、数量 28；累计窗口/菜品各 28，按月份 2026-10 为 25、2026-11 为 3；投影版本 12。`statistics_service` 仅获 `statistics_db` 读写权限，并成功登录读取事实表。
-- 2026-11-13：统计服务、订单/支付事件接线、Gateway Nacos 路由样例及学生端调用已补；本地静态检查已完成。未运行 Maven、构建、测试、应用启动或服务重启；RocketMQ/Redis/Gateway/Android 真机端到端运行验收待用户启动最新代码和发布 Nacos 路由后完成。
-- 2026-11-16：补充首页返回时的月售新鲜度：同一顾客只重读统计接口，不重载窗口/餐厅目录；统计请求失败保留已有数字。未运行 Maven、构建、测试或服务重启。
+- 2026-11-13：开发 MySQL 预检确认 18 笔订单、12 笔成功支付可关联，涉及 14 条订单明细、共 28 份；MySQL 容器健康。迁移前备份
+  `order_db` 和 `payment_db`，gzip 完整性检查通过：
+  `C:\Users\DELL\.codex\backups\order_system_cloud\statistics_sales_20261113\order-payment-before-statistics-171302.sql.gz`
+  ，SHA-256 `aa5c7af1ee08c74ddf86ca685333bffb02a142fcae94de0548347ab001f1c4d2`。
+- 2026-11-13：首次执行发现 MySQL CLI 字符集没有固定，导致中文状态条件未命中；当时 DDL 已成功，但销量事实为空，未写入错误数据。两份脚本加入
+  `SET NAMES utf8mb4` 后，以 `utf8mb4` 客户端重新执行幂等迁移。
+- 2026-11-13：迁移核验通过：`orders=18`、`paid_at` 非空 12、与 `payments.success_time` 不一致 0、未支付订单误写 `paid_at`
+  0；统计事件 12、明细 14、数量 28；累计窗口/菜品各 28，按月份 2026-10 为 25、2026-11 为 3；投影版本 12。`statistics_service` 仅获
+  `statistics_db` 读写权限，并成功登录读取事实表。
+- 2026-11-13：统计服务、订单/支付事件接线、Gateway Nacos 路由样例及学生端调用已补；本地静态检查已完成。未运行
+  Maven、构建、测试、应用启动或服务重启；RocketMQ/Redis/Gateway/Android 真机端到端运行验收待用户启动最新代码和发布 Nacos
+  路由后完成。
+- 2026-11-16：补充首页返回时的月售新鲜度：同一顾客只重读统计接口，不重载窗口/餐厅目录；统计请求失败保留已有数字。未运行
+  Maven、构建、测试或服务重启。

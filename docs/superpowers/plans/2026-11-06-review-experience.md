@@ -17,16 +17,19 @@
 
 ## 修改边界
 
-既有comment-service Controller/Service/impl/Mapper分层，uni-app的api/comments.uts及pages/review/list.uvue；不将商家功能加入学生端，不修改已发布正文、图片和评分。
-
+既有comment-service
+Controller/Service/impl/Mapper分层，uni-app的api/comments.uts及pages/review/list.uvue；不将商家功能加入学生端，不修改已发布正文、图片和评分。
 
 ## 实施记录
 
 - 用户最终确认界面标签为“全部、好评、差评、有图”，不附加星数字样；好评=5分、差评=1分；全部保留1～5分历史评价，有图包含任意分数。
 - score/hasImages参数贯穿两类Controller、Service、Mapper及学生端API；分页查询限制1～50、取limit+1，错误分数在服务层拒绝，游标复核用户/目标/分数/有图条件。
 - V3索引迁移已执行并重复核验，备份C:/Users/DELL/.codex/backups/order-system-cloud/20261106-142823-review-filters。
-- 有图补充V4迁移已执行。comments.has_images依据Mongo图片引用回填，发布时与MySQL元数据事务写入；window_reviews.has_images为图片数组的存储生成列。2条已发布菜品评价均找到正文并完成标记核验，原数据数量/评分不变。备份C:/Users/DELL/.codex/backups/order-system-cloud/20261106-143306-review-images。
-- V4重复执行验证通过，有图索引4个加上评分索引4个已建立。若旧代码运行期间再次新增菜品评价，会留下NULL标记；summary.imageCount返回null，有图查询明确不可用，不能假装没有图片。加载新代码后可再次执行已提供的回填工具。
+-
+有图补充V4迁移已执行。comments.has_images依据Mongo图片引用回填，发布时与MySQL元数据事务写入；window_reviews.has_images为图片数组的存储生成列。2条已发布菜品评价均找到正文并完成标记核验，原数据数量/评分不变。备份C:
+/Users/DELL/.codex/backups/order-system-cloud/20261106-143306-review-images。
+-
+V4重复执行验证通过，有图索引4个加上评分索引4个已建立。若旧代码运行期间再次新增菜品评价，会留下NULL标记；summary.imageCount返回null，有图查询明确不可用，不能假装没有图片。加载新代码后可再次执行已提供的回填工具。
 - 34项真实MySQL临时表SQL检查通过，覆盖全量/一星/五星/有图/组合筛选、游标隔离、数量上限、元数据写入与未知图片标记。业务表未被测试样本污染。
 - 前端评论回归、独立筛选竞态回归、搜索体验及33个页面/组件原生规则检查通过。补充后端参数、数量边界和有图投影测试源码；未运行Maven、Java测试、构建或重启。
 
@@ -35,4 +38,5 @@
 - [ ] 评论服务加载本次新代码后验证summary及四类筛选HTTP接口，Android真机验证带图分页/切换和四个标签计数。当前运行进程可能仍是旧代码，不将源码/SQL检查冒充完整联调。
 - [ ] 若旧进程期间产生新的NULL图片标记，运行tools/migrate-review-image-filter.py的预检与回填，确认全部投影已知。
 
-- 本次真机验收中ADB设备变为offline，HBuilder日志明确资源进入同步队列。尝试reconnect offline后仍离线、mDNS无发现；未清理手机数据或重启ADB服务，四标签最新画面尚未确认。
+- 本次真机验收中ADB设备变为offline，HBuilder日志明确资源进入同步队列。尝试reconnect
+  offline后仍离线、mDNS无发现；未清理手机数据或重启ADB服务，四标签最新画面尚未确认。

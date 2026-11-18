@@ -20,7 +20,8 @@
 - `migrations/product_db/V6__add_window_description_and_sort_order.sql`：在已执行 V1、V2、V4、V5 的商品库上增加窗口简介和排序。
 - `migrations/V3__create_order_items_table.sql`：在已有 `order_db` 中创建订单明细表。
 
-项目当前不自动执行 SQL 迁移。首次创建商品库时，需要用具有建库权限的 MySQL 账号执行商品库迁移；订单明细迁移针对已应用 V1、V2 的 `order_db` 执行。Docker 开发环境可从 MySQL 容器内运行：
+项目当前不自动执行 SQL 迁移。首次创建商品库时，需要用具有建库权限的 MySQL 账号执行商品库迁移；订单明细迁移针对已应用 V1、V2
+的 `order_db` 执行。Docker 开发环境可从 MySQL 容器内运行：
 
 ```bash
 docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot' \
@@ -30,15 +31,19 @@ docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWOR
   < docs/database/migrations/V3__create_order_items_table.sql
 ```
 
-V1 的建库建表语句使用 `IF NOT EXISTS`；V6 等 `ALTER TABLE` 迁移只执行一次，执行前须确认列和约束未存在。V6 需要在部署新版商品服务前执行；项目不会自动执行该迁移。
+V1 的建库建表语句使用 `IF NOT EXISTS`；V6 等 `ALTER TABLE` 迁移只执行一次，执行前须确认列和约束未存在。V6
+需要在部署新版商品服务前执行；项目不会自动执行该迁移。
 
 ## 窗口简介和排序
 
-窗口新增 `description VARCHAR(500) NULL` 和 `sort_order INT NOT NULL DEFAULT 0`。排序不得为负数，默认 0；已有窗口在迁移后保留原有数据并获得默认排序。
+窗口新增 `description VARCHAR(500) NULL` 和 `sort_order INT NOT NULL DEFAULT 0`。排序不得为负数，默认
+0；已有窗口在迁移后保留原有数据并获得默认排序。
 
-窗口管理的新增、编辑和查询接口均支持 `description`、`sortOrder`。新增时可省略，简介为空、排序为 0；编辑时省略或传 null 表示保留原值，简介传 `""` 可清空，排序传 0 可重置。简介最长 500 字符，超长简介和负数排序由请求校验拒绝。
+窗口管理的新增、编辑和查询接口均支持 `description`、`sortOrder`。新增时可省略，简介为空、排序为 0；编辑时省略或传 null
+表示保留原值，简介传 `""` 可清空，排序传 0 可重置。简介最长 500 字符，超长简介和负数排序由请求校验拒绝。
 
-顾客窗口列表返回两个字段，并按「食堂 sort_order → 食堂 ID → 窗口 sort_order → 窗口 ID」升序排列；未配置食堂排序的窗口延续原有规则排到最后。管理列表按「食堂 ID → 窗口 sort_order → 窗口 ID」排列，保留原有数据权限。
+顾客窗口列表返回两个字段，并按「食堂 sort_order → 食堂 ID → 窗口 sort_order → 窗口 ID」升序排列；未配置食堂排序的窗口延续原有规则排到最后。管理列表按「食堂
+ID → 窗口 sort_order → 窗口 ID」排列，保留原有数据权限。
 
 保留食堂 `sort_order`，用于食堂选择列表以及全部窗口列表中的食堂先后顺序；窗口 `sort_order` 控制食堂内部的窗口顺序。
 
@@ -48,20 +53,23 @@ V1 的建库建表语句使用 `IF NOT EXISTS`；V6 等 `ALTER TABLE` 迁移只�
 
 ## 商品服务连接配置
 
-商品服务使用独立的 `product_service` 数据库账号，只授予 `product_db` 的查询、写入、更新和删除权限。账号密码通过 `PRODUCT_DB_USERNAME`、`PRODUCT_DB_PASSWORD` 环境变量提供；本机开发值保存在被 Git 忽略的 `.env`，IDEA 运行配置需要单独设置这两个环境变量。
+商品服务使用独立的 `product_service` 数据库账号，只授予 `product_db` 的查询、写入、更新和删除权限。账号密码通过
+`PRODUCT_DB_USERNAME`、`PRODUCT_DB_PASSWORD` 环境变量提供；本机开发值保存在被 Git 忽略的 `.env`，IDEA 运行配置需要单独设置这两个环境变量。
 
 ## 顾客菜单查询接口
 
 商品服务提供以下只读接口，均要求携带有效的 CUSTOMER JWT：
 
-| Gateway 路径 | 说明 |
-|---|---|
-| `GET /api/products/windows` | 查询所有启用窗口的摘要 |
+| Gateway 路径                                | 说明                   |
+|---------------------------------------------|------------------------|
+| `GET /api/products/windows`                 | 查询所有启用窗口的摘要 |
 | `GET /api/products/windows/{windowId}/menu` | 查询指定启用窗口的菜单 |
 
-窗口菜单返回窗口信息、启用分类及各分类当前在售的菜品。停用窗口返回 `COMMON_404`；停用分类及下架菜品不会展示。允许 `category_id` 为空的在售菜品会放在 `uncategorizedProducts` 中。分类和菜品分别按 `sort_order`、ID 稳定排序。
+窗口菜单返回窗口信息、启用分类及各分类当前在售的菜品。停用窗口返回 `COMMON_404`；停用分类及下架菜品不会展示。允许
+`category_id` 为空的在售菜品会放在 `uncategorizedProducts` 中。分类和菜品分别按 `sort_order`、ID 稳定排序。
 
-Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-service`，并使用 `StripPrefix=1`。Gateway 删除外层 `/api` 后，请求到达商品服务的 `/products/**` 路径。
+Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-service`，并使用 `StripPrefix=1`。Gateway 删除外层
+`/api` 后，请求到达商品服务的 `/products/**` 路径。
 
 菜单接口响应示例：
 
@@ -100,25 +108,28 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 
 ## 目录管理接口
 
-目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。接口要求有效 JWT 且角色为 `STALL_MANAGER` 或 `RESTAURANT_MANAGER`，业务层继续校验操作者的数据范围；普通注册账号默认为 `CUSTOMER`。
+目录管理接口统一位于 `/products/admin/**`，经 Gateway 访问时使用 `/api/products/admin/**`。接口要求有效 JWT 且角色为
+`STALL_MANAGER` 或 `RESTAURANT_MANAGER`，业务层继续校验操作者的数据范围；普通注册账号默认为 `CUSTOMER`。
 
-| 方法 | Gateway 路径 | 说明 |
-|---|---|---|
-| `GET` | `/api/products/admin/windows` | 查询全部窗口，包括停用窗口 |
-| `POST` | `/api/products/admin/windows` | 创建窗口 |
-| `PUT` | `/api/products/admin/windows/{windowId}` | 全量更新窗口，可恢复启用 |
-| `DELETE` | `/api/products/admin/windows/{windowId}` | 停用窗口，不物理删除 |
-| `GET` | `/api/products/admin/windows/{windowId}/categories` | 查询窗口全部分类，包括停用分类 |
-| `POST` | `/api/products/admin/windows/{windowId}/categories` | 在窗口下创建分类 |
-| `PUT` | `/api/products/admin/categories/{categoryId}` | 全量更新分类，可恢复启用 |
-| `DELETE` | `/api/products/admin/categories/{categoryId}` | 停用分类，保留分类和菜品 |
-| `GET` | `/api/products/admin/windows/{windowId}/products` | 查询窗口全部菜品，包括下架菜品 |
-| `POST` | `/api/products/admin/windows/{windowId}/products` | 在窗口下创建菜品 |
-| `GET` | `/api/products/admin/products/{productId}` | 查询菜品详情 |
-| `PUT` | `/api/products/admin/products/{productId}` | 全量更新菜品，可重新上架 |
-| `DELETE` | `/api/products/admin/products/{productId}` | 下架菜品，不物理删除 |
+| 方法     | Gateway 路径                                        | 说明                           |
+|----------|-----------------------------------------------------|--------------------------------|
+| `GET`    | `/api/products/admin/windows`                       | 查询全部窗口，包括停用窗口     |
+| `POST`   | `/api/products/admin/windows`                       | 创建窗口                       |
+| `PUT`    | `/api/products/admin/windows/{windowId}`            | 全量更新窗口，可恢复启用       |
+| `DELETE` | `/api/products/admin/windows/{windowId}`            | 停用窗口，不物理删除           |
+| `GET`    | `/api/products/admin/windows/{windowId}/categories` | 查询窗口全部分类，包括停用分类 |
+| `POST`   | `/api/products/admin/windows/{windowId}/categories` | 在窗口下创建分类               |
+| `PUT`    | `/api/products/admin/categories/{categoryId}`       | 全量更新分类，可恢复启用       |
+| `DELETE` | `/api/products/admin/categories/{categoryId}`       | 停用分类，保留分类和菜品       |
+| `GET`    | `/api/products/admin/windows/{windowId}/products`   | 查询窗口全部菜品，包括下架菜品 |
+| `POST`   | `/api/products/admin/windows/{windowId}/products`   | 在窗口下创建菜品               |
+| `GET`    | `/api/products/admin/products/{productId}`          | 查询菜品详情                   |
+| `PUT`    | `/api/products/admin/products/{productId}`          | 全量更新菜品，可重新上架       |
+| `DELETE` | `/api/products/admin/products/{productId}`          | 下架菜品，不物理删除           |
 
-窗口、分类和菜品的唯一键冲突返回 HTTP 409 / `COMMON_409`。菜品分类必须属于当前窗口；在售菜品只能选择启用分类。停用分类后，顾客菜单和下单核价都会排除该分类下的菜品；重新启用分类后，仍在售的菜品会重新出现。窗口和分类停用通过 `status=0` 实现，菜品下架通过 `sale_status=0` 实现。
+窗口、分类和菜品的唯一键冲突返回 HTTP 409 / `COMMON_409`
+。菜品分类必须属于当前窗口；在售菜品只能选择启用分类。停用分类后，顾客菜单和下单核价都会排除该分类下的菜品；重新启用分类后，仍在售的菜品会重新出现。窗口和分类停用通过
+`status=0` 实现，菜品下架通过 `sale_status=0` 实现。
 
 创建窗口请求示例：
 
@@ -150,29 +161,42 @@ Nacos 的 `gateway-service.yaml` 将 `/api/products/**` 转发至 `lb://product-
 }
 ```
 
-本地开发数据位于 `migrations` 之外的 `seeds/product_catalog_dev.sql`。脚本使用窗口编码、窗口内分类名称和窗口内菜品编码定位记录，可重复执行；测试数据包括下架菜品、停用分类菜品和未分类菜品，用于核对菜单过滤规则。执行方式：
+本地开发数据位于 `migrations` 之外的 `seeds/product_catalog_dev.sql`
+。脚本使用窗口编码、窗口内分类名称和窗口内菜品编码定位记录，可重复执行；测试数据包括下架菜品、停用分类菜品和未分类菜品，用于核对菜单过滤规则。执行方式：
 
 ```bash
 docker exec -i order-system-cloud-mysql-1 sh -lc 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --default-character-set=utf8mb4' \
   < docs/database/seeds/product_catalog_dev.sql
 ```
 
-导入时必须指定 `--default-character-set=utf8mb4`：MySQL 命令行客户端默认按 latin1 解释文件内容，会把中文写成二次编码乱码。若数据已经被写成乱码，执行 `seeds/product_catalog_encoding_repair.sql` 还原（脚本幂等，可重复执行）。
-
+导入时必须指定 `--default-character-set=utf8mb4`：MySQL 命令行客户端默认按 latin1 解释文件内容，会把中文写成二次编码乱码。若数据已经被写成乱码，执行
+`seeds/product_catalog_encoding_repair.sql` 还原（脚本幂等，可重复执行）。
 
 ## 菜品规格（2026-11-17）
 
 迁移 `migrations/product_db/V12__create_product_specification_tables.sql` 新增：
 
-- `product_specification_groups`：`group_id/product_id/name/is_required/sort_order/status`；按菜品、状态、排序和编号建立读取索引，外键指向 `products`。
-- `product_specification_options`：`option_id/group_id/name/additional_price/sort_order/status`；按组、状态、排序和编号建立读取索引，外键指向规格组。
+- `product_specification_groups`：`group_id/product_id/name/is_required/sort_order/status`；按菜品、状态、排序和编号建立读取索引，外键指向
+  `products`。
+- `product_specification_options`：`option_id/group_id/name/additional_price/sort_order/status`
+  ；按组、状态、排序和编号建立读取索引，外键指向规格组。
 
-两张表只软停用（`status=0`），不物理删除。启用名称以生成列 `active_name` 参与唯一键，已停用同名历史不占用名称；加价为 `DECIMAL(10,2)`、非负且最多两位小数。每菜最多10组、每组1至20项、同组单选；必选组必须有至少一个零加价项，保证基础售价可作为最低起售价。
+两张表只软停用（`status=0`），不物理删除。启用名称以生成列 `active_name` 参与唯一键，已停用同名历史不占用名称；加价为
+`DECIMAL(10,2)`、非负且最多两位小数。每菜最多10组、每组1至20项、同组单选；必选组必须有至少一个零加价项，保证基础售价可作为最低起售价。
 
-`GET/PUT /products/admin/products/{productId}/specifications` 只放行 `STALL_MANAGER/RESTAURANT_MANAGER`，并复用所属窗口的数据范围校验；技术管理员不自动获得管理权限。PUT请求为 `{ "groups": [...] }`，空数组清除全部规格。更新时带回 `groupId/optionId` 保持身份，无编号表示新增，跨菜品或跨组编号拒绝。规格整份替换使用菜品行锁串行化，事务中写搜索Outbox，提交后与菜单回源重建共用窗口锁再失效缓存，避免旧菜单快照在删除后写回。
+`GET/PUT /products/admin/products/{productId}/specifications` 只放行 `STALL_MANAGER/RESTAURANT_MANAGER`
+，并复用所属窗口的数据范围校验；技术管理员不自动获得管理权限。PUT请求为 `{ "groups": [...] }`，空数组清除全部规格。更新时带回
+`groupId/optionId` 保持身份，无编号表示新增，跨菜品或跨组编号拒绝。规格整份替换使用菜品行锁串行化，事务中写搜索Outbox，提交后与菜单回源重建共用窗口锁再失效缓存，避免旧菜单快照在删除后写回。
 
-学生菜单的菜品始终带 `specificationGroups` 数组；组字段为 `groupId/name/required/sortOrder/options`，选项字段为 `optionId/name/additionalPrice/sortOrder`。菜单缓存升为 `product:menu:window:v4:{windowId}`，未配置规格返回 `[]`。
+学生菜单的菜品始终带 `specificationGroups` 数组；组字段为 `groupId/name/required/sortOrder/options`，选项字段为
+`optionId/name/additionalPrice/sortOrder`。菜单缓存升为 `product:menu:window:v4:{windowId}`，未配置规格返回 `[]`。
 
-内部核价支持 `items: [{productId, selectedOptionIds}]`，旧 `productIds` 作为无选择兼容，两字段只能提交一个非空列表。商品服务实时校验当前启用规格、所属菜品、单组单选、必选完整性及重复编号；选择错误整体返回400，商品不可售仍沿用省略该商品报价的原协议。核价结果含服务端最终单价、升序选项编号、`selectionKey` 以及 `specificationText`。无选择的键为 `base`，否则为升序ID以 `-` 连接；文字按组显示顺序生成“组名：选项名”，以“；”连接。
+内部核价支持 `items: [{productId, selectedOptionIds}]`，旧 `productIds`
+作为无选择兼容，两字段只能提交一个非空列表。商品服务实时校验当前启用规格、所属菜品、单组单选、必选完整性及重复编号；选择错误整体返回400，商品不可售仍沿用省略该商品报价的原协议。核价结果含服务端最终单价、升序选项编号、
+`selectionKey` 以及 `specificationText`。无选择的键为 `base`，否则为升序ID以 `-` 连接；文字按组显示顺序生成“组名：选项名”，以“；”连接。
 
-订单明细将核价后的选择键、规格文字和最终单价保存为自身快照；`order_db/V9__add_order_item_specification_snapshot.sql` 新增 `selection_key_snapshot` 和 `specification_text_snapshot`，旧订单通过 `base` 和空文字保持原义。商品规格后续改名、涨价或停用不改写历史订单，商品库不跨库建立订单外键。开发库已执行商品 V12 与订单 V9，并对表、索引、外键、默认值和中文注释完成核验；现有商品 77 行、订单明细 20 行未改变。开发演示数据由 `docs/database/seeds/product_specifications_dev.sql` 初始化 69 道菜、94 个规格组和 260 个选项；真实商品编码未被该脚本触及。
+订单明细将核价后的选择键、规格文字和最终单价保存为自身快照；`order_db/V9__add_order_item_specification_snapshot.sql` 新增
+`selection_key_snapshot` 和 `specification_text_snapshot`，旧订单通过 `base`
+和空文字保持原义。商品规格后续改名、涨价或停用不改写历史订单，商品库不跨库建立订单外键。开发库已执行商品 V12 与订单
+V9，并对表、索引、外键、默认值和中文注释完成核验；现有商品 77 行、订单明细 20 行未改变。开发演示数据由
+`docs/database/seeds/product_specifications_dev.sql` 初始化 69 道菜、94 个规格组和 260 个选项；真实商品编码未被该脚本触及。

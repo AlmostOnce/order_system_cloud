@@ -2,12 +2,14 @@
 
 ## 目标
 
-学生可以在点餐页头部收藏店铺（对应业务模型中的窗口）、在菜品评价弹层收藏当前菜品，并从“我的收藏”分别查看、进入或取消收藏。该功能仅对 CUSTOMER 开放。
+学生可以在点餐页头部收藏店铺（对应业务模型中的窗口）、在菜品评价弹层收藏当前菜品，并从“我的收藏”分别查看、进入或取消收藏。该功能仅对
+CUSTOMER 开放。
 
 ## 归属与数据边界
 
 - 收藏关系由 `user-service` 管理并保存在 `user_db`；不新增微服务、数据库或 Maven 依赖。
-- 收藏记录只保存当前用户、目标类型、目标 ID 和创建时间。店铺与菜品的名称、图片、价格等仍由 `product-service` 提供；不跨库查询，也不把客户端提交的商品文案当作可信数据。
+- 收藏记录只保存当前用户、目标类型、目标 ID 和创建时间。店铺与菜品的名称、图片、价格等仍由 `product-service`
+  提供；不跨库查询，也不把客户端提交的商品文案当作可信数据。
 - 收藏类型固定为 `WINDOW`（点餐店铺/窗口）和 `PRODUCT`（菜品）。食堂名称属于窗口的商品信息，不是第三种收藏类型。
 - 不为跨服务目标建立外键。下架、停用或已删除的目标保留收藏关系，在收藏页显示“暂不可用”并允许用户移除，避免目录变化静默清除个人收藏。
 - 不接入 Redis、RocketMQ、统计或推荐；MySQL 是收藏关系的唯一事实来源。
@@ -17,7 +19,8 @@
 - `PUT /users/me/favorites/{targetType}/{targetId}`：收藏；唯一键冲突按幂等成功处理。
 - `DELETE /users/me/favorites/{targetType}/{targetId}`：取消收藏；记录已不存在时也返回成功。
 - `POST /users/me/favorites/status`：批量查询当前用户在指定目标类型下，哪些传入 ID 已收藏；单次最多 100 个 ID。
-- `GET /users/me/favorites?targetType=WINDOW|PRODUCT&beforeId={cursor}&limit=20`：按收藏 ID 倒序游标分页；limit 默认 20、最大 50。返回收藏 ID、目标类型、目标 ID、创建时间、下一游标和 `hasMore`。
+- `GET /users/me/favorites?targetType=WINDOW|PRODUCT&beforeId={cursor}&limit=20`：按收藏 ID 倒序游标分页；limit 默认 20、最大
+  50。返回收藏 ID、目标类型、目标 ID、创建时间、下一游标和 `hasMore`。
 - 所有接口由后端要求 CUSTOMER 角色；用户归属只从已验签 JWT 的 `sub` 读取，绝不接受客户端传入 userId。
 - 类型非法、目标 ID 非正数、游标非法或批量 ID 为空/超限均返回统一参数错误。
 
