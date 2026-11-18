@@ -3,8 +3,8 @@ package com.hbue.ordering.stock.api.client.fallback;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
-import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
+import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import org.slf4j.Logger;
@@ -28,7 +28,9 @@ import java.util.List;
 public class StockServiceClientFallbackFactory
         implements FallbackFactory<StockServiceClient> {
 
-    /** 降级日志记录器。 */
+    /**
+     * 降级日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(
             StockServiceClientFallbackFactory.class
     );

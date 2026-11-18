@@ -5,7 +5,6 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.api.dto.OrderPaidCommand;
-import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import com.hbue.ordering.payment.channel.BalancePaymentChannel;
 import com.hbue.ordering.payment.channel.MockChannelNotifier;
 import com.hbue.ordering.payment.channel.PaymentChannel;
@@ -17,6 +16,7 @@ import com.hbue.ordering.payment.feign.OrderInternalClient;
 import com.hbue.ordering.payment.mapper.PaymentMapper;
 import com.hbue.ordering.payment.model.PaymentDO;
 import com.hbue.ordering.payment.service.PaymentService;
+import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import com.hbue.ordering.payment.vo.PaymentCreateVO;
 import com.hbue.ordering.payment.vo.PaymentStatusVO;
 import com.hbue.ordering.user.api.client.UserBalanceInternalClient;
@@ -36,20 +36,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * 支付核心流程测试：创建支付单幂等、渠道路由、余额同步结算、
@@ -81,13 +74,14 @@ class PaymentServiceImplTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Mock private com.hbue.ordering.payment.service.PaymentOrderGateService paymentGate;
+    @Mock
+    private com.hbue.ordering.payment.service.PaymentOrderGateService paymentGate;
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
         when(paymentChannel.channelCode()).thenReturn("MOCK");
-        org.mockito.Mockito.lenient().when(orderInternalClient.getOrder(ORDER_ID)).thenReturn(ApiResponse.success(order("待支付",USER_ID)));
+        org.mockito.Mockito.lenient().when(orderInternalClient.getOrder(ORDER_ID)).thenReturn(ApiResponse.success(order("待支付", USER_ID)));
         PaymentChannelRegistry channelRegistry = new PaymentChannelRegistry(
                 List.of(paymentChannel, new BalancePaymentChannel())
         );
@@ -99,9 +93,9 @@ class PaymentServiceImplTest {
                 objectMapper,
                 INTERNAL_SCOPE_TOKEN
         );
-        ReflectionTestUtils.setField(paymentService,"paymentGate",paymentGate);
-        org.mockito.Mockito.lenient().when(paymentGate.whileOpen(any(),any())).thenAnswer(call->((java.util.function.Supplier<?>)call.getArgument(1)).get());
-        ReflectionTestUtils.setField(paymentService,"baseMapper",paymentMapper);
+        ReflectionTestUtils.setField(paymentService, "paymentGate", paymentGate);
+        org.mockito.Mockito.lenient().when(paymentGate.whileOpen(any(), any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(1)).get());
+        ReflectionTestUtils.setField(paymentService, "baseMapper", paymentMapper);
     }
 
     // ---------- 创建支付单 ----------
@@ -131,7 +125,9 @@ class PaymentServiceImplTest {
         verify(paymentMapper).insert(any(PaymentDO.class));
     }
 
-    /** 支付单金额必须使用订单优惠后的应付快照，不能重新按商品原价扣款。 */
+    /**
+     * 支付单金额必须使用订单优惠后的应付快照，不能重新按商品原价扣款。
+     */
     @Test
     void shouldCreatePaymentUsingDiscountedPayableAmount() {
         OrderInternalDTO discountedOrder = order("待支付", USER_ID);
@@ -597,7 +593,7 @@ class PaymentServiceImplTest {
     private OrderInternalDTO order(String status, Long userId) {
         OrderInternalDTO order = new OrderInternalDTO();
         order.setOrderId(ORDER_ID);
-        order.setPaymentExpiresAt(System.currentTimeMillis()+900000);
+        order.setPaymentExpiresAt(System.currentTimeMillis() + 900000);
         order.setOrderNo("ORD202610120001AABBCCDD");
         order.setUserId(userId);
         order.setTotalAmount(ORDER_AMOUNT);
@@ -682,29 +678,37 @@ class PaymentServiceImplTest {
         return FeignException.errorStatus("order-service", response);
     }
 
-    @Test void expiryRejectsEvenExistingActivePaymentBeforeDeduction() {
-        var expired=order("待支付",USER_ID);expired.setPaymentExpiresAt(System.currentTimeMillis()-1);stubOrder(expired);
-        assertThrows(BusinessException.class,()->paymentService.createPayment(USER_ID,createRequest("BALANCE")));
-        verify(userBalanceInternalClient,never()).deduct(any(),anyString(),any());
+    @Test
+    void expiryRejectsEvenExistingActivePaymentBeforeDeduction() {
+        var expired = order("待支付", USER_ID);
+        expired.setPaymentExpiresAt(System.currentTimeMillis() - 1);
+        stubOrder(expired);
+        assertThrows(BusinessException.class, () -> paymentService.createPayment(USER_ID, createRequest("BALANCE")));
+        verify(userBalanceInternalClient, never()).deduct(any(), anyString(), any());
     }
-    @Test void successfulPaymentRetryRepairsOrderWithoutAnotherDeduction() {
-        stubOrder(order("待支付",USER_ID));
+
+    @Test
+    void successfulPaymentRetryRepairsOrderWithoutAnotherDeduction() {
+        stubOrder(order("待支付", USER_ID));
         when(paymentMapper.selectSuccessByOrderId(ORDER_ID)).thenReturn(payment("SUCCESS"));
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO)).thenReturn(payment("SUCCESS"));
-        paymentService.createPayment(USER_ID,createRequest("BALANCE"));
+        paymentService.createPayment(USER_ID, createRequest("BALANCE"));
         verify(orderInternalClient).markPaid(eq(ORDER_ID), any(OrderPaidCommand.class));
-        verify(userBalanceInternalClient,never()).deduct(any(),anyString(),any());
+        verify(userBalanceInternalClient, never()).deduct(any(), anyString(), any());
     }
-    @Test void closeConsultsLedgerAndRecoversMissingSuccessFact() {
-        PaymentDO pending=payment("CREATED");pending.setChannelCode("BALANCE");
+
+    @Test
+    void closeConsultsLedgerAndRecoversMissingSuccessFact() {
+        PaymentDO pending = payment("CREATED");
+        pending.setChannelCode("BALANCE");
         when(paymentMapper.selectAllByOrderId(ORDER_ID)).thenReturn(List.of(pending));
-        when(userBalanceInternalClient.close(eq(USER_ID),eq(INTERNAL_SCOPE_TOKEN),any())).thenReturn(ApiResponse.success("PAID"));
+        when(userBalanceInternalClient.close(eq(USER_ID), eq(INTERNAL_SCOPE_TOKEN), any())).thenReturn(ApiResponse.success("PAID"));
         when(paymentMapper.markSuccessIfCreated(eq(PAYMENT_NO), any(), anyString())).thenReturn(1);
         when(paymentMapper.selectByPaymentNo(PAYMENT_NO)).thenReturn(payment("SUCCESS"));
         PaymentCloseResult closeResult = paymentService.closeUnpaidOrder(ORDER_ID);
         assertEquals("PAID", closeResult.status());
         assertEquals(LocalDateTime.of(2026, 11, 13, 9, 30), closeResult.paidAt());
         verify(paymentGate).beginClose(ORDER_ID);
-        verify(paymentMapper,never()).closeIfCreated(anyString());
+        verify(paymentMapper, never()).closeIfCreated(anyString());
     }
 }

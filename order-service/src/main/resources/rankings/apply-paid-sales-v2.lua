@@ -1,11 +1,19 @@
-if redis.call('GET', KEYS[5]) ~= ARGV[1] then return -2 end
-if not redis.call('GET', KEYS[4]) then return -1 end
-if redis.call('SISMEMBER', KEYS[3], ARGV[2]) == 1 then return 0 end
+if redis.call('GET', KEYS[5]) ~= ARGV[1] then
+    return -2
+end
+if not redis.call('GET', KEYS[4]) then
+    return -1
+end
+if redis.call('SISMEMBER', KEYS[3], ARGV[2]) == 1 then
+    return 0
+end
 -- 先校验所有增量的精确整数边界，再执行任何写入。
 for pos = 4, #ARGV, 3 do
     local quantity = tonumber(ARGV[pos + 1])
     local current = tonumber(redis.call('ZSCORE', KEYS[1], ARGV[pos]) or '0')
-    if not quantity or quantity <= 0 or quantity % 1 ~= 0 or current + quantity > 9007199254740991 then return -3 end
+    if not quantity or quantity <= 0 or quantity % 1 ~= 0 or current + quantity > 9007199254740991 then
+        return -3
+    end
 end
 for pos = 4, #ARGV, 3 do
     local member = ARGV[pos]

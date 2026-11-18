@@ -13,7 +13,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-/** 验证浏览器预检、非白名单拒绝以及认证失败响应的跨域头。 */
+/**
+ * 验证浏览器预检、非白名单拒绝以及认证失败响应的跨域头。
+ */
 class GatewayCorsConfigTest {
 
     private final CorsWebFilter filter = new CorsWebFilter(

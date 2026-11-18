@@ -16,8 +16,7 @@ public interface LoginAttemptService {
      *
      * @param username 登录用户名
      * @return 账号是否仍在锁定期内
-     * @throws com.hbue.ordering.common.core.exception.BusinessException
-     *         Redis 不可用或无法确认锁定状态时抛出
+     * @throws com.hbue.ordering.common.core.exception.BusinessException Redis 不可用或无法确认锁定状态时抛出
      */
     boolean isLocked(String username);
 
@@ -26,8 +25,7 @@ public interface LoginAttemptService {
      *
      * @param username 登录用户名
      * @return 本次失败是否已达到阈值并触发临时锁定
-     * @throws com.hbue.ordering.common.core.exception.BusinessException
-     *         Redis 不可用或无法确认计数结果时抛出
+     * @throws com.hbue.ordering.common.core.exception.BusinessException Redis 不可用或无法确认计数结果时抛出
      */
     boolean recordFailure(String username);
 

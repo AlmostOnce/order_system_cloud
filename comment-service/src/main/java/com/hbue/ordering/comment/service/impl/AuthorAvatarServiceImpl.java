@@ -2,23 +2,29 @@ package com.hbue.ordering.comment.service.impl;
 
 import com.hbue.ordering.comment.client.CommentUserClient;
 import com.hbue.ordering.comment.service.AuthorAvatarService;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** 每页一次批量回源，头像失败不使评价正文不可用。 */
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 每页一次批量回源，头像失败不使评价正文不可用。
+ */
 @Service
 public class AuthorAvatarServiceImpl implements AuthorAvatarService {
     private static final Logger log = LoggerFactory.getLogger(AuthorAvatarServiceImpl.class);
     private final CommentUserClient users;
     private final String token;
+
     public AuthorAvatarServiceImpl(CommentUserClient users, @Value("${internal.scope.token:}") String token) {
-        this.users = users; this.token = token;
+        this.users = users;
+        this.token = token;
     }
+
     @Override
     public Map<Long, String> resolve(Collection<Long> userIds) {
         var ids = userIds.stream().filter(id -> id != null && id > 0).distinct().toList();

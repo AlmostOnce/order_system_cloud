@@ -1,10 +1,6 @@
 package com.hbue.ordering.product.dto.request;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 /**
@@ -19,17 +15,23 @@ import lombok.Data;
 @Data
 public class ProductCategorySaveRequest {
 
-    /** 分类名称。 */
+    /**
+     * 分类名称。
+     */
     @NotBlank
     @Size(max = 64)
     private String categoryName;
 
-    /** 分类排序值。 */
+    /**
+     * 分类排序值。
+     */
     @NotNull
     @Min(0)
     private Integer sortOrder;
 
-    /** 分类状态：1 启用，0 停用。 */
+    /**
+     * 分类状态：1 启用，0 停用。
+     */
     @NotNull
     @Min(0)
     @Max(1)

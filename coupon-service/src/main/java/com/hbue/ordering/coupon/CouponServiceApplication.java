@@ -1,8 +1,8 @@
 package com.hbue.ordering.coupon;
 
-import com.hbue.ordering.user.api.client.UserScopeInternalClient;
-import com.hbue.ordering.product.api.client.WindowInternalClient;
 import com.hbue.ordering.order.api.client.OrderCouponConsumeAckClient;
+import com.hbue.ordering.product.api.client.WindowInternalClient;
+import com.hbue.ordering.user.api.client.UserScopeInternalClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -28,7 +28,9 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @MapperScan("com.hbue.ordering.coupon.mapper")
 public class CouponServiceApplication {
 
-    /** 设置服务独立日志目录后启动 Spring 容器，避免多服务共用日志文件。 */
+    /**
+     * 设置服务独立日志目录后启动 Spring 容器，避免多服务共用日志文件。
+     */
     public static void main(String[] args) {
         System.getProperties().putIfAbsent("JM.LOG.PATH", java.nio.file.Path.of(
                 System.getProperty("user.home"), "logs", "order-system", "coupon-service"

@@ -53,18 +53,18 @@ class PublicUserIdentityTest {
     @Test
     @SuppressWarnings("unchecked")
     void rejectsAccessTokenIssuedBeforePasswordRecovery() {
-        ObjectProvider<PublicUserIdentityLookup> provider=mock(ObjectProvider.class);
-        PublicUserIdentityLookup lookup=mock(PublicUserIdentityLookup.class);
+        ObjectProvider<PublicUserIdentityLookup> provider = mock(ObjectProvider.class);
+        PublicUserIdentityLookup lookup = mock(PublicUserIdentityLookup.class);
         when(provider.getIfAvailable()).thenReturn(lookup);
         when(lookup.isEmailVerified(UUID)).thenReturn(true);
         when(lookup.findCredentialVersion(UUID)).thenReturn(1L);
-        var identities=new JwtUserIdentity(provider,"http://unused","internal-test");
-        Jwt old=Jwt.withTokenValue("old-signed").header("alg","RS256").subject(UUID).build();
-        assertThrows(JwtException.class,()->identities.toInternalPrincipal(old));
-        verify(lookup,never()).findInternalId(UUID);
+        var identities = new JwtUserIdentity(provider, "http://unused", "internal-test");
+        Jwt old = Jwt.withTokenValue("old-signed").header("alg", "RS256").subject(UUID).build();
+        assertThrows(JwtException.class, () -> identities.toInternalPrincipal(old));
+        verify(lookup, never()).findInternalId(UUID);
         when(lookup.findInternalId(UUID)).thenReturn(7L);
-        Jwt fresh=Jwt.withTokenValue("fresh-signed").header("alg","RS256").subject(UUID).claim("credential_version",1L).build();
-        assertEquals("7",identities.toInternalPrincipal(fresh).getSubject());
+        Jwt fresh = Jwt.withTokenValue("fresh-signed").header("alg", "RS256").subject(UUID).claim("credential_version", 1L).build();
+        assertEquals("7", identities.toInternalPrincipal(fresh).getSubject());
     }
 
     @Test
@@ -77,13 +77,16 @@ class PublicUserIdentityTest {
         assertTrue(profile.contains(UUID));
     }
 
-    @Test @SuppressWarnings("unchecked") void oldTokenCannotBypassUnverifiedEmailGate() {
-        ObjectProvider<PublicUserIdentityLookup> provider=mock(ObjectProvider.class);
-        PublicUserIdentityLookup lookup=mock(PublicUserIdentityLookup.class);when(provider.getIfAvailable()).thenReturn(lookup);
+    @Test
+    @SuppressWarnings("unchecked")
+    void oldTokenCannotBypassUnverifiedEmailGate() {
+        ObjectProvider<PublicUserIdentityLookup> provider = mock(ObjectProvider.class);
+        PublicUserIdentityLookup lookup = mock(PublicUserIdentityLookup.class);
+        when(provider.getIfAvailable()).thenReturn(lookup);
         when(lookup.isEmailVerified(UUID)).thenReturn(false);
-        var identities=new JwtUserIdentity(provider,"http://unused","internal-test");
-        var jwt=Jwt.withTokenValue("old").header("alg","RS256").subject(UUID).build();
-        assertThrows(JwtException.class,()->identities.toInternalPrincipal(jwt));
-        verify(lookup,never()).findInternalId(UUID);
+        var identities = new JwtUserIdentity(provider, "http://unused", "internal-test");
+        var jwt = Jwt.withTokenValue("old").header("alg", "RS256").subject(UUID).build();
+        assertThrows(JwtException.class, () -> identities.toInternalPrincipal(jwt));
+        verify(lookup, never()).findInternalId(UUID);
     }
 }

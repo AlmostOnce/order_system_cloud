@@ -41,13 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 订单创建与幂等逻辑测试。
@@ -162,7 +156,9 @@ class OrderServiceImplTest {
         ));
     }
 
-    /** 优惠只接受券服务结果，并按明细原价比例分摊到分；尾差由最后一行承接。 */
+    /**
+     * 优惠只接受券服务结果，并按明细原价比例分摊到分；尾差由最后一行承接。
+     */
     @Test
     void shouldLockCouponAndPersistProportionalDiscountSnapshot() {
         stubQuotes(
@@ -203,7 +199,9 @@ class OrderServiceImplTest {
         verify(orderPersistenceService).applyCouponSnapshot(any(OrderDO.class), any());
     }
 
-    /** 更换所选券会改变同一幂等键的请求摘要，避免重放成另一种金额意图。 */
+    /**
+     * 更换所选券会改变同一幂等键的请求摘要，避免重放成另一种金额意图。
+     */
     @Test
     void selectedCouponParticipatesInIdempotencyHash() {
         OrderCreateRequest first = createRequest(null, item(101L, 1));
@@ -217,7 +215,9 @@ class OrderServiceImplTest {
         org.junit.jupiter.api.Assertions.assertNotEquals(firstHash, secondHash);
     }
 
-    /** 支付链路没有零元订单状态，锁券响应全额抵扣时订单必须拒绝应用该结果。 */
+    /**
+     * 支付链路没有零元订单状态，锁券响应全额抵扣时订单必须拒绝应用该结果。
+     */
     @Test
     void shouldRejectCouponThatWouldCreateZeroPayableOrder() {
         stubQuotes(new ProductQuoteVO(101L, "A101", "鸡肉饭", new BigDecimal("5.25")));
@@ -286,7 +286,7 @@ class OrderServiceImplTest {
     @Test
     void shouldRejectDifferentRequestForSameKey() {
         OrderDO existingOrder = new OrderDO();
-        existingOrder.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
+        existingOrder.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 4, 12, 0));
         existingOrder.setOrderId(600L);
         existingOrder.setRequestHash("different-hash");
         when(orderMapper.selectByUserIdAndIdempotencyKey(
@@ -337,7 +337,7 @@ class OrderServiceImplTest {
         OrderCreateRequest request = createRequest(null, item(101L, 1));
         AtomicInteger lookupCount = new AtomicInteger();
         OrderDO winnerOrder = new OrderDO();
-        winnerOrder.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
+        winnerOrder.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 4, 12, 0));
         winnerOrder.setOrderId(707L);
         winnerOrder.setUserId(USER_ID);
         winnerOrder.setWindowId(3L);

@@ -19,19 +19,29 @@ import org.springframework.scheduling.annotation.Scheduled;
 @ConditionalOnProperty(name = "recommendation.messaging.enabled", havingValue = "true")
 public class RecommendationPurchaseOutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(RecommendationPurchaseOutboxPublisher.class);
-    /** 本地可靠队列与项目统一JSON编码器。 */
+    /**
+     * 本地可靠队列与项目统一JSON编码器。
+     */
     private final RecommendationPurchaseOutboxMapper outbox;
     private final ObjectMapper json;
-    /** 只发布不可变Outbox正文，不在派发阶段重新读取并改写历史事件。 */
+    /**
+     * 只发布不可变Outbox正文，不在派发阶段重新读取并改写历史事件。
+     */
     private final StreamBridge stream;
 
-    /** 注入持久任务与消息桥；开关只控制派发，不跳过源事务记录。 */
+    /**
+     * 注入持久任务与消息桥；开关只控制派发，不跳过源事务记录。
+     */
     public RecommendationPurchaseOutboxPublisher(RecommendationPurchaseOutboxMapper outbox,
-            ObjectMapper json, StreamBridge stream) {
-        this.outbox = outbox; this.json = json; this.stream = stream;
+                                                 ObjectMapper json, StreamBridge stream) {
+        this.outbox = outbox;
+        this.json = json;
+        this.stream = stream;
     }
 
-    /** 有界扫描和校验后同步发送；未获Broker确认则保留任务退避，不伪报完成。 */
+    /**
+     * 有界扫描和校验后同步发送；未获Broker确认则保留任务退避，不伪报完成。
+     */
     @Scheduled(fixedDelayString = "${recommendation.messaging.publish-delay-ms:1000}")
     public void publishPending() {
         try {

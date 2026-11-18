@@ -15,10 +15,14 @@ import com.hbue.ordering.product.service.ProductSearchSourceService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-/** 从商品主库构造搜索服务可消费的当前菜单快照。 */
+/**
+ * 从商品主库构造搜索服务可消费的当前菜单快照。
+ */
 @Service
 @Transactional(readOnly = true)
 public class ProductSearchSourceServiceImpl implements ProductSearchSourceService {
@@ -28,7 +32,7 @@ public class ProductSearchSourceServiceImpl implements ProductSearchSourceServic
     private final RestaurantMapper restaurants;
 
     public ProductSearchSourceServiceImpl(DiningWindowMapper windows, ProductMapper products,
-                                      ProductCategoryMapper categories, RestaurantMapper restaurants) {
+                                          ProductCategoryMapper categories, RestaurantMapper restaurants) {
         this.windows = windows;
         this.products = products;
         this.categories = categories;
@@ -44,7 +48,9 @@ public class ProductSearchSourceServiceImpl implements ProductSearchSourceServic
                 .stream().map(DiningWindowDO::getWindowId).toList();
     }
 
-    /** 读取单个可售菜品；不存在或不再可售时返回空列表，供搜索服务删除文档。 */
+    /**
+     * 读取单个可售菜品；不存在或不再可售时返回空列表，供搜索服务删除文档。
+     */
     public List<ProductSearchDocument> document(Long windowId, Long productId) {
         ProductDO product = products.selectById(productId);
         if (product == null || !windowId.equals(product.getWindowId()) || !Integer.valueOf(1).equals(product.getSaleStatus())) {

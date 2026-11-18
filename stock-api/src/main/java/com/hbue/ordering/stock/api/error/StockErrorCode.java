@@ -42,7 +42,7 @@ public enum StockErrorCode implements ErrorCode {
     /**
      * 创建库存业务错误码。
      *
-     * @param code 错误码字符串
+     * @param code    错误码字符串
      * @param message 默认提示
      */
     StockErrorCode(String code, String message) {

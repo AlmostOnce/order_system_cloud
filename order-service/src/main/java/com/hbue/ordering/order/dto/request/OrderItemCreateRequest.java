@@ -20,17 +20,23 @@ import java.util.List;
 @Data
 public class OrderItemCreateRequest {
 
-    /** 菜品 ID。 */
+    /**
+     * 菜品 ID。
+     */
     @NotNull(message = "菜品 ID 不能为空")
     @Positive(message = "菜品 ID 必须大于 0")
     private Long productId;
 
-    /** 购买数量。 */
+    /**
+     * 购买数量。
+     */
     @NotNull(message = "菜品数量不能为空")
     @Positive(message = "菜品数量必须大于 0")
     private Integer quantity;
 
-    /** 顾客在各单选规格组中选择的选项 ID；空列表表示没有可选规格。 */
+    /**
+     * 顾客在各单选规格组中选择的选项 ID；空列表表示没有可选规格。
+     */
     @Size(max = 10, message = "菜品规格选项不能超过 10 项")
     private List<@NotNull(message = "规格选项 ID 不能为空") @Positive(message = "规格选项 ID 必须大于 0") Long> selectedOptionIds;
 }

@@ -22,23 +22,27 @@ import org.springframework.stereotype.Component;
 @Component
 public class ManagementAuditLogger {
 
-    /** 审计专用日志通道，便于日志采集按通道过滤。 */
+    /**
+     * 审计专用日志通道，便于日志采集按通道过滤。
+     */
     private static final Logger AUDIT_LOG =
             LoggerFactory.getLogger("AUDIT");
 
-    /** Spring Security 角色权限前缀。 */
+    /**
+     * Spring Security 角色权限前缀。
+     */
     private static final String ROLE_PREFIX = "ROLE_";
 
     /**
      * 记录一次管理操作。
      *
      * @param actorUserId 操作者用户 ID
-     * @param action 操作动作，例如 ORDER_STATUS_ADVANCE
-     * @param targetType 目标类型，例如 ORDER
-     * @param targetId 目标 ID
-     * @param before 变更前状态
-     * @param after 变更后状态
-     * @param success 操作是否成功
+     * @param action      操作动作，例如 ORDER_STATUS_ADVANCE
+     * @param targetType  目标类型，例如 ORDER
+     * @param targetId    目标 ID
+     * @param before      变更前状态
+     * @param after       变更后状态
+     * @param success     操作是否成功
      */
     public void record(
             Long actorUserId,

@@ -11,14 +11,20 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-/** 搜索服务安全过滤链统一使用项目标准 JSON 错误响应。 */
+/**
+ * 搜索服务安全过滤链统一使用项目标准 JSON 错误响应。
+ */
 @Component
 public class SearchSecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
     private final ObjectMapper json;
-    public SearchSecurityErrorHandler(ObjectMapper json) { this.json = json; }
+
+    public SearchSecurityErrorHandler(ObjectMapper json) {
+        this.json = json;
+    }
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,

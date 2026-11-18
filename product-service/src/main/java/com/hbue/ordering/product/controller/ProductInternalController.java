@@ -2,21 +2,16 @@ package com.hbue.ordering.product.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
-import com.hbue.ordering.product.api.dto.ProductSearchDocument;
-import com.hbue.ordering.product.service.ProductSearchSourceService;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
+import com.hbue.ordering.product.api.dto.ProductSearchDocument;
 import com.hbue.ordering.product.service.ProductQuoteService;
+import com.hbue.ordering.product.service.ProductSearchSourceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 /**
@@ -30,7 +25,9 @@ import java.util.List;
 @RequestMapping("/internal/products")
 public class ProductInternalController {
 
-    /** 商品核价业务服务。 */
+    /**
+     * 商品核价业务服务。
+     */
     private final ProductQuoteService productQuoteService;
     private final ProductSearchSourceService searchSource;
     private final InternalScopeTokenVerifier internalTokenVerifier;

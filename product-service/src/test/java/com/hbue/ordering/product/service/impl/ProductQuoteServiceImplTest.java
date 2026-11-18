@@ -3,19 +3,18 @@ package com.hbue.ordering.product.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
-import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteItemRequest;
-import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
-import java.util.Map;
+import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
-import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.service.ProductSpecificationService;
+import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,17 +24,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductQuoteServiceImplTest {
@@ -43,7 +37,9 @@ class ProductQuoteServiceImplTest {
     @Mock
     private DiningWindowMapper diningWindowMapper;
 
-    /** 规格服务独立mock，原有菜单和核价用例默认无规格配置。 */
+    /**
+     * 规格服务独立mock，原有菜单和核价用例默认无规格配置。
+     */
     @Mock
     private ProductSpecificationService specifications;
 
@@ -160,7 +156,9 @@ class ProductQuoteServiceImplTest {
         verify(diningWindowMapper, never()).selectById(any());
     }
 
-    /** 同一菜品两种规格独立核价，编号顺序不能影响组合身份或服务端金额。 */
+    /**
+     * 同一菜品两种规格独立核价，编号顺序不能影响组合身份或服务端金额。
+     */
     @Test
     void shouldQuoteDifferentSelectionsAndNormalizeIds() {
         DiningWindowDO window = new DiningWindowDO();
@@ -193,7 +191,9 @@ class ProductQuoteServiceImplTest {
         assertEquals(new BigDecimal("12.00"), response.getProducts().get(1).getPrice());
     }
 
-    /** 菜品新增必选组后，旧无选择请求不得自动选零加价项，必须整体拒绝。 */
+    /**
+     * 菜品新增必选组后，旧无选择请求不得自动选零加价项，必须整体拒绝。
+     */
     @Test
     void shouldRejectMissingRequiredSelectionForLegacyRequest() {
         DiningWindowDO window = new DiningWindowDO();
@@ -207,7 +207,9 @@ class ProductQuoteServiceImplTest {
         assertThrows(BusinessException.class, () -> service().quote(request(101L)));
     }
 
-    /** 重复选项与同组选两项不能通过请求去重静默修复，避免用户实际选择与计价不一致。 */
+    /**
+     * 重复选项与同组选两项不能通过请求去重静默修复，避免用户实际选择与计价不一致。
+     */
     @Test
     void shouldRejectDuplicateOptionBeforeReadingDatabase() {
         ProductQuoteRequest request = new ProductQuoteRequest();

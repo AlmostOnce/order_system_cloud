@@ -34,32 +34,44 @@ import org.springframework.context.annotation.Configuration;
 )
 public class OpenApiDocumentationConfig {
 
-    /** JWT Bearer 安全方案名称，需与各接口文档中的引用保持一致。 */
+    /**
+     * JWT Bearer 安全方案名称，需与各接口文档中的引用保持一致。
+     */
     private static final String BEARER_SCHEME_NAME = "bearerAuth";
 
-    /** 文档标题，缺省回落到服务名。 */
+    /**
+     * 文档标题，缺省回落到服务名。
+     */
     private final String serviceTitle;
 
-    /** 文档描述，可为空。 */
+    /**
+     * 文档描述，可为空。
+     */
     private final String serviceDescription;
 
-    /** 文档版本号，缺省为 1.0.0。 */
+    /**
+     * 文档版本号，缺省为 1.0.0。
+     */
     private final String serviceVersion;
 
-    /** 网关基础地址，用于修正经网关聚合后的 "Try it out" 目标地址。 */
+    /**
+     * 网关基础地址，用于修正经网关聚合后的 "Try it out" 目标地址。
+     */
     private final String gatewayBaseUrl;
 
-    /** 本服务在网关上的路径前缀，如 /api/users。 */
+    /**
+     * 本服务在网关上的路径前缀，如 /api/users。
+     */
     private final String gatewayPath;
 
     /**
      * 创建接口文档共享配置。
      *
-     * @param serviceTitle 文档标题
+     * @param serviceTitle       文档标题
      * @param serviceDescription 文档描述
-     * @param serviceVersion 文档版本号
-     * @param gatewayBaseUrl 网关基础地址
-     * @param gatewayPath 本服务的网关路径前缀
+     * @param serviceVersion     文档版本号
+     * @param gatewayBaseUrl     网关基础地址
+     * @param gatewayPath        本服务的网关路径前缀
      */
     public OpenApiDocumentationConfig(
             @Value("${springdoc.service-title:${spring.application.name:接口服务}}")

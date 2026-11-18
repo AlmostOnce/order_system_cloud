@@ -1,9 +1,9 @@
 package com.hbue.ordering.search.task;
 
-import static org.mockito.Mockito.*;
-
 import com.hbue.ordering.search.service.ProductSearchService;
 import org.junit.jupiter.api.Test;
+
+import static org.mockito.Mockito.*;
 
 class SearchIndexBootstrapTest {
     @Test

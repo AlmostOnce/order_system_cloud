@@ -1,8 +1,8 @@
 package com.hbue.ordering.payment.feign;
 
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.payment.dto.OrderInternalDTO;
 import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.payment.dto.OrderInternalDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;

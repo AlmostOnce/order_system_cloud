@@ -1,5 +1,7 @@
 -- generation 是重建任务启动时拿到的 fencing token；租约过期后的旧快照不得覆盖新事件。
-if redis.call('GET', KEYS[5]) ~= ARGV[1] then return 0 end
+if redis.call('GET', KEYS[5]) ~= ARGV[1] then
+    return 0
+end
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[6])
 local orderCount = tonumber(ARGV[4])
 local pos = 5

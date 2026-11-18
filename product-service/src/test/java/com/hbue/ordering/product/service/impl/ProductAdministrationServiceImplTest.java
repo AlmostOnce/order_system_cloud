@@ -17,7 +17,6 @@ import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.vo.ProductAdminVO;
-import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,22 +29,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductAdministrationServiceImplTest {
 
-    /** 测试用操作者用户 ID。 */
+    /**
+     * 测试用操作者用户 ID。
+     */
     private static final Long OPERATOR_ID = 99L;
 
     @Mock

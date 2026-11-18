@@ -21,18 +21,26 @@ import java.util.List;
 @Data
 public class ProductQuoteRequest {
 
-    /** 单次核价允许的最大菜品数。 */
+    /**
+     * 单次核价允许的最大菜品数。
+     */
     public static final int MAX_PRODUCT_IDS = 100;
 
-    /** 请求菜品所属窗口 ID。 */
+    /**
+     * 请求菜品所属窗口 ID。
+     */
     @NotNull
     @Positive
     private Long windowId;
 
-    /** 兼容旧调用方的无规格菜品编号；与items只允许填一个，重复菜品由服务层拒绝。 */
+    /**
+     * 兼容旧调用方的无规格菜品编号；与items只允许填一个，重复菜品由服务层拒绝。
+     */
     @Size(max = MAX_PRODUCT_IDS)
     private List<@NotNull @Positive Long> productIds;
-    /** 新版逐行核价请求；最多100行，同菜不同规格允许分行，相同规范化选择键不允许重复。 */
+    /**
+     * 新版逐行核价请求；最多100行，同菜不同规格允许分行，相同规范化选择键不允许重复。
+     */
     @Size(max = MAX_PRODUCT_IDS)
     private List<@NotNull @Valid ProductQuoteItemRequest> items;
 }

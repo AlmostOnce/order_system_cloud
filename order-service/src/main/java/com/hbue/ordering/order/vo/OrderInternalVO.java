@@ -20,29 +20,45 @@ import java.math.BigDecimal;
 @Builder
 public class OrderInternalVO {
 
-    /** 服务端毫秒时间戳；客户端仅用于显示，支付许可由服务端判定。 */
+    /**
+     * 服务端毫秒时间戳；客户端仅用于显示，支付许可由服务端判定。
+     */
     private Long paymentExpiresAt;
     private Long serverTime;
 
-    /** 订单 ID。 */
+    /**
+     * 订单 ID。
+     */
     private Long orderId;
 
-    /** 订单号。 */
+    /**
+     * 订单号。
+     */
     private String orderNo;
 
-    /** 下单用户 ID。 */
+    /**
+     * 下单用户 ID。
+     */
     private Long userId;
 
-    /** 订单总金额。 */
+    /**
+     * 订单总金额。
+     */
     private BigDecimal totalAmount;
 
-    /** 订单优惠总额，提供给可信支付调用方核对。 */
+    /**
+     * 订单优惠总额，提供给可信支付调用方核对。
+     */
     private BigDecimal discountAmount;
 
-    /** 订单应付金额；不得由支付服务用原价重新推算优惠。 */
+    /**
+     * 订单应付金额；不得由支付服务用原价重新推算优惠。
+     */
     private BigDecimal payableAmount;
 
-    /** 订单当前状态（数据库中文值）。 */
+    /**
+     * 订单当前状态（数据库中文值）。
+     */
     private String status;
 
     /**

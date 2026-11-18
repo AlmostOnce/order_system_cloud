@@ -11,10 +11,11 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderPickupService;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import org.springframework.stereotype.Service;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
-import org.springframework.stereotype.Service;
 
 @Service
 public class OrderPickupServiceImpl implements OrderPickupService {
@@ -25,8 +26,12 @@ public class OrderPickupServiceImpl implements OrderPickupService {
     private final ManagementAuditLogger audit;
 
     public OrderPickupServiceImpl(OrderMapper orders, OrderPersistenceService persistence,
-            DataScopeService scopes, RedisOperationsService redis, ManagementAuditLogger audit) {
-        this.orders = orders; this.persistence = persistence; this.scopes = scopes; this.redis = redis; this.audit = audit;
+                                  DataScopeService scopes, RedisOperationsService redis, ManagementAuditLogger audit) {
+        this.orders = orders;
+        this.persistence = persistence;
+        this.scopes = scopes;
+        this.redis = redis;
+        this.audit = audit;
     }
 
     @Override
@@ -59,5 +64,7 @@ public class OrderPickupServiceImpl implements OrderPickupService {
         return OrderStatusVO.builder().orderId(order.getOrderId()).status(OrderStatus.COMPLETED.getLabel()).build();
     }
 
-    private BusinessException notFound() { return new BusinessException(CommonErrorCode.NOT_FOUND, "取餐码无效或订单不可核销"); }
+    private BusinessException notFound() {
+        return new BusinessException(CommonErrorCode.NOT_FOUND, "取餐码无效或订单不可核销");
+    }
 }

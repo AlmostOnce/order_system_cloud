@@ -7,18 +7,23 @@ import com.hbue.ordering.recommendation.model.RecommendationSearchIntentDO;
 import com.hbue.ordering.recommendation.service.RecommendationSearchIntentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Locale;
 
-/** 保存搜索服务转发的成功首屏意图并按约定删除过期原文。 */
+/**
+ * 保存搜索服务转发的成功首屏意图并按约定删除过期原文。
+ */
 @Service
 public class RecommendationSearchIntentServiceImpl implements RecommendationSearchIntentService {
     private final RecommendationSearchIntentMapper intents;
     private final ObjectMapper json;
 
-    /** 注入短期意图表及列表序列化器，服务端自行生成采集时间。 */
+    /**
+     * 注入短期意图表及列表序列化器，服务端自行生成采集时间。
+     */
     public RecommendationSearchIntentServiceImpl(RecommendationSearchIntentMapper intents, ObjectMapper json) {
         this.intents = intents;
         this.json = json;
@@ -69,13 +74,17 @@ public class RecommendationSearchIntentServiceImpl implements RecommendationSear
         }
     }
 
-    /** 到期关键词和候选结果均在14天后删除；清理失败由后续定时周期再次执行。 */
+    /**
+     * 到期关键词和候选结果均在14天后删除；清理失败由后续定时周期再次执行。
+     */
     @Override
     public void purgeExpired() {
         intents.deleteExpired(LocalDateTime.now().minusDays(14));
     }
 
-    /** 可选筛选 ID 只接受正数，不把0等哨兵值写进个人搜索范围。 */
+    /**
+     * 可选筛选 ID 只接受正数，不把0等哨兵值写进个人搜索范围。
+     */
     private boolean validOptionalId(Long id) {
         return id == null || id > 0;
     }

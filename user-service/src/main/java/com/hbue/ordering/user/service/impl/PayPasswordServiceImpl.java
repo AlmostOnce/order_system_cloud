@@ -31,46 +31,66 @@ import java.time.Duration;
 @Service
 public class PayPasswordServiceImpl implements PayPasswordService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(PayPasswordServiceImpl.class);
 
-    /** 失败计数键前缀。 */
+    /**
+     * 失败计数键前缀。
+     */
     private static final String FAIL_KEY_PREFIX = "user:pay-password:fail:";
 
-    /** 锁定标记键前缀。 */
+    /**
+     * 锁定标记键前缀。
+     */
     private static final String LOCK_KEY_PREFIX = "user:pay-password:lock:";
 
-    /** 用户启用状态。 */
+    /**
+     * 用户启用状态。
+     */
     private static final Integer USER_STATUS_ENABLED = 1;
 
-    /** 用户数据访问接口。 */
+    /**
+     * 用户数据访问接口。
+     */
     private final UserMapper userMapper;
 
-    /** 密码加密器。 */
+    /**
+     * 密码加密器。
+     */
     private final PasswordEncoder passwordEncoder;
 
-    /** Redis 基础操作服务。 */
+    /**
+     * Redis 基础操作服务。
+     */
     private final RedisOperationsService redisOperationsService;
 
-    /** 允许的连续失败次数上限。 */
+    /**
+     * 允许的连续失败次数上限。
+     */
     private final int maxFailures;
 
-    /** 失败计数保留时长。 */
+    /**
+     * 失败计数保留时长。
+     */
     private final Duration failureTtl;
 
-    /** 触发上限后的锁定时长。 */
+    /**
+     * 触发上限后的锁定时长。
+     */
     private final Duration lockTtl;
 
     /**
      * 创建支付密码业务服务。
      *
-     * @param userMapper 用户数据访问接口
-     * @param passwordEncoder 密码加密器
+     * @param userMapper             用户数据访问接口
+     * @param passwordEncoder        密码加密器
      * @param redisOperationsService Redis 基础操作服务
-     * @param maxFailures 允许的连续失败次数上限
-     * @param failureTtlSeconds 失败计数保留秒数
-     * @param lockTtlSeconds 锁定时长秒数
+     * @param maxFailures            允许的连续失败次数上限
+     * @param failureTtlSeconds      失败计数保留秒数
+     * @param lockTtlSeconds         锁定时长秒数
      */
     public PayPasswordServiceImpl(
             UserMapper userMapper,
@@ -97,7 +117,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      * <p>首次设置用登录密码确认身份；修改时通过统一的支付密码校验路径验证
      * 原密码，因此修改操作同样受 Redis 失败计数和锁定策略保护。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param request 支付密码设置请求
      * @throws BusinessException 身份凭据错误、账户不可用或密码不满足业务约束时抛出
      */
@@ -174,7 +194,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
     /**
      * 校验支付密码，失败时累计计数并在超过阈值后锁定。
      *
-     * @param userId 用户 ID
+     * @param userId      用户 ID
      * @param payPassword 支付密码明文
      * @throws BusinessException 密码为空、账户不可用、支付密码未设置、校验失败达到限制或 Redis 不可用时抛出
      */

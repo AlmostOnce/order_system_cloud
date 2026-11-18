@@ -24,26 +24,36 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class CouponLockRequest {
 
-    /** 用户持有的券记录主键。 */
+    /**
+     * 用户持有的券记录主键。
+     */
     @NotNull(message = "用户优惠券 ID 不能为空")
     @Positive(message = "用户优惠券 ID 必须大于 0")
     private Long userCouponId;
 
-    /** 经订单服务认证得到的用户主键，优惠券服务据此校验持券归属。 */
+    /**
+     * 经订单服务认证得到的用户主键，优惠券服务据此校验持券归属。
+     */
     @NotNull(message = "用户 ID 不能为空")
     @Positive(message = "用户 ID 必须大于 0")
     private Long userId;
 
-    /** 服务端生成的订单号，也是锁定/释放的幂等关联键。 */
+    /**
+     * 服务端生成的订单号，也是锁定/释放的幂等关联键。
+     */
     @NotBlank(message = "订单号不能为空")
     private String orderNo;
 
-    /** 当前订单所属窗口，用于核对平台券适用范围。 */
+    /**
+     * 当前订单所属窗口，用于核对平台券适用范围。
+     */
     @NotNull(message = "窗口 ID 不能为空")
     @Positive(message = "窗口 ID 必须大于 0")
     private Long windowId;
 
-    /** 订单服务核价后纳入优惠门槛的商品金额，不包含客户端报价或费用项。 */
+    /**
+     * 订单服务核价后纳入优惠门槛的商品金额，不包含客户端报价或费用项。
+     */
     @NotNull(message = "适用商品金额不能为空")
     @DecimalMin(value = "0.01", message = "适用商品金额必须大于 0")
     private BigDecimal eligibleAmount;

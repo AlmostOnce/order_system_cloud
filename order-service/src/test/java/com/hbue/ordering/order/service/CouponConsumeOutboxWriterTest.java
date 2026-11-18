@@ -12,27 +12,34 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-/** 支付券核销 Outbox 回执的轻量断言，不依赖数据库、Seata 或 RocketMQ。 */
+/**
+ * 支付券核销 Outbox 回执的轻量断言，不依赖数据库、Seata 或 RocketMQ。
+ */
 @ExtendWith(MockitoExtension.class)
 class CouponConsumeOutboxWriterTest {
 
-    @Mock private CouponConsumeOutboxMapper outbox;
-    @Mock private OrderMapper orders;
-    @Mock private ObjectMapper json;
+    @Mock
+    private CouponConsumeOutboxMapper outbox;
+    @Mock
+    private OrderMapper orders;
+    @Mock
+    private ObjectMapper json;
 
     private CouponConsumeOutboxWriter writer;
 
-    /** 用 mock 持久化边界创建回执处理器。 */
+    /**
+     * 用 mock 持久化边界创建回执处理器。
+     */
     @BeforeEach
     void setUp() {
         writer = new CouponConsumeOutboxWriter(outbox, orders, json);
     }
 
-    /** 同一事件的重复消费回执按已确认快照幂等成功，不会要求重新改变状态。 */
+    /**
+     * 同一事件的重复消费回执按已确认快照幂等成功，不会要求重新改变状态。
+     */
     @Test
     void duplicateConfirmationIsIdempotentForTheSameEventTuple() {
         var request = new CouponConsumeConfirmationRequest("event-1", "ORDER-1", 8L);
@@ -45,7 +52,9 @@ class CouponConsumeOutboxWriterTest {
         verify(outbox).isConfirmed("event-1", "ORDER-1", 8L);
     }
 
-    /** 不同订单或券 ID 不能借用已有事件的回执来关闭 Outbox。 */
+    /**
+     * 不同订单或券 ID 不能借用已有事件的回执来关闭 Outbox。
+     */
     @Test
     void mismatchedConfirmationCannotCloseOutbox() {
         var request = new CouponConsumeConfirmationRequest("event-1", "ORDER-OTHER", 8L);
@@ -55,7 +64,9 @@ class CouponConsumeOutboxWriterTest {
         assertThrows(BusinessException.class, () -> writer.confirm(request));
     }
 
-    /** 无效回执在访问持久化前即拒绝。 */
+    /**
+     * 无效回执在访问持久化前即拒绝。
+     */
     @Test
     void invalidConfirmationDoesNotQueryOutbox() {
         assertThrows(BusinessException.class,

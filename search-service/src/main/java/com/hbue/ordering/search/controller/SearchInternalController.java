@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 不经 Gateway 暴露的搜索索引维护接口。 */
+/**
+ * 不经 Gateway 暴露的搜索索引维护接口。
+ */
 @RestController
 @RequestMapping("/internal/search")
 @Tag(name = "搜索内部维护接口")

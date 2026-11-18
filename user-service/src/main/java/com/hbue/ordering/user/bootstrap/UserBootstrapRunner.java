@@ -34,16 +34,24 @@ public class UserBootstrapRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(UserBootstrapRunner.class);
 
-    /** 引导密码最小长度，避免弱口令账号进入系统。 */
+    /**
+     * 引导密码最小长度，避免弱口令账号进入系统。
+     */
     private static final int MIN_PASSWORD_LENGTH = 12;
 
-    /** 引导密码最大长度。 */
+    /**
+     * 引导密码最大长度。
+     */
     private static final int MAX_PASSWORD_LENGTH = 64;
 
-    /** 用户名最小长度，沿用 users.username 的可用长度下界。 */
+    /**
+     * 用户名最小长度，沿用 users.username 的可用长度下界。
+     */
     private static final int MIN_USERNAME_LENGTH = 2;
 
-    /** 用户名最大长度，沿用用户表上限。 */
+    /**
+     * 用户名最大长度，沿用用户表上限。
+     */
     private static final int MAX_USERNAME_LENGTH = 50;
 
     /**
@@ -55,45 +63,63 @@ public class UserBootstrapRunner implements ApplicationRunner {
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
-    /** 系统管理员引导变量前缀。 */
+    /**
+     * 系统管理员引导变量前缀。
+     */
     private static final String ADMIN_PREFIX = "USER_ADMIN_BOOTSTRAP";
 
-    /** 初始总经理引导变量前缀。 */
+    /**
+     * 初始总经理引导变量前缀。
+     */
     private static final String MANAGER_PREFIX = "USER_MANAGER_BOOTSTRAP";
 
     private final UserService userService;
 
-    /** 引导总开关。 */
+    /**
+     * 引导总开关。
+     */
     private final boolean enabled;
 
-    /** 系统管理员引导用户名。 */
+    /**
+     * 系统管理员引导用户名。
+     */
     private final String adminUsername;
 
-    /** 系统管理员引导邮箱。 */
+    /**
+     * 系统管理员引导邮箱。
+     */
     private final String adminEmail;
 
-    /** 系统管理员引导明文密码。 */
+    /**
+     * 系统管理员引导明文密码。
+     */
     private final String adminPassword;
 
-    /** 初始总经理引导用户名。 */
+    /**
+     * 初始总经理引导用户名。
+     */
     private final String managerUsername;
 
-    /** 初始总经理引导邮箱。 */
+    /**
+     * 初始总经理引导邮箱。
+     */
     private final String managerEmail;
 
-    /** 初始总经理引导明文密码。 */
+    /**
+     * 初始总经理引导明文密码。
+     */
     private final String managerPassword;
 
     /**
      * 创建用户引导组件。
      *
-     * @param userService 用户业务服务
-     * @param enabled 引导总开关
-     * @param adminUsername 系统管理员用户名环境变量
-     * @param adminEmail 系统管理员邮箱环境变量
-     * @param adminPassword 系统管理员密码环境变量
+     * @param userService     用户业务服务
+     * @param enabled         引导总开关
+     * @param adminUsername   系统管理员用户名环境变量
+     * @param adminEmail      系统管理员邮箱环境变量
+     * @param adminPassword   系统管理员密码环境变量
      * @param managerUsername 初始总经理用户名环境变量
-     * @param managerEmail 初始总经理邮箱环境变量
+     * @param managerEmail    初始总经理邮箱环境变量
      * @param managerPassword 初始总经理密码环境变量
      */
     public UserBootstrapRunner(
@@ -179,9 +205,9 @@ public class UserBootstrapRunner implements ApplicationRunner {
     /**
      * 校验一组引导配置是否齐全且格式合法。
      *
-     * @param prefix 变量前缀
+     * @param prefix   变量前缀
      * @param username 引导用户名
-     * @param email 引导邮箱
+     * @param email    引导邮箱
      * @param password 引导明文密码
      * @throws IllegalStateException 配置缺失或长度、邮箱格式不符合要求时抛出
      */
@@ -226,8 +252,8 @@ public class UserBootstrapRunner implements ApplicationRunner {
      * 校验引导变量已提供。
      *
      * @param prefix 变量前缀
-     * @param name 变量名称（不含前缀）
-     * @param value 变量值
+     * @param name   变量名称（不含前缀）
+     * @param value  变量值
      * @throws IllegalStateException 引导开关已开启但必填值缺失时抛出
      */
     private void requirePresent(String prefix, String name, String value) {

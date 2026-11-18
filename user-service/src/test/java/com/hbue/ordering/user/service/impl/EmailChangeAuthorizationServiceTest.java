@@ -4,10 +4,12 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
-import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.time.Duration;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -18,9 +20,12 @@ class EmailChangeAuthorizationServiceTest {
     private final RedisOperationsService redis = mock(RedisOperationsService.class);
     private final EmailChangeAuthorizationService service = new EmailChangeAuthorizationService(users, passwords, redis);
 
-    @Test void correctLoginPasswordIssuesShortLivedUserScopedOpaqueToken() {
+    @Test
+    void correctLoginPasswordIssuesShortLivedUserScopedOpaqueToken() {
         UserDO user = new UserDO();
-        user.setUserId(7L); user.setStatus(1); user.setPasswordHash("bcrypt-hash");
+        user.setUserId(7L);
+        user.setStatus(1);
+        user.setPasswordHash("bcrypt-hash");
         when(users.selectPasswordsById(7L)).thenReturn(user);
         when(passwords.matches("correct-password", "bcrypt-hash")).thenReturn(true);
 
@@ -33,9 +38,12 @@ class EmailChangeAuthorizationServiceTest {
         assertNotEquals(token, digest.getValue());
     }
 
-    @Test void wrongPasswordDoesNotIssueAuthorization() {
+    @Test
+    void wrongPasswordDoesNotIssueAuthorization() {
         UserDO user = new UserDO();
-        user.setUserId(7L); user.setStatus(1); user.setPasswordHash("bcrypt-hash");
+        user.setUserId(7L);
+        user.setStatus(1);
+        user.setPasswordHash("bcrypt-hash");
         when(users.selectPasswordsById(7L)).thenReturn(user);
         when(passwords.matches("wrong-password", "bcrypt-hash")).thenReturn(false);
 

@@ -18,34 +18,44 @@ import org.springframework.web.bind.annotation.*;
 @Validated
 public class WindowReviewController {
     private final WindowReviewService reviews;
-    public WindowReviewController(WindowReviewService reviews) { this.reviews = reviews; }
+
+    public WindowReviewController(WindowReviewService reviews) {
+        this.reviews = reviews;
+    }
+
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<WindowReviewVO> create(@AuthenticationPrincipal Jwt jwt,
-            @RequestHeader("Idempotency-Key") String key, @Valid @RequestBody CreateWindowReviewRequest body) {
+                                              @RequestHeader("Idempotency-Key") String key, @Valid @RequestBody CreateWindowReviewRequest body) {
         return ApiResponse.success(reviews.create(Long.valueOf(jwt.getSubject()), jwt.getClaimAsString("username"),
                 "Bearer " + jwt.getTokenValue(), key, body));
     }
+
     @GetMapping("/me")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<WindowReviewPageVO> mine(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name="cursor", required=false) String cursor, @RequestParam(name="limit", defaultValue="20") int limit,
-            @RequestParam(name="score", required=false) Integer score,
-            @RequestParam(name="hasImages", required=false) Boolean hasImages) {
+                                                @RequestParam(name = "cursor", required = false) String cursor, @RequestParam(name = "limit", defaultValue = "20") int limit,
+                                                @RequestParam(name = "score", required = false) Integer score,
+                                                @RequestParam(name = "hasImages", required = false) Boolean hasImages) {
         return ApiResponse.success(reviews.page(Long.valueOf(jwt.getSubject()), null, cursor, limit, score, hasImages));
     }
+
     @GetMapping("/windows/{windowId}")
     public ApiResponse<WindowReviewPageVO> window(@PathVariable("windowId") @Positive Long windowId,
-            @RequestParam(name="cursor", required=false) String cursor, @RequestParam(name="limit", defaultValue="20") int limit,
-            @RequestParam(name="score", required=false) Integer score,
-            @RequestParam(name="hasImages", required=false) Boolean hasImages) {
+                                                  @RequestParam(name = "cursor", required = false) String cursor, @RequestParam(name = "limit", defaultValue = "20") int limit,
+                                                  @RequestParam(name = "score", required = false) Integer score,
+                                                  @RequestParam(name = "hasImages", required = false) Boolean hasImages) {
         return ApiResponse.success(reviews.page(null, windowId, cursor, limit, score, hasImages));
     }
+
     @GetMapping("/windows/{windowId}/rating")
     public ApiResponse<com.hbue.ordering.comment.vo.WindowRatingVO> rating(@PathVariable("windowId") @Positive Long windowId) {
         return ApiResponse.success(reviews.rating(windowId));
     }
-    /** 只读全量概览；不返回用户标识，权限与既有公开评价查询保持一致。 */
+
+    /**
+     * 只读全量概览；不返回用户标识，权限与既有公开评价查询保持一致。
+     */
     @GetMapping("/windows/{windowId}/summary")
     public ApiResponse<com.hbue.ordering.comment.vo.ReviewSummaryVO> summary(
             @PathVariable("windowId") @Positive Long windowId) {

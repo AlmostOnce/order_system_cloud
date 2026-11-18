@@ -37,50 +37,74 @@ import java.util.UUID;
 @Service
 public class FileStorageServiceImpl implements FileStorageService {
 
-    /** 单文件大小上限，5MB。 */
+    /**
+     * 单文件大小上限，5MB。
+     */
     private static final long MAX_FILE_SIZE = 5L * 1024 * 1024;
 
-    /** 业务类型缺省值。 */
+    /**
+     * 业务类型缺省值。
+     */
     private static final String DEFAULT_BIZ_TYPE = "OTHER";
 
-    /** 本地存储介质标识。 */
+    /**
+     * 本地存储介质标识。
+     */
     private static final String STORAGE_TYPE_LOCAL = "LOCAL";
 
-    /** 逻辑删除：正常。 */
+    /**
+     * 逻辑删除：正常。
+     */
     private static final int NOT_DELETED = 0;
 
-    /** 逻辑删除：已删除。 */
+    /**
+     * 逻辑删除：已删除。
+     */
     private static final int DELETED = 1;
 
-    /** 存储路径按日期分层所用的格式。 */
+    /**
+     * 存储路径按日期分层所用的格式。
+     */
     private static final DateTimeFormatter DATE_PATH_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
-    /** 内容摘要算法名。 */
+    /**
+     * 内容摘要算法名。
+     */
     private static final String DIGEST_ALGORITHM = "SHA-256";
 
-    /** 十六进制字符表，用于普通循环拼接摘要。 */
+    /**
+     * 十六进制字符表，用于普通循环拼接摘要。
+     */
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
 
-    /** 文件元数据 Mapper。 */
+    /**
+     * 文件元数据 Mapper。
+     */
     private final FileObjectMapper fileObjectMapper;
 
-    /** 文件存储介质。 */
+    /**
+     * 文件存储介质。
+     */
     private final FileStorage fileStorage;
 
-    /** 文件类型校验器。 */
+    /**
+     * 文件类型校验器。
+     */
     private final FileTypeValidator fileTypeValidator;
 
-    /** 文件访问地址公共前缀。 */
+    /**
+     * 文件访问地址公共前缀。
+     */
     private final String publicBaseUrl;
 
     /**
      * 创建文件存储服务。
      *
-     * @param fileObjectMapper 文件元数据 Mapper
-     * @param fileStorage 文件存储介质
+     * @param fileObjectMapper  文件元数据 Mapper
+     * @param fileStorage       文件存储介质
      * @param fileTypeValidator 文件类型校验器
-     * @param publicBaseUrl 文件访问地址公共前缀
+     * @param publicBaseUrl     文件访问地址公共前缀
      */
     public FileStorageServiceImpl(
             FileObjectMapper fileObjectMapper,
@@ -94,7 +118,9 @@ public class FileStorageServiceImpl implements FileStorageService {
         this.publicBaseUrl = publicBaseUrl;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public FileUploadVO upload(
@@ -157,7 +183,9 @@ public class FileStorageServiceImpl implements FileStorageService {
         return toUploadVO(fileObject);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public FileMetaVO getMeta(String fileKey) {
         // 查询未删除的文件记录，不存在按 404 语义处理。
@@ -165,7 +193,9 @@ public class FileStorageServiceImpl implements FileStorageService {
         return toMetaVO(fileObject);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public FileContent loadContent(String fileKey) {
         // 查询未删除的文件记录，不存在按 404 语义处理。
@@ -182,7 +212,9 @@ public class FileStorageServiceImpl implements FileStorageService {
         );
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void delete(String fileKey, Long operatorId, boolean systemAdmin) {
@@ -281,7 +313,7 @@ public class FileStorageServiceImpl implements FileStorageService {
     /**
      * 按日期分层与内容摘要生成存储路径。
      *
-     * @param sha256 内容摘要
+     * @param sha256  内容摘要
      * @param fileExt 扩展名
      * @return 形如 {@code yyyy/MM/dd/{摘要前2位}/{摘要}.{扩展名}} 的相对路径
      */

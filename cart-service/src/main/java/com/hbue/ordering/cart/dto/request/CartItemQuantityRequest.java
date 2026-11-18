@@ -12,7 +12,9 @@ import lombok.Data;
  */
 @Data
 public class CartItemQuantityRequest {
-    /** 修改后的目标数量；零不是删除操作，删除应调用 DELETE 接口。 */
+    /**
+     * 修改后的目标数量；零不是删除操作，删除应调用 DELETE 接口。
+     */
     @NotNull(message = "目标数量不能为空")
     @Positive(message = "目标数量必须大于零")
     private Integer quantity;

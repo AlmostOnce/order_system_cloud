@@ -25,14 +25,16 @@ import java.nio.file.Paths;
 @Component
 public class LocalFileStorage implements FileStorage {
 
-    /** 本地存储根目录。 */
+    /**
+     * 本地存储根目录。
+     */
     private final Path root;
 
     /**
      * 创建本地文件存储。
      *
      * @param resourceLoader Spring 资源加载器
-     * @param rootLocation 本地存储根目录资源位置
+     * @param rootLocation   本地存储根目录资源位置
      */
     public LocalFileStorage(
             ResourceLoader resourceLoader,
@@ -48,7 +50,9 @@ public class LocalFileStorage implements FileStorage {
         }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public boolean exists(String objectKey) {
         // 归一化并校验对象键后再判断文件是否存在。
@@ -56,7 +60,9 @@ public class LocalFileStorage implements FileStorage {
         return Files.exists(target);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void store(String objectKey, byte[] content) {
         // 归一化并校验对象键，避免路径穿越。
@@ -77,7 +83,9 @@ public class LocalFileStorage implements FileStorage {
         }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public byte[] load(String objectKey) {
         // 归一化并校验对象键，避免越界读取。
@@ -93,7 +101,9 @@ public class LocalFileStorage implements FileStorage {
         }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void delete(String objectKey) {
         // 归一化并校验对象键，避免越界删除。

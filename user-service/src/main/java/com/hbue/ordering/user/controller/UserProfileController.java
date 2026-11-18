@@ -8,7 +8,10 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/users/me/profile")
@@ -22,7 +25,7 @@ public class UserProfileController {
 
     @PutMapping
     public ApiResponse<UserProfileVO> update(@AuthenticationPrincipal Jwt jwt,
-            @Valid @RequestBody UpdateProfileRequest request) {
+                                             @Valid @RequestBody UpdateProfileRequest request) {
         return ApiResponse.success(users.updateOwnProfile(Long.valueOf(jwt.getSubject()), request));
     }
 }

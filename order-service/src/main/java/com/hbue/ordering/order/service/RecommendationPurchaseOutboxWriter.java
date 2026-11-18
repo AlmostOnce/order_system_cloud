@@ -1,6 +1,8 @@
 package com.hbue.ordering.order.service;
 
-/** 在订单本地事务内登记支付成功或成功退款后的推荐全量快照。 */
+/**
+ * 在订单本地事务内登记支付成功或成功退款后的推荐全量快照。
+ */
 public interface RecommendationPurchaseOutboxWriter {
     /**
      * 读取当前订单版本与全部明细并持久化同版本事件；须在调用方订单事务中执行。

@@ -14,17 +14,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** 调用 user-service 的可信范围接口；依赖异常一律按拒绝管理操作处理。 */
+/**
+ * 调用 user-service 的可信范围接口；依赖异常一律按拒绝管理操作处理。
+ */
 @Service
 public class CouponAuthorizationServiceImpl implements CouponAuthorizationService {
-    /** user-service 查询管理数据范围所需的服务间共享令牌。 */
+    /**
+     * user-service 查询管理数据范围所需的服务间共享令牌。
+     */
     private final String internalToken;
-    /** 仅用于读取授权事实，不接受请求体声明的角色或范围。 */
+    /**
+     * 仅用于读取授权事实，不接受请求体声明的角色或范围。
+     */
     private final UserScopeInternalClient scopeClient;
-    /** 复用商品服务内部窗口查询，不直接读取 product_db。 */
+    /**
+     * 复用商品服务内部窗口查询，不直接读取 product_db。
+     */
     private final WindowInternalClient windowClient;
 
-    /** 注入共享令牌和 user-service 内部客户端。 */
+    /**
+     * 注入共享令牌和 user-service 内部客户端。
+     */
     public CouponAuthorizationServiceImpl(
             @Value("${internal.scope.token}") String internalToken,
             UserScopeInternalClient scopeClient,
@@ -35,7 +45,9 @@ public class CouponAuthorizationServiceImpl implements CouponAuthorizationServic
         this.windowClient = windowClient;
     }
 
-    /** 范围服务失败、身份不匹配或未授予平台范围时均拒绝，绝不把故障当作全量授权。 */
+    /**
+     * 范围服务失败、身份不匹配或未授予平台范围时均拒绝，绝不把故障当作全量授权。
+     */
     @Override
     public void requirePlatformScope(Long operatorId) {
         ApiResponse<UserScopeVO> response = scopeClient.getScopes(operatorId, internalToken);
@@ -56,7 +68,9 @@ public class CouponAuthorizationServiceImpl implements CouponAuthorizationServic
         }
     }
 
-    /** 商品服务不可用时 fail closed；不存在的窗口由当前管理请求直接拒绝。 */
+    /**
+     * 商品服务不可用时 fail closed；不存在的窗口由当前管理请求直接拒绝。
+     */
     @Override
     public void requireExistingWindows(List<Long> windowIds) {
         if (windowIds == null || windowIds.isEmpty()) {

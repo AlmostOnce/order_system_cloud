@@ -21,14 +21,7 @@ import feign.FeignException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * 购物车业务实现，编排商品核价与 Redis 原子存储。
@@ -39,18 +32,25 @@ import java.util.TreeMap;
  */
 @Service
 public class CartServiceImpl implements CartService {
-    /** 用户隔离的购物车存储访问层。 */
+    /**
+     * 用户隔离的购物车存储访问层。
+     */
     private final CartRedisRepository repository;
-    /** 商品事实来源，通过服务名调用。 */
+    /**
+     * 商品事实来源，通过服务名调用。
+     */
     private final ProductServiceClient productClient;
-    /** 数量与容量配置。 */
+    /**
+     * 数量与容量配置。
+     */
     private final CartProperties properties;
 
     /**
      * 创建购物车业务服务。
-     * @param repository Redis 持久化访问层
+     *
+     * @param repository    Redis 持久化访问层
      * @param productClient 商品核价客户端
-     * @param properties 购物车约束配置
+     * @param properties    购物车约束配置
      */
     public CartServiceImpl(CartRedisRepository repository, ProductServiceClient productClient,
                            CartProperties properties) {
@@ -61,6 +61,7 @@ public class CartServiceImpl implements CartService {
 
     /**
      * 读取购物车快照并按窗口批量核价；若批量请求因一条失效规格返回 400，则逐行隔离失效项。
+     *
      * @param userId JWT 中的顾客编号
      * @return 当前报价和失效原因；不可售项仍保留删除入口与加入时快照
      */
@@ -103,9 +104,10 @@ public class CartServiceImpl implements CartService {
 
     /**
      * 核验菜品及全部选项，再使用商品服务返回的规范键和规格文字写入 Redis。
-     * @param userId JWT 中的顾客编号
+     *
+     * @param userId   JWT 中的顾客编号
      * @param windowId 窗口编号
-     * @param request 菜品、增加数量及选择的选项编号
+     * @param request  菜品、增加数量及选择的选项编号
      */
     @Override
     public void addItem(Long userId, Long windowId, CartItemAddRequest request) {
@@ -136,13 +138,17 @@ public class CartServiceImpl implements CartService {
                 product.getProductName(), product.getProductCode(), product.getSpecificationText());
     }
 
-    /** 旧路由只修改无规格 base 行，不能根据菜品 ID 猜测规格。 */
+    /**
+     * 旧路由只修改无规格 base 行，不能根据菜品 ID 猜测规格。
+     */
     @Override
     public void updateQuantity(Long userId, Long windowId, Long productId, Integer quantity) {
         updateQuantity(userId, windowId, productId, CartSelectionKey.BASE, quantity);
     }
 
-    /** 设置指定规格行数量；规格失效后仍允许修改或删除购物车本地记录。 */
+    /**
+     * 设置指定规格行数量；规格失效后仍允许修改或删除购物车本地记录。
+     */
     @Override
     public void updateQuantity(Long userId, Long windowId, Long productId, String selectionKey, Integer quantity) {
         validateUser(userId);
@@ -153,13 +159,17 @@ public class CartServiceImpl implements CartService {
         repository.updateQuantity(userId, windowId, productId, selectionKey, quantity);
     }
 
-    /** 旧路由只修改无规格 base 行。 */
+    /**
+     * 旧路由只修改无规格 base 行。
+     */
     @Override
     public void updateChecked(Long userId, Long windowId, Long productId, Boolean checked) {
         updateChecked(userId, windowId, productId, CartSelectionKey.BASE, checked);
     }
 
-    /** 设置指定规格行勾选状态，允许取消失效规格的勾选。 */
+    /**
+     * 设置指定规格行勾选状态，允许取消失效规格的勾选。
+     */
     @Override
     public void updateChecked(Long userId, Long windowId, Long productId, String selectionKey, Boolean checked) {
         validateUser(userId);
@@ -172,13 +182,17 @@ public class CartServiceImpl implements CartService {
         repository.updateChecked(userId, windowId, productId, selectionKey, checked);
     }
 
-    /** 旧路由幂等删除 base 行，不会删除同菜的有规格行。 */
+    /**
+     * 旧路由幂等删除 base 行，不会删除同菜的有规格行。
+     */
     @Override
     public void removeItem(Long userId, Long windowId, Long productId) {
         removeItem(userId, windowId, productId, CartSelectionKey.BASE);
     }
 
-    /** 删除指定规格行；旧失效项仍可删除，不依赖商品服务恢复。 */
+    /**
+     * 删除指定规格行；旧失效项仍可删除，不依赖商品服务恢复。
+     */
     @Override
     public void removeItem(Long userId, Long windowId, Long productId, String selectionKey) {
         validateUser(userId);
@@ -188,7 +202,9 @@ public class CartServiceImpl implements CartService {
         repository.remove(userId, windowId, productId, selectionKey);
     }
 
-    /** 清空当前用户一个窗口的所有规格行，其他窗口保留。 */
+    /**
+     * 清空当前用户一个窗口的所有规格行，其他窗口保留。
+     */
     @Override
     public void clearWindow(Long userId, Long windowId) {
         validateUser(userId);
@@ -233,7 +249,9 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    /** 调用商品服务的逐行核价接口；商品服务始终是规格键与价格的权威来源。 */
+    /**
+     * 调用商品服务的逐行核价接口；商品服务始终是规格键与价格的权威来源。
+     */
     private ProductQuoteResponse callQuote(Long windowId, List<ProductQuoteItemRequest> items) {
         ProductQuoteRequest request = new ProductQuoteRequest();
         request.setWindowId(windowId);
@@ -304,7 +322,9 @@ public class CartServiceImpl implements CartService {
         return products;
     }
 
-    /** 将 Redis 行和当前商品报价合成响应；失效行使用加入时快照且不参与金额。 */
+    /**
+     * 将 Redis 行和当前商品报价合成响应；失效行使用加入时快照且不参与金额。
+     */
     private CartItemVO itemView(CartItemDO item, boolean windowActive, ProductQuoteVO product, boolean rejected) {
         boolean available = windowActive && !rejected && product != null;
         BigDecimal price = available ? product.getPrice() : null;
@@ -319,7 +339,9 @@ public class CartServiceImpl implements CartService {
                 item.getSelectionKey(), CartSelectionKey.optionIds(item.getSelectionKey()), specificationText);
     }
 
-    /** 生成商品服务核价 DTO；主键数组只在 HTTP JSON 层传递，Redis/Lua 只保存字符串规范键。 */
+    /**
+     * 生成商品服务核价 DTO；主键数组只在 HTTP JSON 层传递，Redis/Lua 只保存字符串规范键。
+     */
     private ProductQuoteItemRequest quoteLine(Long productId, List<Long> optionIds) {
         ProductQuoteItemRequest request = new ProductQuoteItemRequest();
         request.setProductId(productId);
@@ -327,7 +349,9 @@ public class CartServiceImpl implements CartService {
         return request;
     }
 
-    /** 校验前端规格选项集合，不接受重复 ID 或超过单选组选项数量的请求。 */
+    /**
+     * 校验前端规格选项集合，不接受重复 ID 或超过单选组选项数量的请求。
+     */
     private List<Long> normalizeRequestedOptionIds(List<Long> optionIds) {
         if (optionIds == null || optionIds.isEmpty()) {
             return List.of();
@@ -340,13 +364,17 @@ public class CartServiceImpl implements CartService {
         return optionIds.stream().sorted().toList();
     }
 
-    /** 根据选项编号本地构造比较键，仅用于匹配输入；最终落库键仍采用商品服务返回值。 */
+    /**
+     * 根据选项编号本地构造比较键，仅用于匹配输入；最终落库键仍采用商品服务返回值。
+     */
     private String requestedKey(List<Long> optionIds) {
         return optionIds.isEmpty() ? CartSelectionKey.BASE : String.join("-", optionIds.stream()
                 .map(String::valueOf).toList());
     }
 
-    /** 严格拒绝不规范规格键，避免客户端通过路径参数指向错误 Redis Field。 */
+    /**
+     * 严格拒绝不规范规格键，避免客户端通过路径参数指向错误 Redis Field。
+     */
     private void validateSelectionKey(String selectionKey) {
         try {
             CartSelectionKey.normalize(selectionKey);
@@ -355,21 +383,27 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    /** 在远程调用前拒绝无效用户身份。 */
+    /**
+     * 在远程调用前拒绝无效用户身份。
+     */
     private void validateUser(Long userId) {
         if (userId == null || userId < 1) {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录用户身份无效");
         }
     }
 
-    /** 统一校验窗口或菜品 ID；路径参数错误应返回 400。 */
+    /**
+     * 统一校验窗口或菜品 ID；路径参数错误应返回 400。
+     */
     private void positiveId(Long id) {
         if (id == null || id < 1) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "窗口与菜品 ID 必须大于零");
         }
     }
 
-    /** 单次数量由 Java 校验，累加后的最终数量由 Lua 再校验以处理并发。 */
+    /**
+     * 单次数量由 Java 校验，累加后的最终数量由 Lua 再校验以处理并发。
+     */
     private void validateQuantity(Integer quantity) {
         if (quantity == null || quantity < 1 || quantity > properties.maxQuantity()) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST,
@@ -377,20 +411,28 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    /** 商品服务故障、降级或响应契约破坏统一返回 503，不伪装成商品下架。 */
+    /**
+     * 商品服务故障、降级或响应契约破坏统一返回 503，不伪装成商品下架。
+     */
     private BusinessException productUnavailable() {
         return new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "商品服务暂时不可用，请稍后重试");
     }
 
-    /** 商品服务明确以 400 拒绝的规格行，用于查询购物车时做逐行隔离。 */
+    /**
+     * 商品服务明确以 400 拒绝的规格行，用于查询购物车时做逐行隔离。
+     */
     private static final class QuoteRejectedException extends RuntimeException {
     }
 
-    /** 菜品与规格组合共同构成购物车行身份。 */
+    /**
+     * 菜品与规格组合共同构成购物车行身份。
+     */
     private record QuoteIdentity(Long productId, String selectionKey) {
     }
 
-    /** 一窗口的报价结果及被商品服务明确拒绝的规格行。 */
+    /**
+     * 一窗口的报价结果及被商品服务明确拒绝的规格行。
+     */
     private record QuoteBatch(boolean windowActive, Map<QuoteIdentity, ProductQuoteVO> products,
                               Set<QuoteIdentity> rejectedSelections) {
     }

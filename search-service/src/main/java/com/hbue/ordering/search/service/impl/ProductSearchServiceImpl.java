@@ -1,14 +1,13 @@
 package com.hbue.ordering.search.service.impl;
 
-import com.hbue.ordering.search.service.ProductSearchService;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
-import com.hbue.ordering.product.api.searchclient.ProductSearchSourceClient;
+import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.api.dto.ProductSearchDocument;
+import com.hbue.ordering.product.api.searchclient.ProductSearchSourceClient;
 import com.hbue.ordering.search.document.MenuProductDocument;
+import com.hbue.ordering.search.service.ProductSearchService;
 import com.hbue.ordering.search.support.SearchIndexLock;
 import com.hbue.ordering.search.support.SearchIndexManager;
 import com.hbue.ordering.search.vo.ProductSearchPageVO;
@@ -19,22 +18,17 @@ import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.SearchHitsIterator;
+import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.data.elasticsearch.core.query.DeleteQuery;
 import org.springframework.data.elasticsearch.core.query.Query;
 import org.springframework.data.elasticsearch.core.query.StringQuery;
-import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
-/** 商品搜索查询、窗口索引刷新与全量重建。 */
+/**
+ * 商品搜索查询、窗口索引刷新与全量重建。
+ */
 @Service
 public class ProductSearchServiceImpl implements ProductSearchService {
     private final ElasticsearchOperations elasticsearch;
@@ -45,8 +39,8 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     private final String internalToken;
 
     public ProductSearchServiceImpl(ElasticsearchOperations elasticsearch, ProductSearchSourceClient productSource,
-                                SearchIndexLock indexLock, SearchIndexManager indexManager, ObjectMapper json,
-                                @Value("${internal.scope.token:}") String internalToken) {
+                                    SearchIndexLock indexLock, SearchIndexManager indexManager, ObjectMapper json,
+                                    @Value("${internal.scope.token:}") String internalToken) {
         this.elasticsearch = elasticsearch;
         this.productSource = productSource;
         this.indexLock = indexLock;
@@ -57,8 +51,11 @@ public class ProductSearchServiceImpl implements ProductSearchService {
 
     public ProductSearchPageVO search(String keyword, Long restaurantId, Long windowId, Long categoryId, int page, int size) {
         String q;
-        try { q = json.writeValueAsString(keyword.trim()); }
-        catch (JsonProcessingException ex) { throw new IllegalArgumentException("搜索词无法编码", ex); }
+        try {
+            q = json.writeValueAsString(keyword.trim());
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("搜索词无法编码", ex);
+        }
         StringBuilder query = new StringBuilder("{\"bool\":{\"must\":[{\"multi_match\":{\"query\":")
                 .append(q).append(",\"type\":\"bool_prefix\",\"fields\":[\"productName\",\"productName._2gram\",\"productName._3gram\",\"description\",\"categoryName\",\"windowName\",\"restaurantName\"]}}],\"filter\":[");
         List<String> filters = new ArrayList<>();
@@ -74,7 +71,9 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         return new ProductSearchPageVO(keyword.trim(), page, size, hits.getTotalHits(), results);
     }
 
-    /** 当前窗口按主库快照整体替换，事件重复消费会得到相同结果。 */
+    /**
+     * 当前窗口按主库快照整体替换，事件重复消费会得到相同结果。
+     */
     public void refreshWindow(Long windowId) {
         if (windowId == null || windowId <= 0) throw new IllegalArgumentException("窗口 ID 无效");
         indexLock.withReadLock(() -> indexLock.withWindowLock(windowId, () -> {
@@ -108,7 +107,9 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }));
     }
 
-    /** 在影子索引写入完整快照，校验后切换别名。 */
+    /**
+     * 在影子索引写入完整快照，校验后切换别名。
+     */
     public int rebuildAll() {
         return indexLock.withWriteLock(() -> {
             List<Long> windowIds = requireData(productSource.listSearchableWindowIds(internalToken), "商品服务未返回窗口列表");
@@ -147,7 +148,8 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                 for (ProductSearchDocument document : requireData(
                         productSource.loadWindowDocuments(internalToken, windowId), "商品服务未返回窗口数据")) {
                     String id = document.windowId() + ":" + document.productId();
-                    if (expected.put(id, document) != null) throw new IllegalStateException("商品快照存在重复菜品：" + id);
+                    if (expected.put(id, document) != null)
+                        throw new IllegalStateException("商品快照存在重复菜品：" + id);
                 }
             }
             Set<String> found = new HashSet<>();
@@ -194,16 +196,25 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                 && Objects.equals(left.getImageUrl(), right.getImageUrl())
                 && Objects.equals(left.getSortOrder(), right.getSortOrder())
                 && (left.getPrice() == null ? right.getPrice() == null
-                    : right.getPrice() != null && left.getPrice().compareTo(right.getPrice()) == 0);
+                : right.getPrice() != null && left.getPrice().compareTo(right.getPrice()) == 0);
     }
 
     private MenuProductDocument toDocument(ProductSearchDocument source) {
         MenuProductDocument d = new MenuProductDocument();
         d.setId(source.windowId() + ":" + source.productId());
-        d.setProductId(source.productId()); d.setCategoryId(source.categoryId()); d.setWindowId(source.windowId()); d.setRestaurantId(source.restaurantId());
-        d.setRestaurantName(source.restaurantName()); d.setRestaurantLocation(source.restaurantLocation());
-        d.setWindowName(source.windowName()); d.setCategoryName(source.categoryName()); d.setProductName(source.productName());
-        d.setDescription(source.description()); d.setImageUrl(source.imageUrl()); d.setPrice(source.price()); d.setSortOrder(source.sortOrder());
+        d.setProductId(source.productId());
+        d.setCategoryId(source.categoryId());
+        d.setWindowId(source.windowId());
+        d.setRestaurantId(source.restaurantId());
+        d.setRestaurantName(source.restaurantName());
+        d.setRestaurantLocation(source.restaurantLocation());
+        d.setWindowName(source.windowName());
+        d.setCategoryName(source.categoryName());
+        d.setProductName(source.productName());
+        d.setDescription(source.description());
+        d.setImageUrl(source.imageUrl());
+        d.setPrice(source.price());
+        d.setSortOrder(source.sortOrder());
         return d;
     }
 

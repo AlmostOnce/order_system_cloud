@@ -24,14 +24,18 @@ public class SalesOutboxPublisher {
     private final ObjectMapper json;
     private final StreamBridge stream;
 
-    /** 注入订单本地 outbox、JSON 编码器和 RocketMQ 同步发送桥。 */
+    /**
+     * 注入订单本地 outbox、JSON 编码器和 RocketMQ 同步发送桥。
+     */
     public SalesOutboxPublisher(SalesOutboxMapper outbox, ObjectMapper json, StreamBridge stream) {
         this.outbox = outbox;
         this.json = json;
         this.stream = stream;
     }
 
-    /** 扫描有界待发送事件；Broker 未确认时保留 outbox 行并让数据库计算下一次重试时间。 */
+    /**
+     * 扫描有界待发送事件；Broker 未确认时保留 outbox 行并让数据库计算下一次重试时间。
+     */
     @Scheduled(fixedDelayString = "${ranking.messaging.publish-delay-ms:1000}")
     public void publishPending() {
         try {

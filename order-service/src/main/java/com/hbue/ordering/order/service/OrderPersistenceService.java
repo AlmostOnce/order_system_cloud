@@ -16,6 +16,7 @@ import java.util.List;
  */
 public interface OrderPersistenceService {
     String ensurePickupCode(Long orderId, Long userId);
+
     boolean completeWithPickupCode(Long orderId, Integer expectedVersion, String code);
 
     /**
@@ -40,10 +41,10 @@ public interface OrderPersistenceService {
     /**
      * 仅当订单状态和版本号都未变化时更新状态。
      *
-     * @param orderId 订单 ID
-     * @param expectedStatus 读取时的原状态
+     * @param orderId         订单 ID
+     * @param expectedStatus  读取时的原状态
      * @param expectedVersion 读取时的版本号
-     * @param targetStatus 目标状态
+     * @param targetStatus    目标状态
      * @return 更新成功时返回 true；状态或版本已变化时返回 false
      */
     boolean updateStatusIfUnchanged(
@@ -56,9 +57,9 @@ public interface OrderPersistenceService {
     /**
      * 支付确认专用事务：原子更新订单状态与 paid_at，并写入销量、状态通知及优惠券核销 outbox。
      *
-     * @param orderId 订单主键
+     * @param orderId         订单主键
      * @param expectedVersion 支付服务回调前读取的订单版本
-     * @param paidAt 支付数据库确认的真实成功时间
+     * @param paidAt          支付数据库确认的真实成功时间
      * @return 只有待支付状态和版本匹配的请求返回 true
      */
     boolean markPaidIfUnchanged(Long orderId, Integer expectedVersion, java.time.LocalDateTime paidAt);

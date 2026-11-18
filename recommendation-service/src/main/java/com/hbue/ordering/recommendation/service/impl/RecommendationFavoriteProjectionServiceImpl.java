@@ -1,22 +1,27 @@
 package com.hbue.ordering.recommendation.service.impl;
 
 import com.hbue.ordering.recommendation.mapper.RecommendationFavoriteStateMapper;
-import com.hbue.ordering.recommendation.model.RecommendationFavoriteStateDO;
 import com.hbue.ordering.recommendation.messaging.FavoriteChangedMessage;
+import com.hbue.ordering.recommendation.model.RecommendationFavoriteStateDO;
 import com.hbue.ordering.recommendation.service.RecommendationFavoriteProjectionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.time.LocalDateTime;
 
-/** 应用收藏当前态及取消墓碑；乱序时按 Outbox 自增编号比较而不是按时间猜测。 */
+/**
+ * 应用收藏当前态及取消墓碑；乱序时按 Outbox 自增编号比较而不是按时间猜测。
+ */
 @Service
 public class RecommendationFavoriteProjectionServiceImpl implements RecommendationFavoriteProjectionService {
     private static final Pattern EVENT_ID = Pattern.compile("favorite:([1-9][0-9]{0,18})");
     private final RecommendationFavoriteStateMapper states;
 
-    /** 注入收藏当前态表；数据库唯一键保证同一用户目标只有一行。 */
+    /**
+     * 注入收藏当前态表；数据库唯一键保证同一用户目标只有一行。
+     */
     public RecommendationFavoriteProjectionServiceImpl(RecommendationFavoriteStateMapper states) {
         this.states = states;
     }
@@ -52,7 +57,7 @@ public class RecommendationFavoriteProjectionServiceImpl implements Recommendati
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void applySnapshot(Long userId, String targetType, Long targetId, Long sourceVersion,
-            Boolean active, LocalDateTime changedAt) {
+                              Boolean active, LocalDateTime changedAt) {
         if (userId == null || userId <= 0 || targetId == null || targetId <= 0
                 || sourceVersion == null || sourceVersion < 0 || !Boolean.TRUE.equals(active)
                 || changedAt == null || !("PRODUCT".equals(targetType) || "WINDOW".equals(targetType))) {
@@ -61,9 +66,11 @@ public class RecommendationFavoriteProjectionServiceImpl implements Recommendati
         persistState(userId, targetType, targetId, sourceVersion, true, changedAt);
     }
 
-    /** 两种可信来源共用数值版本 upsert，确保历史快照不能覆盖已应用的更新事件。 */
+    /**
+     * 两种可信来源共用数值版本 upsert，确保历史快照不能覆盖已应用的更新事件。
+     */
     private void persistState(Long userId, String targetType, Long targetId, long sourceVersion,
-            boolean active, LocalDateTime changedAt) {
+                              boolean active, LocalDateTime changedAt) {
         RecommendationFavoriteStateDO row = new RecommendationFavoriteStateDO();
         row.setUserId(userId);
         row.setTargetType(targetType);

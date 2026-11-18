@@ -38,31 +38,43 @@ public class UserBalanceServiceImpl implements UserBalanceService {
 
     private final com.hbue.ordering.user.mapper.BalanceSettlementGuardMapper settlementGuard;
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(UserBalanceServiceImpl.class);
 
-    /** 消费类型的余额变动。 */
+    /**
+     * 消费类型的余额变动。
+     */
     private static final String CHANGE_TYPE_PAY = "PAY";
 
-    /** 用户启用状态。 */
+    /**
+     * 用户启用状态。
+     */
     private static final Integer USER_STATUS_ENABLED = 1;
 
-    /** 用户数据访问接口。 */
+    /**
+     * 用户数据访问接口。
+     */
     private final UserMapper userMapper;
 
-    /** 余额流水数据访问接口。 */
+    /**
+     * 余额流水数据访问接口。
+     */
     private final BalanceRecordMapper balanceRecordMapper;
 
-    /** 支付密码业务服务。 */
+    /**
+     * 支付密码业务服务。
+     */
     private final PayPasswordService payPasswordService;
 
     /**
      * 创建用户余额业务服务。
      *
-     * @param userMapper 用户数据访问接口
+     * @param userMapper          用户数据访问接口
      * @param balanceRecordMapper 余额流水数据访问接口
-     * @param payPasswordService 支付密码业务服务
+     * @param payPasswordService  支付密码业务服务
      */
     public UserBalanceServiceImpl(
             UserMapper userMapper,
@@ -99,7 +111,7 @@ public class UserBalanceServiceImpl implements UserBalanceService {
      * <p>流水唯一键冲突不视为失败：那说明同一业务单据已经记过账并完成扣款，
      * 因此对 {@link DuplicateKeyException} 不回滚事务，直接返回幂等结果。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param command 余额扣款命令
      * @return 扣款结果
      * @throws BusinessException 参数无效、密码校验失败、余额不足或账户不可用时抛出
@@ -116,15 +128,15 @@ public class UserBalanceServiceImpl implements UserBalanceService {
         String bizRef = command.getBizRef().trim();
         BigDecimal amount = command.getAmount();
 
-        var guard = lockSettlement(userId,bizType,bizRef,amount);
+        var guard = lockSettlement(userId, bizType, bizRef, amount);
         if (Integer.valueOf(1).equals(guard.getClosed()))
-            throw new BusinessException(CommonErrorCode.CONFLICT,"支付已关闭，不能继续扣款");
+            throw new BusinessException(CommonErrorCode.CONFLICT, "支付已关闭，不能继续扣款");
 
         // 第一重幂等：同一业务单据已记过账时直接返回，且不再校验支付密码。
         BalanceRecordDO existing = selectRecord(userId, bizType, bizRef);
         if (existing != null) {
-            if(existing.getAmount().compareTo(amount)!=0)
-                throw new BusinessException(CommonErrorCode.CONFLICT,"既有扣款金额不一致");
+            if (existing.getAmount().compareTo(amount) != 0)
+                throw new BusinessException(CommonErrorCode.CONFLICT, "既有扣款金额不一致");
             return buildIdempotentResult(userId, bizRef, existing);
         }
 
@@ -184,7 +196,7 @@ public class UserBalanceServiceImpl implements UserBalanceService {
     /**
      * 校验扣款入参。
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param command 余额扣款命令
      */
     private void validate(Long userId, UserBalanceDeductCommand command) {
@@ -207,11 +219,11 @@ public class UserBalanceServiceImpl implements UserBalanceService {
                     "业务类型与业务单据引用不能为空"
             );
         }
-        if(!command.getBizType().trim().matches("[A-Z][A-Z0-9_]{0,31}")
+        if (!command.getBizType().trim().matches("[A-Z][A-Z0-9_]{0,31}")
                 || !command.getBizRef().trim().matches("[A-Za-z0-9_-]{1,64}"))
-            throw new BusinessException(CommonErrorCode.BAD_REQUEST,"业务结算引用无效");
-        if (command.getAmount() == null || command.getAmount().scale()>2
-                || command.getAmount().compareTo(new BigDecimal("99999999.99"))>0
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "业务结算引用无效");
+        if (command.getAmount() == null || command.getAmount().scale() > 2
+                || command.getAmount().compareTo(new BigDecimal("99999999.99")) > 0
                 || command.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(
                     CommonErrorCode.BAD_REQUEST,
@@ -223,9 +235,9 @@ public class UserBalanceServiceImpl implements UserBalanceService {
     /**
      * 查询同一业务单据的既有流水。
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param bizType 业务类型
-     * @param bizRef 业务单据引用
+     * @param bizRef  业务单据引用
      * @return 既有流水，不存在时返回 null
      */
     private BalanceRecordDO selectRecord(
@@ -299,8 +311,8 @@ public class UserBalanceServiceImpl implements UserBalanceService {
     /**
      * 构造幂等重放结果。
      *
-     * @param userId 用户 ID
-     * @param bizRef 业务单据引用
+     * @param userId   用户 ID
+     * @param bizRef   业务单据引用
      * @param existing 既有流水
      * @return 幂等结果
      */
@@ -318,29 +330,30 @@ public class UserBalanceServiceImpl implements UserBalanceService {
                 .build();
     }
 
-    private com.hbue.ordering.user.model.BalanceSettlementGuardDO lockSettlement(Long id,String type,String ref,BigDecimal amount) {
-        settlementGuard.ensure(id,type,ref,amount);
-        var row=settlementGuard.lock(id,type,ref);
-        if(row==null || row.getAmount()==null || row.getAmount().compareTo(amount)!=0)
-            throw new BusinessException(CommonErrorCode.CONFLICT,"结算金额不一致");
+    private com.hbue.ordering.user.model.BalanceSettlementGuardDO lockSettlement(Long id, String type, String ref, BigDecimal amount) {
+        settlementGuard.ensure(id, type, ref, amount);
+        var row = settlementGuard.lock(id, type, ref);
+        if (row == null || row.getAmount() == null || row.getAmount().compareTo(amount) != 0)
+            throw new BusinessException(CommonErrorCode.CONFLICT, "结算金额不一致");
         return row;
     }
+
     @Override
     @Transactional
-    public String closeSettlement(Long id,com.hbue.ordering.user.api.dto.BalanceCloseCommand command) {
-        if(id==null || id<=0 || command==null || !"PAYMENT".equals(command.bizType())
-                || command.bizRef()==null || !command.bizRef().matches("[A-Za-z0-9_-]{1,64}")
-                || command.amount()==null || command.amount().signum()<=0 || command.amount().scale()>2
-                || command.amount().compareTo(new BigDecimal("99999999.99"))>0)
-            throw new BusinessException(CommonErrorCode.BAD_REQUEST,"无效的结算关闭请求");
-        lockSettlement(id,command.bizType(),command.bizRef(),command.amount());
-        var paid=selectRecord(id,command.bizType(),command.bizRef());
-        if(paid!=null) {
-            if(paid.getAmount().compareTo(command.amount())!=0)
-                throw new BusinessException(CommonErrorCode.CONFLICT,"既有扣款金额不一致");
+    public String closeSettlement(Long id, com.hbue.ordering.user.api.dto.BalanceCloseCommand command) {
+        if (id == null || id <= 0 || command == null || !"PAYMENT".equals(command.bizType())
+                || command.bizRef() == null || !command.bizRef().matches("[A-Za-z0-9_-]{1,64}")
+                || command.amount() == null || command.amount().signum() <= 0 || command.amount().scale() > 2
+                || command.amount().compareTo(new BigDecimal("99999999.99")) > 0)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "无效的结算关闭请求");
+        lockSettlement(id, command.bizType(), command.bizRef(), command.amount());
+        var paid = selectRecord(id, command.bizType(), command.bizRef());
+        if (paid != null) {
+            if (paid.getAmount().compareTo(command.amount()) != 0)
+                throw new BusinessException(CommonErrorCode.CONFLICT, "既有扣款金额不一致");
             return "PAID";
         }
-        settlementGuard.close(id,command.bizType(),command.bizRef());
+        settlementGuard.close(id, command.bizType(), command.bizRef());
         return "CLOSED";
     }
 }

@@ -1,10 +1,6 @@
 package com.hbue.ordering.user.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -23,7 +19,9 @@ import java.time.LocalDateTime;
 @TableName("users")
 public class UserDO {
 
-    /** 登录凭据版本，密码恢复时递增，使旧会话失效。 */
+    /**
+     * 登录凭据版本，密码恢复时递增，使旧会话失效。
+     */
     @TableField("credential_version")
     private Long credentialVersion = 0L;
 
@@ -33,11 +31,15 @@ public class UserDO {
     @TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
 
-    /** 永久登录用户号，由系统生成。 */
+    /**
+     * 永久登录用户号，由系统生成。
+     */
     @TableField("user_no")
     private String userNo;
 
-    /** 对外稳定随机 UUID，内部关联仍使用 user_id。 */
+    /**
+     * 对外稳定随机 UUID，内部关联仍使用 user_id。
+     */
     @TableField("user_uuid")
     private String userUuid;
 
@@ -62,7 +64,9 @@ public class UserDO {
     @TableField("email")
     private String email;
 
-    /** 当前绑定邮箱实际验证成功时间；历史账号为null。 */
+    /**
+     * 当前绑定邮箱实际验证成功时间；历史账号为null。
+     */
     private LocalDateTime emailVerifiedAt;
 
     /**

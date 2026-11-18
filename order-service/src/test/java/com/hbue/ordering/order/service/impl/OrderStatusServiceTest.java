@@ -3,8 +3,8 @@ package com.hbue.ordering.order.service.impl;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
-import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
 import com.hbue.ordering.coupon.api.client.CouponServiceClient;
 import com.hbue.ordering.coupon.api.dto.CouponReleaseRequest;
 import com.hbue.ordering.order.enums.OrderStatus;
@@ -13,32 +13,28 @@ import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
-import com.hbue.ordering.order.vo.PaymentCloseVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.vo.PaymentCloseVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
+import org.apache.seata.spring.annotation.GlobalTransactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.apache.seata.spring.annotation.GlobalTransactional;
 
-import java.util.List;
 import java.time.LocalDateTime;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 订单状态业务服务测试。
@@ -81,7 +77,8 @@ class OrderStatusServiceTest {
     @Mock
     private CouponServiceClient couponServiceClient;
 
-    @Mock private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
+    @Mock
+    private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
     private OrderServiceImpl orderService;
 
     /**
@@ -102,7 +99,7 @@ class OrderStatusServiceTest {
         );
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
         orderService.setPaymentClose(paymentClose);
-        org.mockito.Mockito.lenient().when(paymentClose.close(ORDER_ID,"test-internal-token"))
+        org.mockito.Mockito.lenient().when(paymentClose.close(ORDER_ID, "test-internal-token"))
                 .thenReturn(ApiResponse.success(new PaymentCloseVO("CLOSED", null)));
     }
 
@@ -149,7 +146,9 @@ class OrderStatusServiceTest {
         );
     }
 
-    /** 订单状态与库存取消成功后，按订单号释放已锁定的券。 */
+    /**
+     * 订单状态与库存取消成功后，按订单号释放已锁定的券。
+     */
     @Test
     void shouldReleaseLockedCouponAfterSuccessfulCancellationAndStockRestore() {
         OrderDO order = order(CUSTOMER_ID, "待支付", 4);
@@ -173,7 +172,9 @@ class OrderStatusServiceTest {
         assertEquals("TEST-701", request.getValue().getOrderNo());
     }
 
-    /** 支付仍待确认时不能取消订单或释放已锁定优惠券。 */
+    /**
+     * 支付仍待确认时不能取消订单或释放已锁定优惠券。
+     */
     @Test
     void shouldNotReleaseCouponWhenPaymentCloseResultIsUnknown() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
@@ -186,7 +187,9 @@ class OrderStatusServiceTest {
         verify(stockServiceClient, never()).restore(any(), any());
     }
 
-    /** 关单与支付成功竞争时以真实 paidAt 推进订单，不回补库存或释放锁券。 */
+    /**
+     * 关单与支付成功竞争时以真实 paidAt 推进订单，不回补库存或释放锁券。
+     */
     @Test
     void shouldNotReleaseCouponWhenPaymentCloseConfirmsPaid() {
         when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
@@ -463,14 +466,14 @@ class OrderStatusServiceTest {
     /**
      * 构造订单状态业务测试数据。
      *
-     * @param userId 订单所属顾客 ID
-     * @param status 当前状态
+     * @param userId  订单所属顾客 ID
+     * @param status  当前状态
      * @param version 乐观锁版本号
      * @return 订单持久化对象
      */
     private OrderDO order(Long userId, String status, Integer version) {
         OrderDO orderDO = new OrderDO();
-        orderDO.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
+        orderDO.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 4, 12, 0));
         orderDO.setOrderId(ORDER_ID);
         orderDO.setOrderNo("TEST-701");
         orderDO.setUserId(userId);
@@ -480,18 +483,21 @@ class OrderStatusServiceTest {
         return orderDO;
     }
 
-    @Test void automaticExpiryUsesSystemOperatorAndExistingRestoreProtocol() {
-        var expired=order(CUSTOMER_ID,"待支付",4);
+    @Test
+    void automaticExpiryUsesSystemOperatorAndExistingRestoreProtocol() {
+        var expired = order(CUSTOMER_ID, "待支付", 4);
         expired.setExpiresAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).minusSeconds(1));
         when(orderMapper.selectById(ORDER_ID)).thenReturn(expired);
-        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID,"待支付",4,"已取消")).thenReturn(true);
-        var item=new OrderItemDO();item.setProductId(101L);item.setQuantity(2);
+        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID, "待支付", 4, "已取消")).thenReturn(true);
+        var item = new OrderItemDO();
+        item.setProductId(101L);
+        item.setQuantity(2);
         when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of(item));
-        when(stockServiceClient.restore(eq("test-internal-token"),any())).thenReturn(ApiResponse.success(null));
-        assertEquals("已取消",orderService.cancelExpiredOrder(ORDER_ID).getStatus());
-        var request=ArgumentCaptor.forClass(StockRestoreRequest.class);
-        verify(stockServiceClient).restore(eq("test-internal-token"),request.capture());
+        when(stockServiceClient.restore(eq("test-internal-token"), any())).thenReturn(ApiResponse.success(null));
+        assertEquals("已取消", orderService.cancelExpiredOrder(ORDER_ID).getStatus());
+        var request = ArgumentCaptor.forClass(StockRestoreRequest.class);
+        verify(stockServiceClient).restore(eq("test-internal-token"), request.capture());
         org.junit.jupiter.api.Assertions.assertNull(request.getValue().getOperatorId());
-        assertEquals("订单十五分钟未支付自动取消",request.getValue().getRemark());
+        assertEquals("订单十五分钟未支付自动取消", request.getValue().getRemark());
     }
 }

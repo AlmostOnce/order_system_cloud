@@ -1,19 +1,19 @@
 package com.hbue.ordering.product.service.impl;
 
-import com.hbue.ordering.common.web.media.FileReferences;
-import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
+import com.hbue.ordering.common.web.media.FileReferences;
+import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
+import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.RestaurantDO;
-import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.service.RestaurantAdministrationService;
 import com.hbue.ordering.product.vo.RestaurantAdminVO;
 import org.springframework.dao.DuplicateKeyException;
@@ -37,19 +37,29 @@ import java.util.List;
 public class RestaurantAdministrationServiceImpl
         implements RestaurantAdministrationService {
 
-    /** 启用状态值。 */
+    /**
+     * 启用状态值。
+     */
     private static final int ACTIVE_STATUS = 1;
 
-    /** 停用状态值。 */
+    /**
+     * 停用状态值。
+     */
     private static final int INACTIVE_STATUS = 0;
 
-    /** 餐厅数据 Mapper。 */
+    /**
+     * 餐厅数据 Mapper。
+     */
     private final RestaurantMapper restaurantMapper;
 
-    /** 窗口数据 Mapper，用于停用前的档口占用检查。 */
+    /**
+     * 窗口数据 Mapper，用于停用前的档口占用检查。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 数据范围判定服务。 */
+    /**
+     * 数据范围判定服务。
+     */
     private final DataScopeService dataScopeService;
     private final ManagedImageClient images;
     private final ProductSearchOutboxWriter searchOutbox;
@@ -57,9 +67,9 @@ public class RestaurantAdministrationServiceImpl
     /**
      * 创建餐厅管理服务。
      *
-     * @param restaurantMapper 餐厅数据 Mapper
+     * @param restaurantMapper   餐厅数据 Mapper
      * @param diningWindowMapper 窗口数据 Mapper
-     * @param dataScopeService 数据范围判定服务
+     * @param dataScopeService   数据范围判定服务
      */
     public RestaurantAdministrationServiceImpl(
             RestaurantMapper restaurantMapper,
@@ -75,7 +85,9 @@ public class RestaurantAdministrationServiceImpl
         this.searchOutbox = searchOutbox;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<RestaurantAdminVO> listRestaurants(Long operatorId) {
         UserScopeSnapshot scopes = dataScopeService.loadScopes(operatorId);
@@ -95,7 +107,9 @@ public class RestaurantAdministrationServiceImpl
         return results;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public RestaurantAdminVO createRestaurant(
@@ -125,7 +139,9 @@ public class RestaurantAdministrationServiceImpl
         return toRestaurantVO(persisted == null ? restaurant : persisted);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public RestaurantAdminVO updateRestaurant(
@@ -175,7 +191,9 @@ public class RestaurantAdministrationServiceImpl
         return toRestaurantVO(requireRestaurant(restaurantId));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void disableRestaurant(Long operatorId, Long restaurantId) {
@@ -209,7 +227,7 @@ public class RestaurantAdministrationServiceImpl
      * <p>展示排序、新建与停用属平台口径，只有总经理（全平台范围）可以操作。</p>
      *
      * @param operatorId 当前登录操作者 ID
-     * @param action 操作名称
+     * @param action     操作名称
      */
     private void requirePlatformScope(Long operatorId, String action) {
         UserScopeSnapshot scopes = dataScopeService.loadScopes(operatorId);
@@ -222,7 +240,7 @@ public class RestaurantAdministrationServiceImpl
      * 解析展示排序：请求留空时沿用兜底值。
      *
      * @param requested 请求中的展示排序
-     * @param fallback 兜底值
+     * @param fallback  兜底值
      * @return 最终写入的展示排序
      */
     private Integer resolveSortOrder(Integer requested, Integer fallback) {
@@ -236,7 +254,7 @@ public class RestaurantAdministrationServiceImpl
      * 判断请求中的展示排序是否等同于原值；留空表示不变。
      *
      * @param requested 请求中的展示排序
-     * @param existing 原展示排序
+     * @param existing  原展示排序
      * @return 未要求改动时返回 true
      */
     private boolean sameSortOrder(Integer requested, Integer existing) {

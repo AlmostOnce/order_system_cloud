@@ -4,18 +4,14 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
 import com.hbue.ordering.statistics.mapper.SalesProjectionMapper;
+import com.hbue.ordering.statistics.messaging.SalesPaidEvent;
 import com.hbue.ordering.statistics.model.SalesEventDO;
 import com.hbue.ordering.statistics.model.SalesEventItemDO;
-import com.hbue.ordering.statistics.messaging.SalesPaidEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 在 statistics_db 内原子保存事件事实、订单菜品明细与累计/月度汇总。
@@ -30,12 +26,16 @@ public class SalesProjectionService {
     private static final long MAX_EXACT_REDIS_INTEGER = 9_007_199_254_740_991L;
     private final SalesProjectionMapper mapper;
 
-    /** 注入只负责本地 MySQL 的 Mapper；Redis 更新在此事务提交后执行。 */
+    /**
+     * 注入只负责本地 MySQL 的 Mapper；Redis 更新在此事务提交后执行。
+     */
     public SalesProjectionService(SalesProjectionMapper mapper) {
         this.mapper = mapper;
     }
 
-    /** 查询稳定事件键是否已通过历史迁移或先前消费写入，用于跳过无需再查订单的旧消息。 */
+    /**
+     * 查询稳定事件键是否已通过历史迁移或先前消费写入，用于跳过无需再查订单的旧消息。
+     */
     public boolean alreadyRecorded(String eventId) {
         return mapper.selectEvent(eventId) != null;
     }
@@ -43,7 +43,7 @@ public class SalesProjectionService {
     /**
      * 原子持久化已支付快照，并返回提交后的 MySQL 投影版本。
      *
-     * @param event RocketMQ 上收到的事件版本
+     * @param event    RocketMQ 上收到的事件版本
      * @param snapshot 已由 V2 消息携带或由订单内部接口补齐的购买事实
      * @return 当前权威投影版本，重复投递不会递增该值
      */
@@ -77,7 +77,9 @@ public class SalesProjectionService {
         return version;
     }
 
-    /** 把消息明细转换为统计库的事实行，保留每一行的订单明细标识。 */
+    /**
+     * 把消息明细转换为统计库的事实行，保留每一行的订单明细标识。
+     */
     private List<SalesEventItemDO> toRows(String eventId, List<OrderPaidSalesSnapshotVO.Item> items) {
         List<SalesEventItemDO> rows = new ArrayList<>();
         for (OrderPaidSalesSnapshotVO.Item item : items) {
@@ -92,7 +94,9 @@ public class SalesProjectionService {
         return rows;
     }
 
-    /** 在同一本地事务中增加 ALL 与支付自然月两套窗口和菜品汇总。 */
+    /**
+     * 在同一本地事务中增加 ALL 与支付自然月两套窗口和菜品汇总。
+     */
     private void addTotals(Long windowId, String monthKey, List<SalesEventItemDO> rows) {
         Map<Long, ProductGroup> products = new HashMap<>();
         long orderQuantity = 0;
@@ -109,14 +113,17 @@ public class SalesProjectionService {
         mapper.addWindowTotal("MONTH", monthKey, windowId, orderQuantity);
         for (Map.Entry<Long, ProductGroup> entry : products.entrySet()) {
             ProductGroup group = entry.getValue();
-            if (group.quantity > MAX_EXACT_REDIS_INTEGER) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "菜品销量超出可统计范围");
+            if (group.quantity > MAX_EXACT_REDIS_INTEGER)
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "菜品销量超出可统计范围");
             SalesEventItemDO latest = group.latest;
             mapper.addProductTotal(ALL_PERIOD, ALL_KEY, windowId, entry.getKey(), latest.getProductName(), latest.getItemId(), group.quantity);
             mapper.addProductTotal("MONTH", monthKey, windowId, entry.getKey(), latest.getProductName(), latest.getItemId(), group.quantity);
         }
     }
 
-    /** 验证订单身份与所有原始菜品快照；不一致属于数据冲突而不是可吞掉的重复消息。 */
+    /**
+     * 验证订单身份与所有原始菜品快照；不一致属于数据冲突而不是可吞掉的重复消息。
+     */
     private void verifyDuplicate(SalesEventDO incoming, List<SalesEventItemDO> incomingItems) {
         SalesEventDO stored = mapper.selectEvent(incoming.getEventId());
         if (stored == null || !stored.getOrderId().equals(incoming.getOrderId())
@@ -125,7 +132,8 @@ public class SalesProjectionService {
         }
         List<SalesEventItemDO> storedItems = mapper.selectEventItems(incoming.getEventId());
         incomingItems.sort(Comparator.comparing(SalesEventItemDO::getItemId));
-        if (storedItems.size() != incomingItems.size()) throw new IllegalStateException("重复销量消息的订单明细数量不一致");
+        if (storedItems.size() != incomingItems.size())
+            throw new IllegalStateException("重复销量消息的订单明细数量不一致");
         for (int i = 0; i < storedItems.size(); i++) {
             SalesEventItemDO left = storedItems.get(i);
             SalesEventItemDO right = incomingItems.get(i);
@@ -136,7 +144,9 @@ public class SalesProjectionService {
         }
     }
 
-    /** 在写入边界检查订单、时间和每条购买明细，拒绝空事实或不稳定事件键。 */
+    /**
+     * 在写入边界检查订单、时间和每条购买明细，拒绝空事实或不稳定事件键。
+     */
     private void validateSnapshot(SalesPaidEvent event, OrderPaidSalesSnapshotVO snapshot) {
         if (event == null || !event.valid() || snapshot == null || snapshot.orderId() == null
                 || !event.orderId().equals(snapshot.orderId()) || snapshot.paidAt() == null
@@ -152,7 +162,9 @@ public class SalesProjectionService {
         }
     }
 
-    /** 同一订单中若出现重复菜品行，先汇总份数并保留最新的名称快照。 */
+    /**
+     * 同一订单中若出现重复菜品行，先汇总份数并保留最新的名称快照。
+     */
     private static final class ProductGroup {
         private long quantity;
         private SalesEventItemDO latest;

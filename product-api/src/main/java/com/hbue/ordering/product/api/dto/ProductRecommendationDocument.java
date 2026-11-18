@@ -24,9 +24,15 @@ public record ProductRecommendationDocument(
         boolean hasSpecifications,
         List<SpecificationGroup> specificationGroups
 ) {
-    /** 当前启用的规格组及其选项；只供商品级口味候选匹配，不用于核价或库存拆分。 */
-    public record SpecificationGroup(Long groupId, String groupName, List<SpecificationOption> options) {}
+    /**
+     * 当前启用的规格组及其选项；只供商品级口味候选匹配，不用于核价或库存拆分。
+     */
+    public record SpecificationGroup(Long groupId, String groupName, List<SpecificationOption> options) {
+    }
 
-    /** 当前启用的规格选项文字；价格和必选规则继续由商品核价接口权威处理。 */
-    public record SpecificationOption(Long optionId, String optionName) {}
+    /**
+     * 当前启用的规格选项文字；价格和必选规则继续由商品核价接口权威处理。
+     */
+    public record SpecificationOption(Long optionId, String optionName) {
+    }
 }

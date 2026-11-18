@@ -17,24 +17,38 @@ public class OrderInternalDTO {
     private Long paymentExpiresAt;
     private Long serverTime;
 
-    /** 订单 ID。 */
+    /**
+     * 订单 ID。
+     */
     private Long orderId;
 
-    /** 订单号。 */
+    /**
+     * 订单号。
+     */
     private String orderNo;
 
-    /** 下单用户 ID。 */
+    /**
+     * 下单用户 ID。
+     */
     private Long userId;
 
-    /** 订单总金额。 */
+    /**
+     * 订单总金额。
+     */
     private java.math.BigDecimal totalAmount;
 
-    /** 服务端已确认的优惠金额快照。 */
+    /**
+     * 服务端已确认的优惠金额快照。
+     */
     private java.math.BigDecimal discountAmount;
 
-    /** 服务端已确认的应付金额快照，支付单必须使用该字段。 */
+    /**
+     * 服务端已确认的应付金额快照，支付单必须使用该字段。
+     */
     private java.math.BigDecimal payableAmount;
 
-    /** 订单当前状态（数据库中文值）。 */
+    /**
+     * 订单当前状态（数据库中文值）。
+     */
     private String status;
 }

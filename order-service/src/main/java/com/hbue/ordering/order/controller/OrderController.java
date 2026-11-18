@@ -51,24 +51,25 @@ public class OrderController {
      * @return 订单服务运行状态文本
      */
     @GetMapping("/ping")
-    public ApiResponse<String> ping () {
+    public ApiResponse<String> ping() {
         return ApiResponse.success("order service is running!");
     }
 
     /**
      * 查询本人订单游标页。状态筛选交给Service及数据库，不再返回当前用户全部历史记录。
-     * @param jwt 已认证身份，不接受请求参数指定其他顾客
+     *
+     * @param jwt    已认证身份，不接受请求参数指定其他顾客
      * @param status 五组筛选编码，默认all
      * @param cursor 上一页返回的nextCursor，首屏不传
-     * @param limit 每页条数，默认20，上限50
+     * @param limit  每页条数，默认20，上限50
      * @return 当前页摘要、下一页游标与是否还有更多
      */
     @GetMapping("/list")
     public ApiResponse<OrderPageVO> list(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name="status", defaultValue="all") String status,
-            @RequestParam(name="cursor", required=false) String cursor,
-            @RequestParam(name="limit", defaultValue="20") int limit
+            @RequestParam(name = "status", defaultValue = "all") String status,
+            @RequestParam(name = "cursor", required = false) String cursor,
+            @RequestParam(name = "limit", defaultValue = "20") int limit
     ) {
         Long userId = Long.valueOf(jwt.getSubject());
         var page = orderService.pageByUserId(userId, status, cursor, limit);
@@ -80,7 +81,7 @@ public class OrderController {
     /**
      * 根据订单 ID 查询当前用户的订单详情。
      *
-     * @param jwt 当前登录用户 JWT
+     * @param jwt     当前登录用户 JWT
      * @param orderId 订单 ID
      * @return 订单详情
      */
@@ -107,9 +108,9 @@ public class OrderController {
     /**
      * 创建订单。
      *
-     * @param jwt 当前登录用户 JWT
+     * @param jwt            当前登录用户 JWT
      * @param idempotencyKey 客户端幂等键
-     * @param request 创建订单请求
+     * @param request        创建订单请求
      * @return 新创建的订单详情
      */
     @PreAuthorize("hasRole('CUSTOMER')")
@@ -138,7 +139,7 @@ public class OrderController {
     /**
      * 顾客取消自己尚未支付的订单。
      *
-     * @param jwt 当前登录顾客 JWT
+     * @param jwt     当前登录顾客 JWT
      * @param orderId 订单 ID
      * @return 变更后的订单状态
      */
@@ -164,7 +165,7 @@ public class OrderController {
      * <p>只允许档口负责人与餐厅经理调用；技术角色不参与订单履约。
      * Service 会校验订单是否落在操作者的数据范围内，越权按不存在处理。</p>
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt     当前登录操作者 JWT
      * @param orderId 订单 ID
      * @param request 目标订单状态
      * @return 变更后的订单状态

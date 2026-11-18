@@ -9,7 +9,9 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-/** 通过已配置的 QQ 邮箱 SMTP 发送验证码。 */
+/**
+ * 通过已配置的 QQ 邮箱 SMTP 发送验证码。
+ */
 @Service
 public class SmtpEmailCodeSender implements EmailCodeSender {
     private final JavaMailSender mail;
@@ -24,13 +26,24 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
     }
 
     @Override
-    public void send(String email, String code) { sendMessage(email, code, "邮箱验证"); }
+    public void send(String email, String code) {
+        sendMessage(email, code, "邮箱验证");
+    }
 
-    @Override public void sendPasswordReset(String email, String code) { sendMessage(email, code, "找回登录密码"); }
+    @Override
+    public void sendPasswordReset(String email, String code) {
+        sendMessage(email, code, "找回登录密码");
+    }
 
-    @Override public void sendPayPasswordReset(String email, String code) { sendMessage(email, code, "找回支付密码"); }
+    @Override
+    public void sendPayPasswordReset(String email, String code) {
+        sendMessage(email, code, "找回支付密码");
+    }
 
-    @Override public void sendOwnershipVerification(String email,String code) {sendMessage(email,code,"验证邮箱所有权");}
+    @Override
+    public void sendOwnershipVerification(String email, String code) {
+        sendMessage(email, code, "验证邮箱所有权");
+    }
 
     private void sendMessage(String email, String code, String purpose) {
         if (username.isBlank() || password.isBlank()) {

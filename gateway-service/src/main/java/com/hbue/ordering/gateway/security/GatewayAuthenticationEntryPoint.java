@@ -50,7 +50,7 @@ public class GatewayAuthenticationEntryPoint
     /**
      * 处理未认证请求。
      *
-     * @param exchange WebFlux 请求交换对象
+     * @param exchange  WebFlux 请求交换对象
      * @param exception 认证异常
      * @return 响应写入完成信号；JSON 序列化失败时返回错误信号
      */

@@ -1,9 +1,9 @@
 package com.hbue.ordering.user.service.impl;
 
-import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.user.dto.request.RechargeRequest;
 import com.hbue.ordering.user.mapper.BalanceRecordMapper;
 import com.hbue.ordering.user.mapper.UserMapper;
@@ -22,7 +22,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
-/** 模拟充值仍保留真实记账的一致性与幂等性，不调用第三方支付。 */
+/**
+ * 模拟充值仍保留真实记账的一致性与幂等性，不调用第三方支付。
+ */
 @Service
 public class UserWalletServiceImpl implements UserWalletService {
     private static final BigDecimal MAX_RECHARGE = new BigDecimal("10000.00");

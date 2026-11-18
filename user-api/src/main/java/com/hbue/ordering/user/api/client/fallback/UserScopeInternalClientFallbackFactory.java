@@ -3,7 +3,6 @@ package com.hbue.ordering.user.api.client.fallback;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.client.UserScopeInternalClient;
-import com.hbue.ordering.user.api.vo.UserScopeVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.openfeign.FallbackFactory;

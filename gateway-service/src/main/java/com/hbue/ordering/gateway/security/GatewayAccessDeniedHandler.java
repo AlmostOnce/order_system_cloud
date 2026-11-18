@@ -48,7 +48,7 @@ public class GatewayAccessDeniedHandler
     /**
      * 处理无权限请求。
      *
-     * @param exchange WebFlux 请求交换对象
+     * @param exchange  WebFlux 请求交换对象
      * @param exception 无权限异常
      * @return 响应写入完成信号；JSON 序列化失败时返回错误信号
      */

@@ -2,17 +2,17 @@ package com.hbue.ordering.order.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
-import com.hbue.ordering.order.service.OrderPersistenceService;
-import com.hbue.ordering.order.ranking.SalesOutboxWriter;
-import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
-import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
-import com.hbue.ordering.order.enums.OrderStatus;
+import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
+import com.hbue.ordering.order.service.OrderPersistenceService;
+import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,9 @@ import java.util.List;
 public class OrderPersistenceServiceImpl implements OrderPersistenceService {
     private static final java.security.SecureRandom PICKUP_RANDOM = new java.security.SecureRandom();
 
-    /** 兼容已有未生成取餐码的已支付订单，并发读取不会覆盖已签发的码。 */
+    /**
+     * 兼容已有未生成取餐码的已支付订单，并发读取不会覆盖已签发的码。
+     */
     @Override
     @Transactional
     public String ensurePickupCode(Long orderId, Long userId) {
@@ -61,7 +63,9 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         return current.getPickupCode();
     }
 
-    /** 凭据消费、完成状态和通知 outbox 在同一本地事务提交。 */
+    /**
+     * 凭据消费、完成状态和通知 outbox 在同一本地事务提交。
+     */
     @Override
     @Transactional
     public boolean completeWithPickupCode(Long orderId, Integer expectedVersion, String code) {
@@ -81,31 +85,42 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
     private final com.hbue.ordering.order.service.OrderTimeoutOutboxService timeoutOutbox;
 
-    /** 订单表 Mapper。 */
+    /**
+     * 订单表 Mapper。
+     */
     private final OrderMapper orderMapper;
 
-    /** 订单明细表 Mapper。 */
+    /**
+     * 订单明细表 Mapper。
+     */
     private final OrderItemMapper orderItemMapper;
     private final SalesOutboxWriter salesOutbox;
-    /** 推荐购买快照与支付状态同事务保存，异步派发失败不要求重新支付。 */
+    /**
+     * 推荐购买快照与支付状态同事务保存，异步派发失败不要求重新支付。
+     */
     private final RecommendationPurchaseOutboxWriter recommendationOutbox;
-    /** 支付成功后的优惠券核销事件与订单支付状态同事务落库。 */
+    /**
+     * 支付成功后的优惠券核销事件与订单支付状态同事务落库。
+     */
     private final CouponConsumeOutboxWriter couponConsumeOutbox;
     private OrderNotificationOutboxWriter notificationOutbox;
     @Value("${notification.order-events.enabled:false}")
     private boolean notificationsEnabled;
+
     @Autowired
-    void setNotificationOutbox(OrderNotificationOutboxWriter writer) { this.notificationOutbox = writer; }
+    void setNotificationOutbox(OrderNotificationOutboxWriter writer) {
+        this.notificationOutbox = writer;
+    }
 
     /**
      * 创建订单原子持久化服务实现。
      *
-     * @param orderMapper 订单表 Mapper
-     * @param orderItemMapper 订单明细表 Mapper
-     * @param salesOutbox 既有累计销量事件写入器，不变更其业务口径
-     * @param timeoutOutbox 超时关单事实写入器
+     * @param orderMapper          订单表 Mapper
+     * @param orderItemMapper      订单明细表 Mapper
+     * @param salesOutbox          既有累计销量事件写入器，不变更其业务口径
+     * @param timeoutOutbox        超时关单事实写入器
      * @param recommendationOutbox 支付/退款推荐快照写入器，必须参与同一本地事务
-     * @param couponConsumeOutbox 支付成功券核销事件 Outbox 写入器
+     * @param couponConsumeOutbox  支付成功券核销事件 Outbox 写入器
      */
     public OrderPersistenceServiceImpl(
             OrderMapper orderMapper,
@@ -115,7 +130,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
             RecommendationPurchaseOutboxWriter recommendationOutbox,
             CouponConsumeOutboxWriter couponConsumeOutbox
     ) {
-        this.timeoutOutbox=timeoutOutbox;
+        this.timeoutOutbox = timeoutOutbox;
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.salesOutbox = salesOutbox;
@@ -123,15 +138,18 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         this.couponConsumeOutbox = couponConsumeOutbox;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public OrderDO saveOrderWithItems(
             OrderDO order,
             List<OrderItemDO> items
     ) {
-        if(order.getCreatedAt()==null)order.setCreatedAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")));
-        if(order.getExpiresAt()==null)order.setExpiresAt(order.getCreatedAt().plusMinutes(15));
+        if (order.getCreatedAt() == null)
+            order.setCreatedAt(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")));
+        if (order.getExpiresAt() == null) order.setExpiresAt(order.getCreatedAt().plusMinutes(15));
         // 先插入订单主记录以取得数据库生成的主键；事务保证后续失败时主记录也回滚。
         if (orderMapper.insert(order) != 1) {
             throw new BusinessException(
@@ -158,6 +176,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
 
     /**
      * 在订单本地事务中写入订单级优惠和逐行分摊；金额条件或任一行更新失败都会回滚全部快照。
+     *
      * @param order 已保存并绑定券 ID 的订单金额快照
      * @param items 已计算分摊金额且具有数据库主键的订单行
      * @throws BusinessException 参数不完整、订单不匹配或任一明细保存失败时回滚本地事务
@@ -191,7 +210,9 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         }
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public boolean updateStatusIfUnchanged(
@@ -216,7 +237,9 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         return changed;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public boolean markPaidIfUnchanged(Long orderId, Integer expectedVersion, java.time.LocalDateTime paidAt) {

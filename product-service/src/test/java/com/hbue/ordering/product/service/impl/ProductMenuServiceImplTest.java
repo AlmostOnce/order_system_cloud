@@ -9,12 +9,12 @@ import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
-import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
+import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,19 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductMenuServiceImplTest {
@@ -53,7 +43,9 @@ class ProductMenuServiceImplTest {
     @Mock
     private ProductCategoryMapper productCategoryMapper;
 
-    /** 规格服务独立mock，原有菜单和核价用例默认无规格配置。 */
+    /**
+     * 规格服务独立mock，原有菜单和核价用例默认无规格配置。
+     */
     @Mock
     private ProductSpecificationService specifications;
 

@@ -7,8 +7,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserUuidLookup implements PublicUserIdentityLookup {
     private final UserMapper mapper;
-    public UserUuidLookup(UserMapper mapper) { this.mapper = mapper; }
-    @Override public Boolean isEmailVerified(String userUuid) {return mapper.selectEmailVerified(userUuid);}
-    @Override public Long findCredentialVersion(String userUuid) { return mapper.selectCredentialVersion(userUuid); }
-    @Override public Long findInternalId(String userUuid) { return mapper.selectIdByUuid(userUuid); }
+
+    public UserUuidLookup(UserMapper mapper) {
+        this.mapper = mapper;
+    }
+
+    @Override
+    public Boolean isEmailVerified(String userUuid) {
+        return mapper.selectEmailVerified(userUuid);
+    }
+
+    @Override
+    public Long findCredentialVersion(String userUuid) {
+        return mapper.selectCredentialVersion(userUuid);
+    }
+
+    @Override
+    public Long findInternalId(String userUuid) {
+        return mapper.selectIdByUuid(userUuid);
+    }
 }

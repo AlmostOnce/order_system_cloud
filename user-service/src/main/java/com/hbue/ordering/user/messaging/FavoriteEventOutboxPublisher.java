@@ -9,17 +9,25 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** 定时发送用户库发件箱；Broker 未同步确认时保留事件并退避重试。 */
+/**
+ * 定时发送用户库发件箱；Broker 未同步确认时保留事件并退避重试。
+ */
 @Component
 @ConditionalOnProperty(name = "user.favorite-messaging.enabled", havingValue = "true")
 public class FavoriteEventOutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(FavoriteEventOutboxPublisher.class);
-    /** 用户库事件持久化接口，作为失败恢复来源。 */
+    /**
+     * 用户库事件持久化接口，作为失败恢复来源。
+     */
     private final FavoriteEventOutboxMapper outbox;
-    /** 项目现有 Spring Cloud Stream Binder，配置为同步发送。 */
+    /**
+     * 项目现有 Spring Cloud Stream Binder，配置为同步发送。
+     */
     private final StreamBridge stream;
 
-    /** 注入发件箱和消息发送器，禁止在收藏本地事务中同步等待 Broker。 */
+    /**
+     * 注入发件箱和消息发送器，禁止在收藏本地事务中同步等待 Broker。
+     */
     public FavoriteEventOutboxPublisher(FavoriteEventOutboxMapper outbox, StreamBridge stream) {
         this.outbox = outbox;
         this.stream = stream;

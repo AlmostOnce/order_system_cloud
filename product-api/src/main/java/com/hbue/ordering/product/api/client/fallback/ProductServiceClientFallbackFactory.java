@@ -3,8 +3,6 @@ package com.hbue.ordering.product.api.client.fallback;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
-import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
-import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +22,9 @@ import org.springframework.stereotype.Component;
 public class ProductServiceClientFallbackFactory
         implements FallbackFactory<ProductServiceClient> {
 
-    /** 降级日志记录器。 */
+    /**
+     * 降级日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(
             ProductServiceClientFallbackFactory.class
     );

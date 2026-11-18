@@ -4,7 +4,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 待发布库存事件记录。 */
+/**
+ * 待发布库存事件记录。
+ */
 @Data
 public class StockEventOutboxRow {
     private String eventId;

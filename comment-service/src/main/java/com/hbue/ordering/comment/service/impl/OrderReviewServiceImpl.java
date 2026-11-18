@@ -1,7 +1,9 @@
 package com.hbue.ordering.comment.service.impl;
 
 import com.hbue.ordering.comment.client.CommentOrderClient;
-import com.hbue.ordering.comment.service.*;
+import com.hbue.ordering.comment.service.CommentService;
+import com.hbue.ordering.comment.service.OrderReviewService;
+import com.hbue.ordering.comment.service.WindowReviewService;
 import com.hbue.ordering.comment.vo.OrderReviewsVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -13,9 +15,13 @@ public class OrderReviewServiceImpl implements OrderReviewService {
     private final CommentOrderClient orders;
     private final CommentService comments;
     private final WindowReviewService windows;
+
     public OrderReviewServiceImpl(CommentOrderClient orders, CommentService comments, WindowReviewService windows) {
-        this.orders = orders; this.comments = comments; this.windows = windows;
+        this.orders = orders;
+        this.comments = comments;
+        this.windows = windows;
     }
+
     public OrderReviewsVO get(Long userId, Long orderId, String bearer) {
         // 先经订单服务校验本人归属；不能只凭订单编号读取其他用户的评价。
         try {

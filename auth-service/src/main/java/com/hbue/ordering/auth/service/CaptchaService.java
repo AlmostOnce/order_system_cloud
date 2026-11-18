@@ -26,7 +26,7 @@ public interface CaptchaService {
     /**
      * 校验验证码，校验成功或失败都会使该验证码立即失效。
      *
-     * @param captchaId 验证码标识
+     * @param captchaId   验证码标识
      * @param captchaCode 用户输入的验证码字符
      * @return 验证码存在且与答案一致时返回 true
      * @throws BusinessException Redis 不可用、无法确认校验结果时抛出

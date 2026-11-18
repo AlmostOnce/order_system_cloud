@@ -29,14 +29,19 @@ import java.util.Set;
  */
 @Service
 public class CartCleanupServiceImpl implements CartCleanupService {
-    /** 用当前顾客凭据读取订单，服务端继续检查订单归属。 */
+    /**
+     * 用当前顾客凭据读取订单，服务端继续检查订单归属。
+     */
     private final OrderServiceClient orders;
-    /** 只负责本用户 Hash 内的版本比较与原子删除。 */
+    /**
+     * 只负责本用户 Hash 内的版本比较与原子删除。
+     */
     private final CartRedisRepository repository;
 
     /**
      * 注入订单读取和购物车存储边界，不依赖其它服务的实现类。
-     * @param orders 订单读取客户端
+     *
+     * @param orders     订单读取客户端
      * @param repository 购物车 Redis 访问层
      */
     public CartCleanupServiceImpl(OrderServiceClient orders, CartRedisRepository repository) {
@@ -46,7 +51,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 按提交快照清理，当前状态已变化的条目交由 Redis 脚本保留。
-     * @param userId 已认证顾客 ID
+     *
+     * @param userId  已认证顾客 ID
      * @param orderId 已成功创建的订单 ID
      * @param request 下单前保存、重试时保持不变的快照
      * @return 实际删除与跳过的条目数
@@ -96,7 +102,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 在远程调用之前检查身份、容量、版本与重复商品；Service 独立调用也不能绕过校验。
-     * @param userId 当前顾客 ID
+     *
+     * @param userId  当前顾客 ID
      * @param orderId 已创建订单 ID
      * @param request 原始提交快照
      */
@@ -123,6 +130,7 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 读取已有订单并保留 401/403/404，网络错误与降级统一返回 503。
+     *
      * @param orderId 已有订单 ID
      * @return 当前用户订单的购买事实
      */
@@ -154,6 +162,7 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 创建快照不一致错误，提醒调用方不要用新查询的购物车替换原始下单快照。
+     *
      * @return HTTP 409 对应业务异常
      */
     private BusinessException mismatch() {
@@ -162,6 +171,7 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 创建依赖不可用错误，明确订单不需要重建，只需稍后重试清理。
+     *
      * @return HTTP 503 对应业务异常
      */
     private BusinessException unavailable() {

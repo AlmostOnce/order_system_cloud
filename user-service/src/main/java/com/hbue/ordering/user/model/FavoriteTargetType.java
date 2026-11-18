@@ -7,8 +7,12 @@ package com.hbue.ordering.user.model;
  * 这里仅定义跨服务收藏记录使用的稳定类型代码，不复制商品字段。</p>
  */
 public enum FavoriteTargetType {
-    /** 点餐首页展示、进入后打开菜单的窗口店铺。 */
+    /**
+     * 点餐首页展示、进入后打开菜单的窗口店铺。
+     */
     WINDOW,
-    /** 窗口菜单中的菜品。 */
+    /**
+     * 窗口菜单中的菜品。
+     */
     PRODUCT
 }

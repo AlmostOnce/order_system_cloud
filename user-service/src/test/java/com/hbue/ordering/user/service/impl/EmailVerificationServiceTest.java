@@ -6,15 +6,19 @@ import com.hbue.ordering.user.dto.request.SendEmailCodeRequest;
 import com.hbue.ordering.user.dto.request.VerifyEmailCaptchaRequest;
 import com.hbue.ordering.user.service.EmailChangeAuthorization;
 import com.hbue.ordering.user.service.EmailCodeSender;
-import java.time.Duration;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import java.time.Duration;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/** 邮箱换绑的人机验证、一次性发送凭据和验证码边界。 */
+/**
+ * 邮箱换绑的人机验证、一次性发送凭据和验证码边界。
+ */
 class EmailVerificationServiceTest {
     private final RedisOperationsService redis = mock(RedisOperationsService.class);
     private final EmailCodeSender sender = mock(EmailCodeSender.class);
@@ -24,7 +28,8 @@ class EmailVerificationServiceTest {
     private final String authToken = "a".repeat(64);
     private final String captchaTicket = "b".repeat(64);
 
-    @Test void imageCaptchaMustPassBeforeEmailSendCredentialIsIssued() {
+    @Test
+    void imageCaptchaMustPassBeforeEmailSendCredentialIsIssued() {
         when(redis.getAndDelete("auth:captcha:image-id")).thenReturn("ABCD");
         String ticket = service.verifyCaptcha(7L,
                 new VerifyEmailCaptchaRequest("USER@example.com", authToken, "image-id", "abcd"));
@@ -33,14 +38,16 @@ class EmailVerificationServiceTest {
         verify(redis).setValue(eq("email:captcha:verified:7"), anyString(), eq(Duration.ofMinutes(5)));
     }
 
-    @Test void wrongOrExpiredImageCaptchaDoesNotIssueTicket() {
+    @Test
+    void wrongOrExpiredImageCaptchaDoesNotIssueTicket() {
         when(redis.getAndDelete("auth:captcha:image-id")).thenReturn("ABCD");
         assertThrows(BusinessException.class, () -> service.verifyCaptcha(7L,
                 new VerifyEmailCaptchaRequest("user@example.com", authToken, "image-id", "WRONG")));
         verify(redis, never()).setValue(eq("email:captcha:verified:7"), anyString(), any());
     }
 
-    @Test void sendingRequiresAOneTimeCaptchaTicketAndAuthorization() {
+    @Test
+    void sendingRequiresAOneTimeCaptchaTicketAndAuthorization() {
         when(redis.executeScript(any(), eq(List.of("email:captcha:verified:7")), any())).thenReturn(1L);
         when(redis.increment(anyString(), any(Duration.class))).thenReturn(1L);
         service.send(7L, new SendEmailCodeRequest("USER@example.com", authToken, captchaTicket));
@@ -52,7 +59,8 @@ class EmailVerificationServiceTest {
         verify(redis).setValue(eq("email:verification:user:7"), anyString(), eq(Duration.ofMinutes(10)));
     }
 
-    @Test void sendingWithoutVerifiedCaptchaDoesNotSendMailOrConsumeRateQuota() {
+    @Test
+    void sendingWithoutVerifiedCaptchaDoesNotSendMailOrConsumeRateQuota() {
         when(redis.executeScript(any(), anyList(), any())).thenReturn(0L);
         assertThrows(BusinessException.class, () -> service.send(7L,
                 new SendEmailCodeRequest("user@example.com", authToken, captchaTicket)));
@@ -60,7 +68,8 @@ class EmailVerificationServiceTest {
         verify(redis, never()).increment(anyString(), any(Duration.class));
     }
 
-    @Test void emailCodeIsBoundToTheSameAuthorizationAndEmail() {
+    @Test
+    void emailCodeIsBoundToTheSameAuthorizationAndEmail() {
         when(redis.executeScript(any(), anyList(), any())).thenReturn(1L);
         when(redis.executeScript(any(), anyList(), any(), eq("5"))).thenReturn(1L);
         service.consume(7L, authToken, "first@example.com", "123456");

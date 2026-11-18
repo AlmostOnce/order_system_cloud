@@ -11,7 +11,9 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
-/** 将支付成功后的优惠券核销 Outbox 异步发布至 RocketMQ。 */
+/**
+ * 将支付成功后的优惠券核销 Outbox 异步发布至 RocketMQ。
+ */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(name = "coupon.consume.messaging.enabled", havingValue = "true")
@@ -19,17 +21,24 @@ public class CouponConsumeOutboxPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(CouponConsumeOutboxPublisher.class);
 
-    /** 读取待发记录并在同步发送后标记状态或安排退避重试。 */
+    /**
+     * 读取待发记录并在同步发送后标记状态或安排退避重试。
+     */
     private final CouponConsumeOutboxMapper outbox;
-    /** 验证数据库中已持久化的 JSON 快照。 */
+    /**
+     * 验证数据库中已持久化的 JSON 快照。
+     */
     private final ObjectMapper json;
-    /** 向配置好的优惠券核销 RocketMQ binding 发布事件。 */
+    /**
+     * 向配置好的优惠券核销 RocketMQ binding 发布事件。
+     */
     private final StreamBridge stream;
 
     /**
      * 发布器仅依赖本地 Outbox、JSON 解码器和同步确认的消息桥。
+     *
      * @param outbox 持久化待发消息并记录发布/重试状态的 Mapper
-     * @param json 解码 Outbox 载荷并核对快照字段的工具
+     * @param json   解码 Outbox 载荷并核对快照字段的工具
      * @param stream 向优惠券消息 binding 发送消息的桥接器
      */
     public CouponConsumeOutboxPublisher(CouponConsumeOutboxMapper outbox, ObjectMapper json, StreamBridge stream) {

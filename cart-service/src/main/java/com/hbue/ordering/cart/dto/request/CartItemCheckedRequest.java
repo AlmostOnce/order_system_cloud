@@ -11,7 +11,9 @@ import lombok.Data;
  */
 @Data
 public class CartItemCheckedRequest {
-    /** true 为勾选，false 为取消勾选。 */
+    /**
+     * true 为勾选，false 为取消勾选。
+     */
     @NotNull(message = "勾选状态不能为空")
     private Boolean checked;
 }

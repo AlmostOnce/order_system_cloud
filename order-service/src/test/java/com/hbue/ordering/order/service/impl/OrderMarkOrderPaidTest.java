@@ -25,10 +25,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 支付回调驱动的订单推进测试：待支付到已支付、幂等与冲突场景。
@@ -37,7 +34,9 @@ import static org.mockito.Mockito.when;
 class OrderMarkOrderPaidTest {
 
     private static final Long ORDER_ID = 501L;
-    /** 固定支付成功事实，避免测试用当前时间推测订单支付时刻。 */
+    /**
+     * 固定支付成功事实，避免测试用当前时间推测订单支付时刻。
+     */
     private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 11, 13, 9, 30);
 
     @Mock
@@ -138,7 +137,7 @@ class OrderMarkOrderPaidTest {
      */
     private OrderDO order(String status, Integer version) {
         OrderDO order = new OrderDO();
-        order.setCreatedAt(java.time.LocalDateTime.of(2026,11,4,12,0));
+        order.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 4, 12, 0));
         order.setOrderId(ORDER_ID);
         order.setOrderNo("ORD202610120001AABBCCDD");
         order.setUserId(17L);

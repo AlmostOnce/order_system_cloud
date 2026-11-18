@@ -1,16 +1,10 @@
 package com.hbue.ordering.auth.service.impl;
 
 import com.hbue.ordering.auth.dto.request.LoginRequest;
-import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
+import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
-import com.hbue.ordering.auth.service.AuthService;
-import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
-import com.hbue.ordering.auth.service.CaptchaService;
-import com.hbue.ordering.auth.service.LoginAttemptService;
-import com.hbue.ordering.auth.service.JwtTokenService;
-import com.hbue.ordering.auth.service.RefreshTokenService;
-import com.hbue.ordering.auth.service.RefreshTokenLockService;
+import com.hbue.ordering.auth.service.*;
 import com.hbue.ordering.auth.vo.LoginVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -39,7 +33,9 @@ public class AuthServiceImpl implements AuthService {
 
     private final com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership;
 
-    /** 当前类的日志对象。 */
+    /**
+     * 当前类的日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(AuthServiceImpl.class);
 
@@ -81,13 +77,13 @@ public class AuthServiceImpl implements AuthService {
     /**
      * 创建认证业务服务。
      *
-     * @param userServiceClient 用户服务远程调用客户端
-     * @param loginAttemptService 登录失败计数与账号临时锁定服务
-     * @param captchaService 图片验证码服务
-     * @param jwtTokenService JWT Token 服务
-     * @param refreshTokenService Refresh Token 服务
+     * @param userServiceClient           用户服务远程调用客户端
+     * @param loginAttemptService         登录失败计数与账号临时锁定服务
+     * @param captchaService              图片验证码服务
+     * @param jwtTokenService             JWT Token 服务
+     * @param refreshTokenService         Refresh Token 服务
      * @param accessTokenBlacklistService Access Token 黑名单服务
-     * @param refreshTokenLockService Refresh Token 轮换分布式锁服务
+     * @param refreshTokenLockService     Refresh Token 轮换分布式锁服务
      */
     public AuthServiceImpl(
             UserServiceClient userServiceClient,
@@ -99,7 +95,7 @@ public class AuthServiceImpl implements AuthService {
             RefreshTokenLockService refreshTokenLockService,
             com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership
     ) {
-        this.emailOwnership=emailOwnership;
+        this.emailOwnership = emailOwnership;
         this.userServiceClient = userServiceClient;
         this.loginAttemptService = loginAttemptService;
         this.captchaService = captchaService;
@@ -188,8 +184,8 @@ public class AuthServiceImpl implements AuthService {
         // 凭据校验成功后清除历史失败和锁定状态，新的失败窗口从零开始。
         loginAttemptService.recordSuccess(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
 
-        if(!userBasicVO.isEmailVerified()) {
-            var challenge=emailOwnership.challenge(userBasicVO);
+        if (!userBasicVO.isEmailVerified()) {
+            var challenge = emailOwnership.challenge(userBasicVO);
             return LoginVO.builder().emailVerificationRequired(true)
                     .emailVerificationToken(challenge.authorizationToken()).emailVerificationExpiresIn(challenge.expiresIn())
                     .roleCode(challenge.roleCode()).build();
@@ -278,13 +274,13 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "用户身份不可用，请重新登录");
         }
         UserBasicVO currentIdentity = identityResponse.getData();
-        if(!currentIdentity.isEmailVerified()) {
+        if (!currentIdentity.isEmailVerified()) {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);
-            throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"邮箱尚未验证，请重新登录完成邮箱验证");
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "邮箱尚未验证，请重新登录完成邮箱验证");
         }
-        if(refreshTokenInfo.getCredentialVersion()!=currentIdentity.getCredentialVersion()) {
+        if (refreshTokenInfo.getCredentialVersion() != currentIdentity.getCredentialVersion()) {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);
-            throw new BusinessException(CommonErrorCode.UNAUTHORIZED,"登录密码已重置，请重新登录");
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录密码已重置，请重新登录");
         }
         // 使用用户信息签发新的访问 Token。
         String accessToken = jwtTokenService.createAccessToken(
@@ -354,7 +350,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * 用户注销。
      *
-     * @param request 注销请求，包含需要撤销的 Refresh Token
+     * @param request     注销请求，包含需要撤销的 Refresh Token
      * @param accessToken 当前已通过认证的 Access Token
      * @throws BusinessException Access Token 不完整、Refresh Token 属于其他用户或 Redis 撤销失败时抛出
      */

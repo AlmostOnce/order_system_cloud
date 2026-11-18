@@ -7,7 +7,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** 学生可领取或总经理管理的模板视图，窗口 ID 只用于说明适用范围。 */
+/**
+ * 学生可领取或总经理管理的模板视图，窗口 ID 只用于说明适用范围。
+ */
 @Value
 @Builder
 public class CouponTemplateVO {

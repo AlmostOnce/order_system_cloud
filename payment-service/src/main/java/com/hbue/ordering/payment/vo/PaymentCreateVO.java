@@ -17,38 +17,56 @@ import java.math.BigDecimal;
 @Builder
 public class PaymentCreateVO {
 
-    /** 支付单 ID。 */
+    /**
+     * 支付单 ID。
+     */
     private Long paymentId;
 
-    /** 业务支付单号。 */
+    /**
+     * 业务支付单号。
+     */
     private String paymentNo;
 
-    /** 订单 ID。 */
+    /**
+     * 订单 ID。
+     */
     private Long orderId;
 
-    /** 订单号快照。 */
+    /**
+     * 订单号快照。
+     */
     private String orderNo;
 
-    /** 支付渠道标识。 */
+    /**
+     * 支付渠道标识。
+     */
     private String channelCode;
 
-    /** 应付金额。 */
+    /**
+     * 应付金额。
+     */
     private BigDecimal amount;
 
-    /** 支付单状态。 */
+    /**
+     * 支付单状态。
+     */
     private String status;
 
-    /** 模拟收银台页面地址。 */
+    /**
+     * 模拟收银台页面地址。
+     */
     private String checkoutUrl;
 
-    /** 收银台二维码内容。 */
+    /**
+     * 收银台二维码内容。
+     */
     private String qrCodeContent;
 
     /**
      * 从支付单持久化对象与渠道下单结果构建视图。
      *
      * @param paymentDO 支付单持久化对象
-     * @param creation 渠道下单结果；同步结算渠道（余额）无收银台凭证，传 null
+     * @param creation  渠道下单结果；同步结算渠道（余额）无收银台凭证，传 null
      * @return 创建结果视图
      */
     public static PaymentCreateVO from(

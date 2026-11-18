@@ -5,13 +5,18 @@ import com.hbue.ordering.comment.service.RatingBatchService;
 import com.hbue.ordering.comment.vo.RatingBatchItemVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
-import java.util.List;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class RatingBatchServiceImpl implements RatingBatchService {
     private final RatingBatchMapper repository;
-    public RatingBatchServiceImpl(RatingBatchMapper repository) { this.repository = repository; }
+
+    public RatingBatchServiceImpl(RatingBatchMapper repository) {
+        this.repository = repository;
+    }
+
     public List<RatingBatchItemVO> get(String kind, List<Long> ids) {
         if ((!"windows".equals(kind) && !"products".equals(kind)) || ids == null || ids.isEmpty() || ids.size() > 100 || ids.stream().anyMatch(id -> id == null || id <= 0))
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "评分查询参数不正确");

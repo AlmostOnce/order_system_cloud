@@ -18,19 +18,29 @@ public final class ProductCacheKeys {
      */
     public static final String ACTIVE_WINDOWS = "product:windows:active:v3";
 
-    /** 窗口布隆过滤器名称。 */
+    /**
+     * 窗口布隆过滤器名称。
+     */
     public static final String WINDOW_BLOOM_FILTER = "product:bloom:window";
 
-    /** 菜品布隆过滤器名称。 */
+    /**
+     * 菜品布隆过滤器名称。
+     */
     public static final String PRODUCT_BLOOM_FILTER = "product:bloom:product";
 
-    /** 窗口菜单缓存键前缀；v4增加菜品规格数组，避免命中旧缓存时丢失必选规则。 */
+    /**
+     * 窗口菜单缓存键前缀；v4增加菜品规格数组，避免命中旧缓存时丢失必选规则。
+     */
     private static final String WINDOW_MENU_PREFIX = "product:menu:window:v4:";
 
-    /** 窗口菜单空值标记缓存键前缀。 */
+    /**
+     * 窗口菜单空值标记缓存键前缀。
+     */
     private static final String WINDOW_MENU_NULL_PREFIX = "product:null:menu:window:";
 
-    /** 窗口菜单重建分布式锁 Key 前缀。 */
+    /**
+     * 窗口菜单重建分布式锁 Key 前缀。
+     */
     private static final String WINDOW_MENU_LOCK_PREFIX = "product:lock:menu:window:";
 
     /**

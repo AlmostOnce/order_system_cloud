@@ -1,17 +1,11 @@
 package com.hbue.ordering.product.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
-import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteItemRequest;
-import com.hbue.ordering.product.service.ProductSpecificationService;
-import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.annotation.Isolation;
-import java.math.BigDecimal;
-import java.util.Set;
-import java.util.stream.Collectors;
+import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
 import com.hbue.ordering.product.cache.ProductBloomFilterManager;
@@ -22,14 +16,15 @@ import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.service.ProductQuoteService;
+import com.hbue.ordering.product.service.ProductSpecificationService;
+import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 基于商品数据库提供当前窗口可售菜品和价格的内部核价实现。
@@ -44,42 +39,60 @@ import java.util.Map;
 @Service
 public class ProductQuoteServiceImpl implements ProductQuoteService {
 
-    /** 单次核价允许的最大菜品数量。 */
+    /**
+     * 单次核价允许的最大菜品数量。
+     */
     private static final int MAX_PRODUCTS_PER_QUOTE =
             ProductQuoteRequest.MAX_PRODUCT_IDS;
 
-    /** 启用状态值。 */
+    /**
+     * 启用状态值。
+     */
     private static final int ACTIVE_STATUS = 1;
 
-    /** 在售状态值。 */
+    /**
+     * 在售状态值。
+     */
     private static final int ON_SALE_STATUS = 1;
 
-    /** 与商品及订单明细 DECIMAL(10,2) 一致的最高可报价单价。 */
+    /**
+     * 与商品及订单明细 DECIMAL(10,2) 一致的最高可报价单价。
+     */
     private static final BigDecimal MAX_UNIT_PRICE = new BigDecimal("99999999.99");
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 分类数据 Mapper。 */
+    /**
+     * 分类数据 Mapper。
+     */
     private final ProductCategoryMapper productCategoryMapper;
 
-    /** 菜品数据 Mapper。 */
+    /**
+     * 菜品数据 Mapper。
+     */
     private final ProductMapper productMapper;
 
-    /** 商品布隆过滤器管理器。 */
+    /**
+     * 商品布隆过滤器管理器。
+     */
     private final ProductBloomFilterManager bloomFilterManager;
 
-    /** 当前启用规格的数据库读取能力，不使用可能过期的菜单缓存。 */
+    /**
+     * 当前启用规格的数据库读取能力，不使用可能过期的菜单缓存。
+     */
     private final ProductSpecificationService specifications;
 
     /**
      * 创建商品核价服务。
      *
-     * @param diningWindowMapper 窗口数据 Mapper
+     * @param diningWindowMapper    窗口数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
-     * @param productMapper 菜品数据 Mapper
-     * @param bloomFilterManager 商品布隆过滤器管理器
-     * @param specifications 规格批量查询服务
+     * @param productMapper         菜品数据 Mapper
+     * @param bloomFilterManager    商品布隆过滤器管理器
+     * @param specifications        规格批量查询服务
      */
     public ProductQuoteServiceImpl(
             DiningWindowMapper diningWindowMapper,
@@ -183,7 +196,7 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
      * 显示文字按规格组顺序生成，选择键仅由排序后的编号生成，输入顺序不会改变购物车身份。
      */
     private ProductQuoteVO quoteSelection(ProductDO product, List<Long> selectedIds,
-            List<ProductSpecificationGroupVO> configurations) {
+                                          List<ProductSpecificationGroupVO> configurations) {
         Set<Long> remaining = new HashSet<>(selectedIds);
         BigDecimal price = product.getPrice();
         List<String> descriptions = new ArrayList<>();
@@ -249,12 +262,16 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
         return items;
     }
 
-    /** 选择键为base或升序ID以短横线连接；不依赖请求顺序、组名或选项名称。 */
+    /**
+     * 选择键为base或升序ID以短横线连接；不依赖请求顺序、组名或选项名称。
+     */
     private String selectionKey(List<Long> ids) {
         return ids.isEmpty() ? "base" : ids.stream().sorted().map(String::valueOf).collect(Collectors.joining("-"));
     }
 
-    /** 核价信任边界校验失败统一返回400，不采纳任何客户端传入金额。 */
+    /**
+     * 核价信任边界校验失败统一返回400，不采纳任何客户端传入金额。
+     */
     private BusinessException badRequest(String message) {
         return new BusinessException(CommonErrorCode.BAD_REQUEST, message);
     }

@@ -29,17 +29,25 @@ import java.util.List;
 @Component
 public class ProductBloomFilterInitializer implements ApplicationRunner {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(ProductBloomFilterInitializer.class);
 
-    /** 商品布隆过滤器管理器。 */
+    /**
+     * 商品布隆过滤器管理器。
+     */
     private final ProductBloomFilterManager bloomFilterManager;
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 菜品数据 Mapper。 */
+    /**
+     * 菜品数据 Mapper。
+     */
     private final ProductMapper productMapper;
 
     /**
@@ -47,7 +55,7 @@ public class ProductBloomFilterInitializer implements ApplicationRunner {
      *
      * @param bloomFilterManager 商品布隆过滤器管理器
      * @param diningWindowMapper 窗口数据 Mapper
-     * @param productMapper 菜品数据 Mapper
+     * @param productMapper      菜品数据 Mapper
      */
     public ProductBloomFilterInitializer(
             ProductBloomFilterManager bloomFilterManager,

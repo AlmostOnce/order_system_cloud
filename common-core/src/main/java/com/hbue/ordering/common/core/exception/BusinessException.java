@@ -15,7 +15,9 @@ import java.util.Objects;
  */
 public class BusinessException extends RuntimeException {
 
-    /** 用于统一响应映射的业务错误码。 */
+    /**
+     * 用于统一响应映射的业务错误码。
+     */
     private final ErrorCode errorCode;
 
     /**
@@ -33,7 +35,7 @@ public class BusinessException extends RuntimeException {
      * 使用指定提示信息创建业务异常。
      *
      * @param errorCode 业务错误码，不能为空
-     * @param message 面向调用方的业务失败说明
+     * @param message   面向调用方的业务失败说明
      * @throws NullPointerException 当错误码为 null 时抛出
      */
     public BusinessException(ErrorCode errorCode, String message) {

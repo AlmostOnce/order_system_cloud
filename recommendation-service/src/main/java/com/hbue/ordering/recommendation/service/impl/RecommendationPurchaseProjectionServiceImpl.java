@@ -10,19 +10,24 @@ import com.hbue.ordering.recommendation.model.RecommendationOrderSnapshotDO;
 import com.hbue.ordering.recommendation.service.RecommendationPurchaseProjectionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.HashSet;
 import java.util.Set;
 
-/** 把订单服务支付和成功退款快照投影到推荐库，保持源明细及退款定位不丢失。 */
+/**
+ * 把订单服务支付和成功退款快照投影到推荐库，保持源明细及退款定位不丢失。
+ */
 @Service
 public class RecommendationPurchaseProjectionServiceImpl implements RecommendationPurchaseProjectionService {
     private final RecommendationOrderSnapshotMapper orders;
     private final RecommendationOrderItemMapper items;
     private final ObjectMapper json;
 
-    /** 注入本服务快照表与 JSON 解析器；方法事务确保头版本和所有明细一起提交。 */
+    /**
+     * 注入本服务快照表与 JSON 解析器；方法事务确保头版本和所有明细一起提交。
+     */
     public RecommendationPurchaseProjectionServiceImpl(RecommendationOrderSnapshotMapper orders,
-            RecommendationOrderItemMapper items, ObjectMapper json) {
+                                                       RecommendationOrderItemMapper items, ObjectMapper json) {
         this.orders = orders;
         this.items = items;
         this.json = json;
@@ -66,7 +71,9 @@ public class RecommendationPurchaseProjectionServiceImpl implements Recommendati
         }
     }
 
-    /** 校验服务端规格快照与选择键一致；坏消息不能产生伪口味标签或部分兴趣更新。 */
+    /**
+     * 校验服务端规格快照与选择键一致；坏消息不能产生伪口味标签或部分兴趣更新。
+     */
     private void validateItem(RecommendationPurchaseSnapshotEvent.Item item) {
         try {
             JsonNode root = json.readTree(item.specificationSelectionSnapshot());

@@ -12,7 +12,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.function.Consumer;
 
-/** 可靠发布已提交库存变更事件；Broker 故障时保留 outbox 并退避重试。 */
+/**
+ * 可靠发布已提交库存变更事件；Broker 故障时保留 outbox 并退避重试。
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "stock.messaging.enabled", havingValue = "true")
 public class StockEventPublisher {

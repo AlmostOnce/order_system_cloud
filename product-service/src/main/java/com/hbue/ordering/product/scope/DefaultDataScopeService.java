@@ -27,7 +27,7 @@ import java.util.Set;
  * 商品服务数据范围判定实现。
  *
  * <p>范围事实以 user-service 的内部查询结果为准，Redis 中的用户范围快照仅作短期缓存
- *（键 {@code authz:user-scope:{userId}}，TTL 300 秒）。缓存读取失败会回源查询，
+ * （键 {@code authz:user-scope:{userId}}，TTL 300 秒）。缓存读取失败会回源查询，
  * 写入缓存失败不影响本次判权；user-service 查询失败时按服务不可用拒绝继续操作，
  * 不会因范围信息缺失而放行。撤销范围时由 user-service 主动删除对应缓存键。</p>
  *
@@ -39,33 +39,45 @@ import java.util.Set;
 @Service
 public class DefaultDataScopeService implements DataScopeService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(DefaultDataScopeService.class);
 
-    /** 用户数据范围内部查询客户端。 */
+    /**
+     * 用户数据范围内部查询客户端。
+     */
     private final UserScopeInternalClient userScopeInternalClient;
 
-    /** Redis 基础操作服务。 */
+    /**
+     * Redis 基础操作服务。
+     */
     private final RedisOperationsService redisOperationsService;
 
-    /** JSON 序列化器，用于缓存范围快照。 */
+    /**
+     * JSON 序列化器，用于缓存范围快照。
+     */
     private final ObjectMapper objectMapper;
 
-    /** 窗口数据 Mapper，用于把档口换算为所属餐厅。 */
+    /**
+     * 窗口数据 Mapper，用于把档口换算为所属餐厅。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 服务间共享密钥。 */
+    /**
+     * 服务间共享密钥。
+     */
     private final String internalScopeToken;
 
     /**
      * 创建商品服务数据范围判定实现。
      *
      * @param userScopeInternalClient 用户数据范围内部查询客户端
-     * @param redisOperationsService Redis 基础操作服务
-     * @param objectMapper JSON 序列化器
-     * @param diningWindowMapper 窗口数据 Mapper
-     * @param internalScopeToken 服务间共享密钥
+     * @param redisOperationsService  Redis 基础操作服务
+     * @param objectMapper            JSON 序列化器
+     * @param diningWindowMapper      窗口数据 Mapper
+     * @param internalScopeToken      服务间共享密钥
      */
     public DefaultDataScopeService(
             UserScopeInternalClient userScopeInternalClient,
@@ -121,7 +133,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 校验用户是否有权操作指定档口，失败时抛出 403。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      */
     @Override
@@ -134,7 +146,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 校验用户是否有权操作指定餐厅，失败时抛出 403。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      */
     @Override
@@ -150,7 +162,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * <p>全平台或直接授权档口范围命中时无需再查档口归属；否则只有用户具备餐厅范围
      * 才继续读取档口所属餐厅并判断覆盖关系。档口不存在时返回无权，避免以缺失归属放行。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      * @return 有权时返回 true
      */
@@ -176,7 +188,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 判断用户是否有权操作指定餐厅。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      * @return 有权时返回 true
      */
@@ -212,7 +224,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * 把范围写入 Redis 缓存。
      *
      * @param cacheKey 缓存键
-     * @param scopeVO 范围事实
+     * @param scopeVO  范围事实
      */
     private void writeCache(String cacheKey, UserScopeVO scopeVO) {
         try {
@@ -231,7 +243,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * 把内部契约对象转换为范围快照。
      *
      * @param scopeVO 内部契约范围对象
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @return 范围快照
      */
     private UserScopeSnapshot toSnapshot(UserScopeVO scopeVO, Long userId) {

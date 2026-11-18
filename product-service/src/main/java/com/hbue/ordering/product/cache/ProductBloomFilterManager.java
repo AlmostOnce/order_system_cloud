@@ -20,16 +20,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductBloomFilterManager {
 
-    /** 窗口过滤器预期元素数量。 */
+    /**
+     * 窗口过滤器预期元素数量。
+     */
     private static final long WINDOW_EXPECTED_INSERTIONS = 1000L;
 
-    /** 菜品过滤器预期元素数量。 */
+    /**
+     * 菜品过滤器预期元素数量。
+     */
     private static final long PRODUCT_EXPECTED_INSERTIONS = 10000L;
 
-    /** 布隆过滤器预期误判率。 */
+    /**
+     * 布隆过滤器预期误判率。
+     */
     private static final double FALSE_PROBABILITY = 0.01D;
 
-    /** 布隆过滤器底层组件。 */
+    /**
+     * 布隆过滤器底层组件。
+     */
     private final RedisBloomFilterService redisBloomFilterService;
 
     /**

@@ -40,44 +40,64 @@ import java.util.Set;
 public class UserScopeAdministrationServiceImpl
         implements UserScopeAdministrationService {
 
-    /** 覆盖式授予的审计动作。 */
+    /**
+     * 覆盖式授予的审计动作。
+     */
     private static final String ACTION_SCOPE_REPLACE = "USER_SCOPE_REPLACE";
 
-    /** 撤销单条范围的审计动作。 */
+    /**
+     * 撤销单条范围的审计动作。
+     */
     private static final String ACTION_SCOPE_REVOKE = "USER_SCOPE_REVOKE";
 
-    /** 目标类型：用户。 */
+    /**
+     * 目标类型：用户。
+     */
     private static final String TARGET_TYPE_USER = "USER";
 
-    /** 目标类型：数据范围记录。 */
+    /**
+     * 目标类型：数据范围记录。
+     */
     private static final String TARGET_TYPE_SCOPE = "USER_SCOPE";
 
-    /** 全平台范围的引用值，按约定固定为 0。 */
+    /**
+     * 全平台范围的引用值，按约定固定为 0。
+     */
     private static final long PLATFORM_SCOPE_REF = 0L;
 
-    /** 用户数据范围业务服务。 */
+    /**
+     * 用户数据范围业务服务。
+     */
     private final UserDataScopeService userDataScopeService;
 
-    /** 用户业务服务，用于确认目标用户存在。 */
+    /**
+     * 用户业务服务，用于确认目标用户存在。
+     */
     private final UserService userService;
 
-    /** 档口与餐厅内部查询客户端。 */
+    /**
+     * 档口与餐厅内部查询客户端。
+     */
     private final WindowInternalClient windowInternalClient;
 
-    /** 管理操作审计记录器。 */
+    /**
+     * 管理操作审计记录器。
+     */
     private final ManagementAuditLogger auditLogger;
 
-    /** 服务间共享密钥。 */
+    /**
+     * 服务间共享密钥。
+     */
     private final String internalScopeToken;
 
     /**
      * 创建用户数据范围授予业务服务。
      *
      * @param userDataScopeService 用户数据范围业务服务
-     * @param userService 用户业务服务
+     * @param userService          用户业务服务
      * @param windowInternalClient 档口与餐厅内部查询客户端
-     * @param auditLogger 管理操作审计记录器
-     * @param internalScopeToken 服务间共享密钥
+     * @param auditLogger          管理操作审计记录器
+     * @param internalScopeToken   服务间共享密钥
      */
     public UserScopeAdministrationServiceImpl(
             UserDataScopeService userDataScopeService,
@@ -96,7 +116,7 @@ public class UserScopeAdministrationServiceImpl
     /**
      * 查询指定用户持有的全部数据范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @return 目标用户的数据范围列表
      */
@@ -115,9 +135,9 @@ public class UserScopeAdministrationServiceImpl
     /**
      * 覆盖式设置指定用户的数据范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param request 新的范围列表
+     * @param request      新的范围列表
      * @return 写入后的数据范围列表
      */
     @Override
@@ -179,9 +199,9 @@ public class UserScopeAdministrationServiceImpl
     /**
      * 撤销指定用户的一条数据范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param scopeId 范围记录 ID
+     * @param scopeId      范围记录 ID
      */
     @Override
     public void revokeScope(
@@ -236,9 +256,9 @@ public class UserScopeAdministrationServiceImpl
      * 根据请求构建一条数据范围，并校验其落在授予者的可授范围内。
      *
      * @param operatorScopes 授予者的范围快照
-     * @param item 请求中的范围条目
-     * @param targetUserId 目标用户 ID
-     * @param now 写入时间
+     * @param item           请求中的范围条目
+     * @param targetUserId   目标用户 ID
+     * @param now            写入时间
      * @return 数据范围持久化对象
      */
     private UserDataScopeDO buildScope(
@@ -273,8 +293,8 @@ public class UserScopeAdministrationServiceImpl
      * 解析并校验范围引用，同时确认授予者具备该范围。
      *
      * @param operatorScopes 授予者的范围快照
-     * @param scopeType 范围类型
-     * @param scopeRef 请求中的范围引用
+     * @param scopeType      范围类型
+     * @param scopeRef       请求中的范围引用
      * @return 规范化后的范围引用
      */
     private long resolveScopeRef(
@@ -326,7 +346,7 @@ public class UserScopeAdministrationServiceImpl
      * 校验待撤销的范围仍在授予者的可授范围内。
      *
      * @param operatorScopes 授予者的范围快照
-     * @param scope 待撤销的范围记录
+     * @param scope          待撤销的范围记录
      */
     private void requireWithinOperatorScope(
             UserScopeSnapshot operatorScopes,
@@ -405,7 +425,7 @@ public class UserScopeAdministrationServiceImpl
      * 解包内部接口响应，失败时统一按服务不可用处理。
      *
      * @param response 内部接口响应
-     * @param <T> 数据类型
+     * @param <T>      数据类型
      * @return 响应数据；成功但对象不存在时返回 null
      */
     private <T> T unwrap(ApiResponse<T> response) {
@@ -452,7 +472,7 @@ public class UserScopeAdministrationServiceImpl
     /**
      * 拒绝对自己授予或撤销范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
      */
     private void rejectSelfOperation(Long operatorId, Long targetUserId) {

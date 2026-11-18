@@ -1,6 +1,6 @@
 server:
   # 避开现有业务服务端口；端口仅用于本地开发，部署时可由运行配置覆盖。
-  port: 9112
+  port: 9113
 
 spring:
   profiles:

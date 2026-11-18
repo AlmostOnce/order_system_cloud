@@ -23,7 +23,9 @@ import org.springframework.stereotype.Component;
 public class WindowInternalClientFallbackFactory
         implements FallbackFactory<WindowInternalClient> {
 
-    /** 降级日志记录器。 */
+    /**
+     * 降级日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(
             WindowInternalClientFallbackFactory.class
     );

@@ -13,14 +13,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-/** 验证登录标识、密码和新注册账户号，不依赖远程服务。 */
+/**
+ * 验证登录标识、密码和新注册账户号，不依赖远程服务。
+ */
 class UserAccountLoginTest {
     private final UserMapper mapper = mock(UserMapper.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
-    private final com.hbue.ordering.user.service.EmailOwnershipService ownership=mock(com.hbue.ordering.user.service.EmailOwnershipService.class);
+    private final com.hbue.ordering.user.service.EmailOwnershipService ownership = mock(com.hbue.ordering.user.service.EmailOwnershipService.class);
     private final UserServiceImpl service = new UserServiceImpl(passwords,
             mock(UserDataScopeService.class), mock(ManagementAuditLogger.class),
             mock(com.hbue.ordering.user.service.EmailVerification.class), ownership);
@@ -32,17 +35,21 @@ class UserAccountLoginTest {
     @Test
     void shouldAuthenticateNumberAndNormalizedEmailWithPassword() {
         UserDO user = new UserDO();
-        user.setUserNo("1234567890"); user.setStatus(1); user.setPasswordHash("hash");
+        user.setUserNo("1234567890");
+        user.setStatus(1);
+        user.setPasswordHash("hash");
         when(mapper.selectByAccountForLogin(anyString())).thenReturn(user);
         when(passwords.matches("password", "hash")).thenReturn(true);
         for (String account : new String[]{"1234567890", " USER@Example.com "}) {
             UserPasswordVerifyCommand command = new UserPasswordVerifyCommand();
-            command.setAccount(account); command.setPassword("password");
+            command.setAccount(account);
+            command.setPassword("password");
             assertEquals("1234567890", service.authenticate(command).getUserNo());
         }
         verify(mapper).selectByAccountForLogin("user@example.com");
         UserPasswordVerifyCommand wrong = new UserPasswordVerifyCommand();
-        wrong.setAccount("1234567890"); wrong.setPassword("incorrect");
+        wrong.setAccount("1234567890");
+        wrong.setPassword("incorrect");
         assertThrows(BusinessException.class, () -> service.authenticate(wrong));
     }
 
@@ -52,7 +59,9 @@ class UserAccountLoginTest {
         when(mapper.selectIdByUserNo(anyString())).thenReturn(null);
         UserRegisterCommand command = new UserRegisterCommand();
         command.setEmailVerificationToken("a".repeat(64));
-        command.setUsername("校园用户"); command.setEmail(" USER@Example.com "); command.setPassword("password");
+        command.setUsername("校园用户");
+        command.setEmail(" USER@Example.com ");
+        command.setPassword("password");
         when(passwords.encode("password")).thenReturn("hash");
         when(mapper.insert(any(UserDO.class))).thenReturn(1);
         var result = service.register(command);
@@ -65,11 +74,17 @@ class UserAccountLoginTest {
         assertTrue(result.isEmailVerified());
     }
 
-    @Test void invalidRegistrationProofCannotCreateAccountOrHashPassword() {
-        var command=new UserRegisterCommand();command.setUsername("校园用户");command.setEmail("user@example.com");command.setPassword("password");command.setEmailVerificationToken("a".repeat(64));
-        doThrow(new BusinessException(com.hbue.ordering.common.core.error.CommonErrorCode.BAD_REQUEST,"验证凭据无效"))
-                .when(ownership).consumeRegistration("user@example.com","a".repeat(64));
-        assertThrows(BusinessException.class,()->service.register(command));
-        verify(mapper,never()).insert(any(UserDO.class));verifyNoInteractions(passwords);
+    @Test
+    void invalidRegistrationProofCannotCreateAccountOrHashPassword() {
+        var command = new UserRegisterCommand();
+        command.setUsername("校园用户");
+        command.setEmail("user@example.com");
+        command.setPassword("password");
+        command.setEmailVerificationToken("a".repeat(64));
+        doThrow(new BusinessException(com.hbue.ordering.common.core.error.CommonErrorCode.BAD_REQUEST, "验证凭据无效"))
+                .when(ownership).consumeRegistration("user@example.com", "a".repeat(64));
+        assertThrows(BusinessException.class, () -> service.register(command));
+        verify(mapper, never()).insert(any(UserDO.class));
+        verifyNoInteractions(passwords);
     }
 }

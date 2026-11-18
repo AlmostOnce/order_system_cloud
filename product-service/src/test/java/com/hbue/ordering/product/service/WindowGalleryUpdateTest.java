@@ -10,15 +10,20 @@ import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.service.impl.ProductAdministrationServiceImpl;
 import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.*;
 
-/** 普通资料与独立图片保存的并发边界回归：省略图片字段必须真正不更新对应列。 */
+/**
+ * 普通资料与独立图片保存的并发边界回归：省略图片字段必须真正不更新对应列。
+ */
 class WindowGalleryUpdateTest {
-    @Test void omittedImageFieldsCannotOverwriteConcurrentGallery() {
+    @Test
+    void omittedImageFieldsCannotOverwriteConcurrentGallery() {
         DiningWindowMapper mapper = mock(DiningWindowMapper.class);
         DiningWindowDO window = new DiningWindowDO();
-        window.setWindowId(9L); window.setImageFileKeys("[]");
+        window.setWindowId(9L);
+        window.setImageFileKeys("[]");
         when(mapper.selectById(9L)).thenReturn(window);
         doAnswer(call -> {
             UpdateWrapper<?> update = call.getArgument(1);
@@ -30,7 +35,8 @@ class WindowGalleryUpdateTest {
                 mock(DataScopeService.class), mock(ProductMenuCacheService.class),
                 mock(ProductBloomFilterManager.class), null, mock(ProductSearchOutboxWriter.class));
         WindowSaveRequest request = new WindowSaveRequest();
-        request.setRestaurantId(1L); request.setWindowName("更新名称");
+        request.setRestaurantId(1L);
+        request.setWindowName("更新名称");
         service.updateWindow(7L, 9L, request);
         verify(mapper).update(isNull(), any(UpdateWrapper.class));
     }

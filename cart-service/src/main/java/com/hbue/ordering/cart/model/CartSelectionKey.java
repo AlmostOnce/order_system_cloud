@@ -8,9 +8,13 @@ import java.util.List;
  * 因此只能接受商品服务生成的升序正整数编号，不能按规格名称拼接。
  */
 public final class CartSelectionKey {
-    /** 无规格菜品固定使用的键，保持原 Redis Hash Field 不变。 */
+    /**
+     * 无规格菜品固定使用的键，保持原 Redis Hash Field 不变。
+     */
     public static final String BASE = "base";
-    /** 每道菜最多10个单选规格组，因此一个键最多有10个选项编号。 */
+    /**
+     * 每道菜最多10个单选规格组，因此一个键最多有10个选项编号。
+     */
     private static final int MAX_OPTION_COUNT = 10;
 
     private CartSelectionKey() {
@@ -88,7 +92,7 @@ public final class CartSelectionKey {
     /**
      * 生成本用户 Hash 内单个菜品规格行的稳定身份。
      *
-     * @param productId 菜品编号
+     * @param productId    菜品编号
      * @param selectionKey 规格键
      * @return 菜品与规格组合身份
      */

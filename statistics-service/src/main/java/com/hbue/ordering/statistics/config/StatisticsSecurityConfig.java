@@ -11,12 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -35,7 +30,9 @@ import java.util.Objects;
 @Configuration
 @EnableMethodSecurity
 public class StatisticsSecurityConfig {
-    /** 无状态过滤链只开放健康检查、接口文档和带登录态的统计接口，其余路径默认拒绝。 */
+    /**
+     * 无状态过滤链只开放健康检查、接口文档和带登录态的统计接口，其余路径默认拒绝。
+     */
     @Bean
     SecurityFilterChain statisticsSecurity(HttpSecurity http, JwtAuthenticationConverter converter,
                                            StatisticsSecurityErrorHandler errors) throws Exception {
@@ -54,7 +51,9 @@ public class StatisticsSecurityConfig {
                 .build();
     }
 
-    /** 把 JWT 的 roles 声明映射为 Spring Security 的 ROLE_*，与其他用户端服务一致。 */
+    /**
+     * 把 JWT 的 roles 声明映射为 Spring Security 的 ROLE_*，与其他用户端服务一致。
+     */
     @Bean
     JwtAuthenticationConverter statisticsJwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
@@ -65,7 +64,9 @@ public class StatisticsSecurityConfig {
         return converter;
     }
 
-    /** 验签后再检查 jti 黑名单；任何 Redis 访问故障按无效令牌处理。 */
+    /**
+     * 验签后再检查 jti 黑名单；任何 Redis 访问故障按无效令牌处理。
+     */
     @Bean
     JwtDecoder statisticsJwtDecoder(ResourceLoader resources,
                                     @Value("${security.jwt.public-key-location}") String keyLocation,
@@ -80,7 +81,8 @@ public class StatisticsSecurityConfig {
                 Jwt verified = decoder.decode(token);
                 if (verified.getId() == null || verified.getId().isBlank()) throw invalidToken("访问令牌缺少 jti 声明");
                 try {
-                    if (!Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + verified.getId()))) throw invalidToken("访问令牌已注销或状态无法确认");
+                    if (!Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + verified.getId())))
+                        throw invalidToken("访问令牌已注销或状态无法确认");
                 } catch (JwtException exception) {
                     throw exception;
                 } catch (RuntimeException exception) {
@@ -93,7 +95,9 @@ public class StatisticsSecurityConfig {
         }
     }
 
-    /** 使用标准 OAuth 错误码表示令牌无效，避免把黑名单存储细节泄露给客户端。 */
+    /**
+     * 使用标准 OAuth 错误码表示令牌无效，避免把黑名单存储细节泄露给客户端。
+     */
     private JwtValidationException invalidToken(String description) {
         OAuth2Error error = new OAuth2Error("invalid_token", description, null);
         return new JwtValidationException(description, List.of(error));

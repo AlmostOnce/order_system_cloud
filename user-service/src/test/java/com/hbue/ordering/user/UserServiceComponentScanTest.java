@@ -2,12 +2,12 @@ package com.hbue.ordering.user;
 
 import com.hbue.ordering.common.web.handler.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.beans.factory.config.BeanDefinition;
 
 import java.util.Set;
 

@@ -8,23 +8,29 @@ import com.hbue.ordering.recommendation.service.RecommendationPopularityService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** 通过统计服务内部接口复用累计销量口径，并把有效响应写入推荐库。 */
+/**
+ * 通过统计服务内部接口复用累计销量口径，并把有效响应写入推荐库。
+ */
 @Service
 public class RecommendationPopularityServiceImpl implements RecommendationPopularityService {
     private final RecommendationStatisticsClient statistics;
     private final RecommendationHotSalesWriter writer;
     private final String internalToken;
 
-    /** 注入统计服务契约和本地原子榜单写入器。 */
+    /**
+     * 注入统计服务契约和本地原子榜单写入器。
+     */
     public RecommendationPopularityServiceImpl(RecommendationStatisticsClient statistics,
-            RecommendationHotSalesWriter writer,
-            @Value("${internal.scope.token:}") String internalToken) {
+                                               RecommendationHotSalesWriter writer,
+                                               @Value("${internal.scope.token:}") String internalToken) {
         this.statistics = statistics;
         this.writer = writer;
         this.internalToken = internalToken;
     }
 
-    /** 仅标准成功响应可替换本地榜单；依赖故障由定时任务捕获并保留旧榜。 */
+    /**
+     * 仅标准成功响应可替换本地榜单；依赖故障由定时任务捕获并保留旧榜。
+     */
     @Override
     public void refresh() {
         ApiResponse<RecommendationStatisticsClient.Ranking> response = statistics.ranking(internalToken, 50);

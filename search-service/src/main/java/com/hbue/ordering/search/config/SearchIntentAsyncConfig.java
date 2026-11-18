@@ -6,7 +6,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.ThreadPoolExecutor;
 
-/** 搜索意图是允许丢失的弱信号；线程和队列都有限，不能让推荐故障耗尽搜索请求资源。 */
+/**
+ * 搜索意图是允许丢失的弱信号；线程和队列都有限，不能让推荐故障耗尽搜索请求资源。
+ */
 @Configuration
 public class SearchIntentAsyncConfig {
 

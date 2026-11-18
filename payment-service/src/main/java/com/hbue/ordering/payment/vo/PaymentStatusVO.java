@@ -17,34 +17,54 @@ import java.time.LocalDateTime;
 @Builder
 public class PaymentStatusVO {
 
-    /** 支付单 ID。 */
+    /**
+     * 支付单 ID。
+     */
     private Long paymentId;
 
-    /** 业务支付单号。 */
+    /**
+     * 业务支付单号。
+     */
     private String paymentNo;
 
-    /** 订单 ID。 */
+    /**
+     * 订单 ID。
+     */
     private Long orderId;
 
-    /** 订单号快照。 */
+    /**
+     * 订单号快照。
+     */
     private String orderNo;
 
-    /** 应付金额。 */
+    /**
+     * 应付金额。
+     */
     private BigDecimal amount;
 
-    /** 实收金额。 */
+    /**
+     * 实收金额。
+     */
     private BigDecimal paidAmount;
 
-    /** 支付单状态。 */
+    /**
+     * 支付单状态。
+     */
     private String status;
 
-    /** 渠道交易号。 */
+    /**
+     * 渠道交易号。
+     */
     private String channelTradeNo;
 
-    /** 支付成功时间。 */
+    /**
+     * 支付成功时间。
+     */
     private LocalDateTime successTime;
 
-    /** 失败原因或异常备注。 */
+    /**
+     * 失败原因或异常备注。
+     */
     private String failReason;
 
     /**

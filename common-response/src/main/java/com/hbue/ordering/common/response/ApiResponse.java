@@ -38,9 +38,9 @@ public final class ApiResponse<T> {
     /**
      * 创建统一响应对象。
      *
-     * @param code 业务状态码
+     * @param code    业务状态码
      * @param message 返回提示信息
-     * @param data 实际业务数据
+     * @param data    实际业务数据
      */
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public ApiResponse(
@@ -57,7 +57,7 @@ public final class ApiResponse<T> {
      * 创建成功响应。
      *
      * @param data 成功数据
-     * @param <T> 数据类型
+     * @param <T>  数据类型
      * @return 成功响应
      */
     public static <T> ApiResponse<T> success(T data) {
@@ -73,7 +73,7 @@ public final class ApiResponse<T> {
      * 创建失败响应。
      *
      * @param errorCode 错误码
-     * @param <T> 数据类型
+     * @param <T>       数据类型
      * @return 失败响应
      * @throws NullPointerException 当错误码为 null 时抛出
      */
@@ -96,8 +96,8 @@ public final class ApiResponse<T> {
      * 创建带自定义提示信息的失败响应。
      *
      * @param errorCode 错误码
-     * @param message 自定义错误信息
-     * @param <T> 数据类型
+     * @param message   自定义错误信息
+     * @param <T>       数据类型
      * @return 失败响应
      * @throws NullPointerException 当错误码为 null 时抛出
      */

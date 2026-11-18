@@ -3,10 +3,10 @@ package com.hbue.ordering.product.service;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.product.service.impl.ProductStockServiceImpl;
 import com.hbue.ordering.product.vo.MenuProductVO;
 import com.hbue.ordering.product.vo.ProductStockVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
-import com.hbue.ordering.product.service.impl.ProductStockServiceImpl;
 import com.hbue.ordering.stock.api.client.StockServiceClient;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import org.junit.jupiter.api.Test;
@@ -18,14 +18,14 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductStockServiceTest {
-    @Mock private ProductMenuService menuService;
-    @Mock private StockServiceClient stockClient;
+    @Mock
+    private ProductMenuService menuService;
+    @Mock
+    private StockServiceClient stockClient;
 
     @Test
     void shouldReturnOnlyVisibleProductsAndDistinguishMissingFromSoldOut() {

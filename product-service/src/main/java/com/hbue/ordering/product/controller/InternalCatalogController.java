@@ -9,11 +9,7 @@ import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 档口与餐厅内部查询接口。
@@ -30,21 +26,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal")
 public class InternalCatalogController {
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
     private final com.hbue.ordering.product.service.WindowCatalogService windowCatalog;
 
-    /** 餐厅数据 Mapper。 */
+    /**
+     * 餐厅数据 Mapper。
+     */
     private final RestaurantMapper restaurantMapper;
 
-    /** 内部调用共享密钥校验器。 */
+    /**
+     * 内部调用共享密钥校验器。
+     */
     private final InternalScopeTokenVerifier internalScopeTokenVerifier;
 
     /**
      * 创建档口与餐厅内部查询接口。
      *
-     * @param diningWindowMapper 窗口数据 Mapper
-     * @param restaurantMapper 餐厅数据 Mapper
+     * @param diningWindowMapper         窗口数据 Mapper
+     * @param restaurantMapper           餐厅数据 Mapper
      * @param internalScopeTokenVerifier 内部调用共享密钥校验器
      */
     public InternalCatalogController(
@@ -59,7 +61,9 @@ public class InternalCatalogController {
         this.internalScopeTokenVerifier = internalScopeTokenVerifier;
     }
 
-    /** 批量读取订单展示所需的店铺名称；校验内部凭据后交给目录服务。 */
+    /**
+     * 批量读取订单展示所需的店铺名称；校验内部凭据后交给目录服务。
+     */
     @GetMapping("/windows/names")
     public ApiResponse<java.util.Map<Long, String>> windowNames(
             @org.springframework.web.bind.annotation.RequestParam("windowIds") java.util.List<Long> ids,
@@ -71,7 +75,7 @@ public class InternalCatalogController {
     /**
      * 查询档口基本信息。
      *
-     * @param windowId 档口 ID
+     * @param windowId      档口 ID
      * @param internalToken 服务间共享密钥
      * @return 档口信息；档口不存在时 data 为 null
      */
@@ -98,7 +102,7 @@ public class InternalCatalogController {
     /**
      * 查询餐厅基本信息。
      *
-     * @param restaurantId 餐厅 ID
+     * @param restaurantId  餐厅 ID
      * @param internalToken 服务间共享密钥
      * @return 餐厅信息；餐厅不存在时 data 为 null
      */

@@ -28,11 +28,11 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
      * @return 支付单；不存在时返回 null
      */
     @Select("""
-        SELECT *
-        FROM payments
-        WHERE payment_no = #{paymentNo}
-        LIMIT 1
-        """)
+            SELECT *
+            FROM payments
+            WHERE payment_no = #{paymentNo}
+            LIMIT 1
+            """)
     PaymentDO selectByPaymentNo(
             @Param("paymentNo") String paymentNo
     );
@@ -44,12 +44,12 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
      * @return 进行中的支付单；不存在时返回 null
      */
     @Select("""
-        SELECT *
-        FROM payments
-        WHERE order_id = #{orderId}
-          AND status = 'CREATED'
-        LIMIT 1
-        """)
+            SELECT *
+            FROM payments
+            WHERE order_id = #{orderId}
+              AND status = 'CREATED'
+            LIMIT 1
+            """)
     PaymentDO selectActiveByOrderId(
             @Param("orderId") Long orderId
     );
@@ -61,12 +61,12 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
      * @return 最近的支付单；不存在时返回 null
      */
     @Select("""
-        SELECT *
-        FROM payments
-        WHERE order_id = #{orderId}
-        ORDER BY payment_id DESC
-        LIMIT 1
-        """)
+            SELECT *
+            FROM payments
+            WHERE order_id = #{orderId}
+            ORDER BY payment_id DESC
+            LIMIT 1
+            """)
     PaymentDO selectLatestByOrderId(
             @Param("orderId") Long orderId
     );
@@ -78,11 +78,11 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
      * @return 更新行数
      */
     @Update("""
-        UPDATE payments
-        SET notify_count = notify_count + 1,
-            last_notify_at = CURRENT_TIMESTAMP
-        WHERE payment_no = #{paymentNo}
-        """)
+            UPDATE payments
+            SET notify_count = notify_count + 1,
+                last_notify_at = CURRENT_TIMESTAMP
+            WHERE payment_no = #{paymentNo}
+            """)
     int touchNotify(
             @Param("paymentNo") String paymentNo
     );
@@ -93,21 +93,21 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
      * <p>更新行数为 0 说明并发回调已有赢家或支付单已终态，
      * 调用方必须回读状态判断，不得重复推进订单。</p>
      *
-     * @param paymentNo 业务支付单号
-     * @param paidAmount 实收金额
+     * @param paymentNo      业务支付单号
+     * @param paidAmount     实收金额
      * @param channelTradeNo 渠道交易号
      * @return 更新行数；条件不满足时返回 0
      */
     @Update("""
-        UPDATE payments
-        SET status = 'SUCCESS',
-            paid_amount = #{paidAmount},
-            channel_trade_no = #{channelTradeNo},
-            success_time = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE payment_no = #{paymentNo}
-          AND status = 'CREATED'
-        """)
+            UPDATE payments
+            SET status = 'SUCCESS',
+                paid_amount = #{paidAmount},
+                channel_trade_no = #{channelTradeNo},
+                success_time = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE payment_no = #{paymentNo}
+              AND status = 'CREATED'
+            """)
     int markSuccessIfCreated(
             @Param("paymentNo") String paymentNo,
             @Param("paidAmount") BigDecimal paidAmount,
@@ -117,18 +117,18 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
     /**
      * 仅当支付单仍为 CREATED 时标记支付失败。
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo  业务支付单号
      * @param failReason 失败原因
      * @return 更新行数；条件不满足时返回 0
      */
     @Update("""
-        UPDATE payments
-        SET status = 'FAILED',
-            fail_reason = #{failReason},
-            updated_at = CURRENT_TIMESTAMP
-        WHERE payment_no = #{paymentNo}
-          AND status = 'CREATED'
-        """)
+            UPDATE payments
+            SET status = 'FAILED',
+                fail_reason = #{failReason},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE payment_no = #{paymentNo}
+              AND status = 'CREATED'
+            """)
     int markFailedIfCreated(
             @Param("paymentNo") String paymentNo,
             @Param("failReason") String failReason
@@ -136,8 +136,10 @@ public interface PaymentMapper extends BaseMapper<PaymentDO> {
 
     @Select("SELECT * FROM payments WHERE order_id=#{id} ORDER BY payment_id")
     java.util.List<PaymentDO> selectAllByOrderId(@Param("id") Long id);
+
     @Update("UPDATE payments SET status='CLOSED',updated_at=CURRENT_TIMESTAMP WHERE payment_no=#{no} AND status='CREATED'")
     int closeIfCreated(@Param("no") String no);
+
     @Select("SELECT * FROM payments WHERE order_id=#{id} AND status='SUCCESS' ORDER BY payment_id LIMIT 1")
     PaymentDO selectSuccessByOrderId(@Param("id") Long id);
 }

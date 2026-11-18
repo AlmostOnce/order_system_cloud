@@ -19,7 +19,9 @@ public class PaymentCloseInternalController {
     private final PaymentService payments;
     private final InternalScopeTokenVerifier tokens;
 
-    /** 注入关单业务服务和共享密钥校验器；本 Controller 不实现支付状态迁移本身。 */
+    /**
+     * 注入关单业务服务和共享密钥校验器；本 Controller 不实现支付状态迁移本身。
+     */
     public PaymentCloseInternalController(PaymentService payments, InternalScopeTokenVerifier tokens) {
         this.payments = payments;
         this.tokens = tokens;
@@ -29,7 +31,7 @@ public class PaymentCloseInternalController {
      * 关闭指定订单的进行中支付单并返回关单竞争后的真实支付结论。
      *
      * @param orderId 目标订单主键，必须为正数
-     * @param token 订单服务携带的内部共享令牌
+     * @param token   订单服务携带的内部共享令牌
      * @return PAID 与成功时间，或 CLOSED 与空成功时间
      */
     @PostMapping("/{orderId}/close")

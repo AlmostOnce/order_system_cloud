@@ -45,8 +45,8 @@ public class OrderAccessDeniedHandler
     /**
      * 处理无权限请求。
      *
-     * @param request HTTP 请求
-     * @param response HTTP 响应
+     * @param request               HTTP 请求
+     * @param response              HTTP 响应
      * @param accessDeniedException 无权限异常
      * @throws IOException 响应写入异常
      */

@@ -12,9 +12,14 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "排行榜")
 public class SalesRankingController {
     private final StatisticsRankingClient statistics;
-    public SalesRankingController(StatisticsRankingClient statistics) { this.statistics = statistics; }
 
-    /** 登录用户查询全站菜品销量，不返回任何订单和用户信息。 */
+    public SalesRankingController(StatisticsRankingClient statistics) {
+        this.statistics = statistics;
+    }
+
+    /**
+     * 登录用户查询全站菜品销量，不返回任何订单和用户信息。
+     */
     @GetMapping("/sales")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<SalesRankingVO> sales(

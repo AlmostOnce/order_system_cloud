@@ -6,17 +6,22 @@ import com.hbue.ordering.recommendation.model.RecommendationHotProductDO;
 import com.hbue.ordering.recommendation.service.RecommendationHotSalesWriter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** 原子替换统计服务销量榜本地投影，源端故障不会清空上次可用榜单。 */
+/**
+ * 原子替换统计服务销量榜本地投影，源端故障不会清空上次可用榜单。
+ */
 @Service
 public class RecommendationHotSalesWriterImpl implements RecommendationHotSalesWriter {
     private final RecommendationHotProductMapper hotProducts;
 
-    /** 注入推荐库热门读模型 Mapper。 */
+    /**
+     * 注入推荐库热门读模型 Mapper。
+     */
     public RecommendationHotSalesWriterImpl(RecommendationHotProductMapper hotProducts) {
         this.hotProducts = hotProducts;
     }

@@ -10,12 +10,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 支付服务顾客接口。
@@ -31,7 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/payments")
 public class PaymentController {
 
-    /** 支付业务服务。 */
+    /**
+     * 支付业务服务。
+     */
     private final PaymentService paymentService;
 
     /**
@@ -46,7 +43,7 @@ public class PaymentController {
     /**
      * 为待支付订单创建支付单。
      *
-     * @param jwt 当前登录顾客 JWT
+     * @param jwt     当前登录顾客 JWT
      * @param request 创建支付单请求
      * @return 支付单创建结果
      * @throws NumberFormatException JWT subject 不是数值格式时抛出
@@ -66,7 +63,7 @@ public class PaymentController {
     /**
      * 查询支付单状态。
      *
-     * @param jwt 当前登录顾客 JWT
+     * @param jwt       当前登录顾客 JWT
      * @param paymentId 支付单 ID
      * @return 支付单状态
      * @throws NumberFormatException JWT subject 不是数值格式时抛出
@@ -86,7 +83,7 @@ public class PaymentController {
     /**
      * 按订单查询最近一笔支付单（前端轮询用）。
      *
-     * @param jwt 当前登录顾客 JWT
+     * @param jwt     当前登录顾客 JWT
      * @param orderId 订单 ID
      * @return 支付单状态
      * @throws NumberFormatException JWT subject 不是数值格式时抛出

@@ -1,14 +1,12 @@
 package com.hbue.ordering.stock.messaging;
 
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.*;
 
 import java.util.List;
 
-/** 库存事件 outbox 持久化与 Seata 全局事务结果门控。 */
+/**
+ * 库存事件 outbox 持久化与 Seata 全局事务结果门控。
+ */
 @Mapper
 public interface StockEventOutboxMapper {
 

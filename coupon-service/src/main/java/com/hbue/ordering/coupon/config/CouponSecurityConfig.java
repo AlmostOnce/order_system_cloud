@@ -1,7 +1,7 @@
 package com.hbue.ordering.coupon.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.coupon.security.CouponAccessDeniedHandler;
 import com.hbue.ordering.coupon.security.CouponAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,12 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -42,17 +37,21 @@ import java.util.Objects;
 @EnableMethodSecurity
 public class CouponSecurityConfig {
 
-    /** 未认证请求处理器。 */
+    /**
+     * 未认证请求处理器。
+     */
     private final CouponAuthenticationEntryPoint authenticationEntryPoint;
 
-    /** 无权限请求处理器。 */
+    /**
+     * 无权限请求处理器。
+     */
     private final CouponAccessDeniedHandler accessDeniedHandler;
 
     /**
      * 创建优惠券服务安全配置。
      *
      * @param authenticationEntryPoint 未认证请求处理器
-     * @param accessDeniedHandler 无权限请求处理器
+     * @param accessDeniedHandler      无权限请求处理器
      */
     public CouponSecurityConfig(
             CouponAuthenticationEntryPoint authenticationEntryPoint,
@@ -117,11 +116,11 @@ public class CouponSecurityConfig {
     /**
      * 创建校验签名、签发方、有效期和 Redis 黑名单的 JWT 解码器。
      *
-     * @param resourceLoader Spring 资源加载器
-     * @param publicKeyLocation RSA 公钥资源位置
-     * @param issuer JWT 签发方
+     * @param resourceLoader         Spring 资源加载器
+     * @param publicKeyLocation      RSA 公钥资源位置
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      */
     @Bean
@@ -158,10 +157,10 @@ public class CouponSecurityConfig {
     /**
      * 解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过校验的 JWT
      */
     private Jwt decodeAndCheckBlacklist(

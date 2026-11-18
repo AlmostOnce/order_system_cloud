@@ -16,21 +16,31 @@ import lombok.Data;
 @Data
 public class ChannelNotifyRequest {
 
-    /** 业务支付单号。 */
+    /**
+     * 业务支付单号。
+     */
     @NotBlank
     private String paymentNo;
 
-    /** 渠道交易号。 */
+    /**
+     * 渠道交易号。
+     */
     private String channelTradeNo;
 
-    /** 实收金额原串。 */
+    /**
+     * 实收金额原串。
+     */
     @NotBlank
     private String paidAmount;
 
-    /** 通知结果：SUCCESS 或 FAILED。 */
+    /**
+     * 通知结果：SUCCESS 或 FAILED。
+     */
     @NotBlank
     private String status;
 
-    /** 渠道侧时间戳（毫秒），参与签名并用于防重放窗口校验。 */
+    /**
+     * 渠道侧时间戳（毫秒），参与签名并用于防重放窗口校验。
+     */
     private Long timestamp;
 }

@@ -15,14 +15,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-/** 聚合菜单可售菜品与库存，不把动态库存写进菜单缓存。 */
+/**
+ * 聚合菜单可售菜品与库存，不把动态库存写进菜单缓存。
+ */
 @Service
 public class ProductStockServiceImpl implements ProductStockService {
     private static final Logger log = LoggerFactory.getLogger(ProductStockServiceImpl.class);

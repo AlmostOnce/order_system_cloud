@@ -8,13 +8,17 @@ import com.hbue.ordering.comment.service.impl.WindowReviewServiceImpl;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.order.api.vo.OrderReviewSnapshotVO;
-import java.util.List;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class WindowReviewServiceTest {
-    @Test void ratingOnlyAllowsOmittedTextImagesAndTags() {
+    @Test
+    void ratingOnlyAllowsOmittedTextImagesAndTags() {
         var rows = mock(WindowReviewMapper.class);
         var orders = mock(CommentOrderClient.class);
         when(orders.getOrder(7L, "Bearer signed")).thenReturn(ApiResponse.success(

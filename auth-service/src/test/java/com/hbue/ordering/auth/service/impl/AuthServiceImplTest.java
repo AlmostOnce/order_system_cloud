@@ -3,12 +3,7 @@ package com.hbue.ordering.auth.service.impl;
 import com.hbue.ordering.auth.dto.request.LoginRequest;
 import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
-import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
-import com.hbue.ordering.auth.service.CaptchaService;
-import com.hbue.ordering.auth.service.JwtTokenService;
-import com.hbue.ordering.auth.service.LoginAttemptService;
-import com.hbue.ordering.auth.service.RefreshTokenLockService;
-import com.hbue.ordering.auth.service.RefreshTokenService;
+import com.hbue.ordering.auth.service.*;
 import com.hbue.ordering.auth.vo.LoginVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -22,16 +17,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 认证业务服务测试。
@@ -276,7 +264,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 accessTokenBlacklistService,
                 new RefreshTokenLockService(redissonClient)
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
 
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("old-refresh-token");
@@ -350,7 +338,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 accessTokenBlacklistService,
                 refreshTokenLockService
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("old-refresh-token");
 
@@ -395,7 +383,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 accessTokenBlacklistService,
                 mock(RefreshTokenLockService.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("refresh-token");
         Jwt accessToken = createAccessToken("5", "jti-5", expiresAt);
@@ -439,7 +427,7 @@ class AuthServiceImplTest {
                 refreshTokenService,
                 accessTokenBlacklistService,
                 mock(RefreshTokenLockService.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("other-refresh-token");
 
@@ -469,8 +457,8 @@ class AuthServiceImplTest {
     /**
      * 创建含有用户 ID、jti 和有效期的访问令牌测试对象。
      *
-     * @param userId JWT subject
-     * @param tokenId JWT jti
+     * @param userId    JWT subject
+     * @param tokenId   JWT jti
      * @param expiresAt JWT 过期时间
      * @return 测试用 JWT
      */
@@ -508,7 +496,7 @@ class AuthServiceImplTest {
     /**
      * 创建可注入指定登录失败保护行为的认证服务测试对象。
      *
-     * @param userServiceClient 用户服务远程调用客户端
+     * @param userServiceClient   用户服务远程调用客户端
      * @param loginAttemptService 登录失败保护服务测试替身
      * @return 认证业务服务
      */
@@ -529,7 +517,7 @@ class AuthServiceImplTest {
                 mock(RefreshTokenService.class),
                 mock(AccessTokenBlacklistService.class),
                 mock(RefreshTokenLockService.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
     }
 
     /**
@@ -551,7 +539,7 @@ class AuthServiceImplTest {
                 mock(RefreshTokenService.class),
                 mock(AccessTokenBlacklistService.class),
                 mock(RefreshTokenLockService.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
         LoginRequest request = new LoginRequest();
         request.setAccount("test-user");
         request.setPassword("any-password");
@@ -572,58 +560,83 @@ class AuthServiceImplTest {
         verifyNoInteractions(userServiceClient);
         verifyNoInteractions(loginAttemptService);
     }
+
     @Test
     void oldRefreshTokenCannotMintNewSessionAfterRecovery() {
-        var users=mock(UserServiceClient.class);var refresh=mock(RefreshTokenService.class);
-        var lock=mock(RefreshTokenLockService.class);var jwt=mock(JwtTokenService.class);
+        var users = mock(UserServiceClient.class);
+        var refresh = mock(RefreshTokenService.class);
+        var lock = mock(RefreshTokenLockService.class);
+        var jwt = mock(JwtTokenService.class);
         when(lock.acquire("old-token")).thenReturn(mock(RefreshTokenLockService.LockHandle.class));
-        when(refresh.getRefreshTokenInfo("old-token")).thenReturn(new RefreshTokenInfo(9L,"同学","CUSTOMER",0));
+        when(refresh.getRefreshTokenInfo("old-token")).thenReturn(new RefreshTokenInfo(9L, "同学", "CUSTOMER", 0));
         when(users.getUserById(9L)).thenReturn(ApiResponse.success(com.hbue.ordering.user.api.vo.UserBasicVO.builder().emailVerified(true)
                 .userId(9L).userUuid("12345678-1234-4234-8234-123456789abc").credentialVersion(1L).build()));
-        var auth=new AuthServiceImpl(users,mock(LoginAttemptService.class),mock(CaptchaService.class),jwt,refresh,mock(AccessTokenBlacklistService.class),lock, org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
-        var request=new RefreshTokenRequest();request.setRefreshToken("old-token");
-        assertThrows(BusinessException.class,()->auth.refreshAccessToken(request));
-        verify(refresh).deleteRefreshToken("old-token");verifyNoInteractions(jwt);
+        var auth = new AuthServiceImpl(users, mock(LoginAttemptService.class), mock(CaptchaService.class), jwt, refresh, mock(AccessTokenBlacklistService.class), lock, org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+        var request = new RefreshTokenRequest();
+        request.setRefreshToken("old-token");
+        assertThrows(BusinessException.class, () -> auth.refreshAccessToken(request));
+        verify(refresh).deleteRefreshToken("old-token");
+        verifyNoInteractions(jwt);
     }
 
 
-    @Test void unverifiedPasswordLoginReturnsOnlyEnrollmentProof() {
-        var users=mock(UserServiceClient.class);var attempts=mock(LoginAttemptService.class);var captcha=mock(CaptchaService.class);
-        var jwt=mock(JwtTokenService.class);var refresh=mock(RefreshTokenService.class);
-        var ownership=mock(com.hbue.ordering.auth.service.EmailOwnershipService.class);
-        var user=com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).roleCode("CUSTOMER").emailVerified(false).build();
-        when(captcha.verify("image","abcd")).thenReturn(true);
+    @Test
+    void unverifiedPasswordLoginReturnsOnlyEnrollmentProof() {
+        var users = mock(UserServiceClient.class);
+        var attempts = mock(LoginAttemptService.class);
+        var captcha = mock(CaptchaService.class);
+        var jwt = mock(JwtTokenService.class);
+        var refresh = mock(RefreshTokenService.class);
+        var ownership = mock(com.hbue.ordering.auth.service.EmailOwnershipService.class);
+        var user = com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).roleCode("CUSTOMER").emailVerified(false).build();
+        when(captcha.verify("image", "abcd")).thenReturn(true);
         when(users.authenticate(any())).thenReturn(ApiResponse.success(user));
-        when(ownership.challenge(user)).thenReturn(new com.hbue.ordering.user.api.vo.EmailEnrollmentChallengeVO("a".repeat(64),"CUSTOMER",600));
-        var service=new AuthServiceImpl(users,attempts,captcha,jwt,refresh,mock(AccessTokenBlacklistService.class),mock(RefreshTokenLockService.class), ownership);
-        var request=new LoginRequest();request.setAccount("1234567890");request.setPassword("correct-password");request.setCaptchaId("image");request.setCaptchaCode("abcd");
-        var result=service.login(request);
-        assertTrue(result.isEmailVerificationRequired());assertEquals("a".repeat(64),result.getEmailVerificationToken());
-        org.junit.jupiter.api.Assertions.assertNull(result.getAccessToken());org.junit.jupiter.api.Assertions.assertNull(result.getRefreshToken());
-        verifyNoInteractions(jwt,refresh);
-    }
-    @Test void unverifiedIdentityCannotRenewExistingSession() {
-        var users=mock(UserServiceClient.class);var refresh=mock(RefreshTokenService.class);var jwt=mock(JwtTokenService.class);
-        var lock=mock(RefreshTokenLockService.class);
-        when(refresh.getRefreshTokenInfo("old-token")).thenReturn(new com.hbue.ordering.auth.model.RefreshTokenInfo(9L,"user","CUSTOMER"));
-        when(users.getUserById(9L)).thenReturn(ApiResponse.success(com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).emailVerified(false).build()));
-        var service=new AuthServiceImpl(users,mock(LoginAttemptService.class),mock(CaptchaService.class),jwt,refresh,mock(AccessTokenBlacklistService.class),lock, org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
-        var request=new RefreshTokenRequest();request.setRefreshToken("old-token");
-        assertThrows(BusinessException.class,()->service.refreshAccessToken(request));
-        verify(refresh).deleteRefreshToken("old-token");verifyNoInteractions(jwt);
+        when(ownership.challenge(user)).thenReturn(new com.hbue.ordering.user.api.vo.EmailEnrollmentChallengeVO("a".repeat(64), "CUSTOMER", 600));
+        var service = new AuthServiceImpl(users, attempts, captcha, jwt, refresh, mock(AccessTokenBlacklistService.class), mock(RefreshTokenLockService.class), ownership);
+        var request = new LoginRequest();
+        request.setAccount("1234567890");
+        request.setPassword("correct-password");
+        request.setCaptchaId("image");
+        request.setCaptchaCode("abcd");
+        var result = service.login(request);
+        assertTrue(result.isEmailVerificationRequired());
+        assertEquals("a".repeat(64), result.getEmailVerificationToken());
+        org.junit.jupiter.api.Assertions.assertNull(result.getAccessToken());
+        org.junit.jupiter.api.Assertions.assertNull(result.getRefreshToken());
+        verifyNoInteractions(jwt, refresh);
     }
 
-    @Test void registrationPassesEmailProofToUserService() {
-        var users=mock(UserServiceClient.class);
-        var expected=com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).emailVerified(true).build();
+    @Test
+    void unverifiedIdentityCannotRenewExistingSession() {
+        var users = mock(UserServiceClient.class);
+        var refresh = mock(RefreshTokenService.class);
+        var jwt = mock(JwtTokenService.class);
+        var lock = mock(RefreshTokenLockService.class);
+        when(refresh.getRefreshTokenInfo("old-token")).thenReturn(new com.hbue.ordering.auth.model.RefreshTokenInfo(9L, "user", "CUSTOMER"));
+        when(users.getUserById(9L)).thenReturn(ApiResponse.success(com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).emailVerified(false).build()));
+        var service = new AuthServiceImpl(users, mock(LoginAttemptService.class), mock(CaptchaService.class), jwt, refresh, mock(AccessTokenBlacklistService.class), lock, org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+        var request = new RefreshTokenRequest();
+        request.setRefreshToken("old-token");
+        assertThrows(BusinessException.class, () -> service.refreshAccessToken(request));
+        verify(refresh).deleteRefreshToken("old-token");
+        verifyNoInteractions(jwt);
+    }
+
+    @Test
+    void registrationPassesEmailProofToUserService() {
+        var users = mock(UserServiceClient.class);
+        var expected = com.hbue.ordering.user.api.vo.UserBasicVO.builder().userId(9L).emailVerified(true).build();
         when(users.register(any())).thenReturn(ApiResponse.success(expected));
-        var service=createAuthService(users,mock(LoginAttemptService.class));
-        var request=new com.hbue.ordering.auth.dto.request.RegisterRequest();
-        request.setUsername("校园用户");request.setEmail(" USER@Example.com ");request.setPassword("password");request.setEmailVerificationToken("a".repeat(64));
-        assertEquals(expected,service.register(request));
-        var command=org.mockito.ArgumentCaptor.forClass(com.hbue.ordering.user.api.dto.UserRegisterCommand.class);
+        var service = createAuthService(users, mock(LoginAttemptService.class));
+        var request = new com.hbue.ordering.auth.dto.request.RegisterRequest();
+        request.setUsername("校园用户");
+        request.setEmail(" USER@Example.com ");
+        request.setPassword("password");
+        request.setEmailVerificationToken("a".repeat(64));
+        assertEquals(expected, service.register(request));
+        var command = org.mockito.ArgumentCaptor.forClass(com.hbue.ordering.user.api.dto.UserRegisterCommand.class);
         verify(users).register(command.capture());
-        assertEquals("a".repeat(64),command.getValue().getEmailVerificationToken());
-        assertEquals("user@example.com",command.getValue().getEmail());
+        assertEquals("a".repeat(64), command.getValue().getEmailVerificationToken());
+        assertEquals("user@example.com", command.getValue().getEmail());
     }
 }

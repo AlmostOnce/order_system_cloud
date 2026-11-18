@@ -16,15 +16,10 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 用户账号引导业务测试。
@@ -56,7 +51,7 @@ class UserServiceImplBootstrapTest {
                 userDataScopeService,
                 auditLogger,
                 org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }
 
@@ -229,7 +224,7 @@ class UserServiceImplBootstrapTest {
      *
      * @param username 用户名
      * @param roleCode 角色编码
-     * @param status 状态
+     * @param status   状态
      * @return 用户持久化对象
      */
     private UserDO existingUser(String username, String roleCode, Integer status) {

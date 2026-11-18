@@ -5,7 +5,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** 仅把明确口味组与明确选项别名规范到跨菜品标签，未知商家文字不作猜测。 */
+/**
+ * 仅把明确口味组与明确选项别名规范到跨菜品标签，未知商家文字不作猜测。
+ */
 public class SpecificationPreferenceNormalizer {
     private static final Map<String, String> SPICE = Map.ofEntries(
             Map.entry("不辣", "SPICE:NONE"), Map.entry("免辣", "SPICE:NONE"), Map.entry("微辣", "SPICE:LIGHT"),
@@ -21,7 +23,9 @@ public class SpecificationPreferenceNormalizer {
             Map.entry("去冰", "TEMP:NO_ICE"), Map.entry("少冰", "TEMP:LESS_ICE"), Map.entry("正常冰", "TEMP:REGULAR_ICE"),
             Map.entry("多冰", "TEMP:MORE_ICE"));
     private static final Set<String> FLAVOR_GROUPS = Set.of("口味", "风味", "酱料", "酱汁", "蘸料", "口味选择");
-    /** 只把人工确认的常见口味别名跨菜归一；商家未收录的自由文本不自动变成画像标签。 */
+    /**
+     * 只把人工确认的常见口味别名跨菜归一；商家未收录的自由文本不自动变成画像标签。
+     */
     private static final Map<String, String> FLAVOR = Map.ofEntries(
             Map.entry("原味", "FLAVOR:ORIGINAL"), Map.entry("清淡", "FLAVOR:LIGHT"),
             Map.entry("香辣", "FLAVOR:AROMATIC_SPICY"), Map.entry("酸辣", "FLAVOR:SOUR_SPICY"),
@@ -43,12 +47,15 @@ public class SpecificationPreferenceNormalizer {
         if (group.isEmpty() || option.isEmpty()) return null;
         if (group.contains("辣") || group.equals("口味") && SPICE.containsKey(option)) return SPICE.get(option);
         if ((group.contains("糖") || group.contains("甜")) && SUGAR.containsKey(option)) return SUGAR.get(option);
-        if ((group.contains("温") || group.contains("冰")) && TEMPERATURE.containsKey(option)) return TEMPERATURE.get(option);
+        if ((group.contains("温") || group.contains("冰")) && TEMPERATURE.containsKey(option))
+            return TEMPERATURE.get(option);
         if (FLAVOR_GROUPS.contains(group)) return FLAVOR.get(option);
         return null;
     }
 
-    /** 全角/半角、大小写及空白归一化；去掉分隔标点防止自由文本被拆成多个标签。 */
+    /**
+     * 全角/半角、大小写及空白归一化；去掉分隔标点防止自由文本被拆成多个标签。
+     */
     private String normalizeText(String text) {
         if (text == null) return "";
         return Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT)

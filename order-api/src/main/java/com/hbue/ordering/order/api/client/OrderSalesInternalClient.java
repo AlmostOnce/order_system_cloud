@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
  */
 @FeignClient(name = "order-service", contextId = "statisticsOrderSalesClient")
 public interface OrderSalesInternalClient {
-    /** 查询订单支付时固化的销量快照。 */
+    /**
+     * 查询订单支付时固化的销量快照。
+     */
     @GetMapping("/internal/orders/{orderId}/paid-sales-snapshot")
     ApiResponse<OrderPaidSalesSnapshotVO> getPaidSalesSnapshot(
             @PathVariable("orderId") Long orderId,

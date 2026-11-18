@@ -26,12 +26,8 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * 数据范围授予业务测试。
@@ -45,7 +41,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UserScopeAdministrationServiceImplTest {
 
-    /** 测试用服务间共享密钥。 */
+    /**
+     * 测试用服务间共享密钥。
+     */
     private static final String INTERNAL_TOKEN = "test-internal-token";
 
     private static final Long OPERATOR_ID = 5L;

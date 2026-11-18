@@ -2,31 +2,27 @@ package com.hbue.ordering.cart.controller;
 
 import com.hbue.ordering.cart.config.CartSecurityConfig;
 import com.hbue.ordering.cart.security.CartSecurityErrorHandler;
-import com.hbue.ordering.cart.service.CartService;
 import com.hbue.ordering.cart.service.CartCleanupService;
+import com.hbue.ordering.cart.service.CartService;
 import com.hbue.ordering.cart.vo.CartCleanupVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
 
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,7 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({CartSecurityConfig.class, CartSecurityErrorHandler.class})
 class CartAuthorizationTest {
 
-    /** 已登录顾客提交缺少快照的清理请求应返回 400，而不是没有该接口的 404。 */
+    /**
+     * 已登录顾客提交缺少快照的清理请求应返回 400，而不是没有该接口的 404。
+     */
     @Test
     void shouldValidateOrderCleanupSnapshot() throws Exception {
         when(jwtDecoder.decode("customer-token")).thenReturn(token("CUSTOMER"));
@@ -53,7 +51,9 @@ class CartAuthorizationTest {
                 .andExpect(status().isBadRequest());
     }
 
-    /** 清理只使用 JWT 身份，并把删除数量按统一格式返回给调用者。 */
+    /**
+     * 清理只使用 JWT 身份，并把删除数量按统一格式返回给调用者。
+     */
     @Test
     void shouldCleanUsingAuthenticatedIdentity() throws Exception {
         when(jwtDecoder.decode("customer-token")).thenReturn(token("CUSTOMER"));
@@ -68,7 +68,9 @@ class CartAuthorizationTest {
         verify(cleanupService).cleanup(eq(5L), eq(123L), any());
     }
 
-    /** 清理接口不允许游客或管理员角色绕过顾客权限。 */
+    /**
+     * 清理接口不允许游客或管理员角色绕过顾客权限。
+     */
     @Test
     void shouldRejectUnauthenticatedAndNonCustomerCleanup() throws Exception {
         mockMvc.perform(post("/cart/orders/123/cleanup")).andExpect(status().isUnauthorized());
@@ -79,7 +81,9 @@ class CartAuthorizationTest {
         verifyNoInteractions(cleanupService);
     }
 
-    /** 明细中的版本缺失时必须执行嵌套校验，不能进入清理实现。 */
+    /**
+     * 明细中的版本缺失时必须执行嵌套校验，不能进入清理实现。
+     */
     @Test
     void shouldRejectMissingNestedRevision() throws Exception {
         when(jwtDecoder.decode("customer-token")).thenReturn(token("CUSTOMER"));
@@ -91,18 +95,26 @@ class CartAuthorizationTest {
         verifyNoInteractions(cleanupService);
     }
 
-    /** 模拟 Servlet 请求入口。 */
+    /**
+     * 模拟 Servlet 请求入口。
+     */
     @Autowired
     private MockMvc mockMvc;
 
-    /** 替换外置密钥与 Redis 依赖的 JWT 解码器。 */
+    /**
+     * 替换外置密钥与 Redis 依赖的 JWT 解码器。
+     */
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
-    /** 替换业务服务，认证授权用例不依赖商品服务或 Redis 内容。 */
+    /**
+     * 替换业务服务，认证授权用例不依赖商品服务或 Redis 内容。
+     */
     @MockitoBean
     private CartService cartService;
-    /** 清理业务边界替身；此处验证真实入口的身份与参数处理。 */
+    /**
+     * 清理业务边界替身；此处验证真实入口的身份与参数处理。
+     */
     @MockitoBean
     private CartCleanupService cleanupService;
 

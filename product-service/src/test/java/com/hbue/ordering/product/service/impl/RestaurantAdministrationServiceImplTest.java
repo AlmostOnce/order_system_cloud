@@ -21,15 +21,10 @@ import org.springframework.dao.DuplicateKeyException;
 
 import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 餐厅管理服务测试：平台口径与餐厅经理口径的边界。
@@ -37,10 +32,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RestaurantAdministrationServiceImplTest {
 
-    /** 测试用操作者用户 ID。 */
+    /**
+     * 测试用操作者用户 ID。
+     */
     private static final Long OPERATOR_ID = 77L;
 
-    /** 测试用餐厅 ID。 */
+    /**
+     * 测试用餐厅 ID。
+     */
     private static final Long RESTAURANT_ID = 1L;
 
     @Mock

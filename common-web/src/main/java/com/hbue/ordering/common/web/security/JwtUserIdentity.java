@@ -13,7 +13,9 @@ import org.springframework.web.client.RestClientException;
 import java.util.HashMap;
 import java.util.regex.Pattern;
 
-/** 原始签名令牌只包含 UUID；验签和黑名单校验后才在服务端解析内部主键。 */
+/**
+ * 原始签名令牌只包含 UUID；验签和黑名单校验后才在服务端解析内部主键。
+ */
 @Component
 public class JwtUserIdentity {
     public static final Pattern PUBLIC_UUID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}");
@@ -22,8 +24,8 @@ public class JwtUserIdentity {
     private final String internalToken;
 
     public JwtUserIdentity(ObjectProvider<PublicUserIdentityLookup> localLookup,
-            @Value("${identity.user-service-base-url:http://localhost:9092}") String userServiceBaseUrl,
-            @Value("${internal.scope.token:}") String internalToken) {
+                           @Value("${identity.user-service-base-url:http://localhost:9092}") String userServiceBaseUrl,
+                           @Value("${internal.scope.token:}") String internalToken) {
         this.localLookup = localLookup;
         this.internalToken = internalToken;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -47,21 +49,22 @@ public class JwtUserIdentity {
     }
 
     public static long credentialVersion(Jwt jwt) {
-        Object value=jwt.getClaims().get("credential_version");
-        if(value==null)return 0;
-        if(!(value instanceof Number number) || number.longValue()<0 || number.doubleValue()!=number.longValue())
+        Object value = jwt.getClaims().get("credential_version");
+        if (value == null) return 0;
+        if (!(value instanceof Number number) || number.longValue() < 0 || number.doubleValue() != number.longValue())
             throw new JwtException("登录凭据版本无效");
         return number.longValue();
     }
 
     public Long resolveCurrentIdentity(String uuid, long credentialVersion) {
-        if(uuid==null || !PUBLIC_UUID.matcher(uuid).matches() || credentialVersion<0)
+        if (uuid == null || !PUBLIC_UUID.matcher(uuid).matches() || credentialVersion < 0)
             throw new JwtException("身份令牌无效");
-        PublicUserIdentityLookup local=localLookup.getIfAvailable();
-        if(local==null)return remoteLookup(uuid,credentialVersion);
-        if(!Boolean.TRUE.equals(local.isEmailVerified(uuid)))throw new JwtException("邮箱尚未验证，请重新登录完成邮箱验证");
-        Long current=local.findCredentialVersion(uuid);
-        if(current==null || current!=credentialVersion)throw new JwtException("登录密码已重置，请重新登录");
+        PublicUserIdentityLookup local = localLookup.getIfAvailable();
+        if (local == null) return remoteLookup(uuid, credentialVersion);
+        if (!Boolean.TRUE.equals(local.isEmailVerified(uuid)))
+            throw new JwtException("邮箱尚未验证，请重新登录完成邮箱验证");
+        Long current = local.findCredentialVersion(uuid);
+        if (current == null || current != credentialVersion) throw new JwtException("登录密码已重置，请重新登录");
         return local.findInternalId(uuid);
     }
 

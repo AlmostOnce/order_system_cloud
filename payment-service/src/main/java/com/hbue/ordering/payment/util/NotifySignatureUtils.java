@@ -25,10 +25,14 @@ import java.util.HexFormat;
  */
 public final class NotifySignatureUtils {
 
-    /** 通知时间戳允许的偏移窗口（毫秒），超出即视为重放。 */
+    /**
+     * 通知时间戳允许的偏移窗口（毫秒），超出即视为重放。
+     */
     public static final long TIMESTAMP_WINDOW_MS = 300_000L;
 
-    /** HMAC-SHA256 算法名。 */
+    /**
+     * HMAC-SHA256 算法名。
+     */
     private static final String HMAC_SHA256 = "HmacSHA256";
 
     /**
@@ -57,7 +61,7 @@ public final class NotifySignatureUtils {
     /**
      * 使用共享密钥对规范化串计算 HMAC-SHA256 十六进制签名。
      *
-     * @param secret 共享密钥
+     * @param secret          共享密钥
      * @param canonicalString 规范化串
      * @return 十六进制签名
      * @throws IllegalStateException HMAC 算法或密钥初始化不可用时抛出
@@ -96,8 +100,8 @@ public final class NotifySignatureUtils {
      * 验证渠道通知签名：先拒绝空签名或超出时间窗的请求，再重建规范串计算签名，
      * 最后使用常量时间比较降低时序侧信道风险。
      *
-     * @param secret 共享密钥
-     * @param request 渠道通知请求体
+     * @param secret    共享密钥
+     * @param request   渠道通知请求体
      * @param signature 渠道侧携带的十六进制签名
      * @return 验签通过时返回 true
      */

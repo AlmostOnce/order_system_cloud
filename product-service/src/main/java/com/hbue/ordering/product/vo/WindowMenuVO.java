@@ -18,43 +18,68 @@ import java.util.List;
 @NoArgsConstructor
 public class WindowMenuVO {
 
-    /** 窗口 ID。 */
+    /**
+     * 窗口 ID。
+     */
     private Long windowId;
 
-    /** 窗口编码。 */
+    /**
+     * 窗口编码。
+     */
     private String windowCode;
 
-    /** 窗口名称。 */
+    /**
+     * 窗口名称。
+     */
     private String windowName;
 
-    /** 窗口简介。 */
+    /**
+     * 窗口简介。
+     */
     private String description;
 
-    /** 窗口位置。 */
+    /**
+     * 窗口位置。
+     */
     private String location;
 
-    /** 窗口下启用的分类，保留没有在售菜品的空分类。 */
+    /**
+     * 窗口下启用的分类，保留没有在售菜品的空分类。
+     */
     private List<ProductCategoryMenuVO> categories;
 
-    /** 未关联分类但当前在售的菜品。 */
+    /**
+     * 未关联分类但当前在售的菜品。
+     */
     private List<MenuProductVO> uncategorizedProducts;
 
-    /** 窗口封面地址。 */
+    /**
+     * 窗口封面地址。
+     */
     private String imageUrl;
 
-    /** 有序展示地址列表；第一张是封面，最多5张，空列表由客户端展示默认图。 */
+    /**
+     * 有序展示地址列表；第一张是封面，最多5张，空列表由客户端展示默认图。
+     */
     private List<String> imageUrls;
 
-    /** 保留原菜单构造契约；实际目录查询在构造后补齐多图列表。 */
+    /**
+     * 保留原菜单构造契约；实际目录查询在构造后补齐多图列表。
+     */
     public WindowMenuVO(Long windowId, String windowCode, String windowName, String description,
-            String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts, String imageUrl) {
-        this.windowId = windowId; this.windowCode = windowCode; this.windowName = windowName;
-        this.description = description; this.location = location; this.categories = categories;
-        this.uncategorizedProducts = uncategorizedProducts; this.imageUrl = imageUrl;
+                        String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts, String imageUrl) {
+        this.windowId = windowId;
+        this.windowCode = windowCode;
+        this.windowName = windowName;
+        this.description = description;
+        this.location = location;
+        this.categories = categories;
+        this.uncategorizedProducts = uncategorizedProducts;
+        this.imageUrl = imageUrl;
     }
 
     public WindowMenuVO(Long windowId, String windowCode, String windowName, String description,
-            String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts) {
+                        String location, List<ProductCategoryMenuVO> categories, List<MenuProductVO> uncategorizedProducts) {
         this(windowId, windowCode, windowName, description, location, categories, uncategorizedProducts, null);
     }
 }

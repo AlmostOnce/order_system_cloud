@@ -19,9 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 用户角色分配业务测试。
@@ -59,7 +57,7 @@ class UserServiceImplAssignRoleTest {
                 userDataScopeService,
                 auditLogger,
                 org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
-        , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
+                , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }
 

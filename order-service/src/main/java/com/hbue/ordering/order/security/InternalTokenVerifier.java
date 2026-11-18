@@ -22,7 +22,9 @@ import java.security.MessageDigest;
 @Component
 public class InternalTokenVerifier {
 
-    /** 服务间共享密钥，与 payment-service 的 payment.internal.order-token 保持一致。 */
+    /**
+     * 服务间共享密钥，与 payment-service 的 payment.internal.order-token 保持一致。
+     */
     private final String internalOrderToken;
 
     /**

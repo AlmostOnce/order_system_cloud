@@ -4,9 +4,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
-import com.hbue.ordering.user.model.UserDO;
-import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
 import com.hbue.ordering.user.dto.request.ChangeOwnEmailRequest;
+import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
+import com.hbue.ordering.user.model.UserDO;
 import com.hbue.ordering.user.vo.UserProfileVO;
 
 /**
@@ -24,10 +24,14 @@ public interface UserService extends IService<UserDO> {
 
     UserProfileVO updateOwnProfile(Long userId, UpdateProfileRequest request);
 
-    /** 独立验证登录密码和邮箱验证码后，只更新本人邮箱。 */
+    /**
+     * 独立验证登录密码和邮箱验证码后，只更新本人邮箱。
+     */
     void changeOwnEmail(Long userId, ChangeOwnEmailRequest request);
 
-    /** 更新当前用户头像，不接收调用方指定的其他账号。 */
+    /**
+     * 更新当前用户头像，不接收调用方指定的其他账号。
+     */
     Long resolvePublicUserId(String userUuid);
 
     void updateOwnAvatar(Long userId, String fileKey);
@@ -65,8 +69,8 @@ public interface UserService extends IService<UserDO> {
      * <p>已存在启用且未删除的 {@code SYSTEM_ADMIN} 时跳过且不做任何修改，
      * 避免环境变量覆盖已有账号；用户名或邮箱被其他账号占用时拒绝引导。</p>
      *
-     * @param username 管理员用户名
-     * @param email 管理员邮箱
+     * @param username    管理员用户名
+     * @param email       管理员邮箱
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
      * @throws com.hbue.ordering.common.core.exception.BusinessException 用户名或邮箱被其他账号占用时抛出
@@ -84,8 +88,8 @@ public interface UserService extends IService<UserDO> {
      * 账号与其 {@code PLATFORM} 范围在同一本地事务内提交，避免出现
      * "有总经理但没有范围"的半个状态。</p>
      *
-     * @param username 总经理用户名
-     * @param email 总经理邮箱
+     * @param username    总经理用户名
+     * @param email       总经理邮箱
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
      * @throws com.hbue.ordering.common.core.exception.BusinessException 账号冲突或全平台范围写入失败时抛出，事务内账号创建随之回滚
@@ -104,9 +108,9 @@ public interface UserService extends IService<UserDO> {
      * 目标角色必须是 {@link com.hbue.ordering.common.core.role.RoleCode}
      * 中已定义的编码，否则返回 400；目标用户不存在返回 404。</p>
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param roleCode 目标角色编码
+     * @param roleCode     目标角色编码
      * @return 变更后的用户基础信息
      * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效、修改本人角色、目标用户不存在或角色编码无效时抛出
      */
@@ -125,9 +129,9 @@ public interface UserService extends IService<UserDO> {
      * 避免系统进入"无人可管理"的死局。目标用户不存在返回 404，
      * 目标状态不是 0/1 返回 400。</p>
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param status 目标状态：1 启用，0 禁用
+     * @param status       目标状态：1 启用，0 禁用
      * @throws com.hbue.ordering.common.core.exception.BusinessException 目标状态无效、目标用户不存在或禁用最后一个启用的系统管理员时抛出
      */
     void updateUserStatus(

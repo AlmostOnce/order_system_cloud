@@ -1,8 +1,8 @@
 package com.hbue.ordering.stock.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.hbue.ordering.stock.model.StockDO;
 import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
+import com.hbue.ordering.stock.model.StockDO;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -40,14 +40,16 @@ public interface StockMapper extends BaseMapper<StockDO> {
             """)
     List<StockDO> selectByWindowProducts(@Param("items") List<StockBatchQueryRequest.Item> items);
 
-    /** 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。 */
+    /**
+     * 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。
+     */
     @Select("SELECT * FROM stock WHERE window_id = #{windowId} AND is_deleted = 0 ORDER BY product_id")
     List<StockDO> selectByWindow(@Param("windowId") Long windowId);
 
     /**
      * 查询指定档口菜品的库存记录。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存记录；不存在时返回 null
      */
@@ -65,7 +67,7 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * 串行化在同一库存行上：后到的事务会阻塞到前一个事务提交，
      * 从而能读到最新提交的流水记录，天然实现幂等与不超卖。</p>
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存记录；不存在时返回 null
      */
@@ -94,8 +96,8 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * 调用方在更新前已对该行加了行锁，因此版本号条件不会产生误判，
      * 它作为最后一道不超卖防线保留。</p>
      *
-     * @param stockId 库存记录 ID
-     * @param version 本事务读到的版本号
+     * @param stockId  库存记录 ID
+     * @param version  本事务读到的版本号
      * @param quantity 扣减数量，必须为正数
      * @return 受影响行数：1 表示扣减成功，0 表示版本冲突或库存不足
      */
@@ -127,7 +129,7 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * <p>回补由 {@code stock_flow} 的 ORDER_RESTORE 流水保证每单每菜品只执行一次，
      * 因此这里直接累加，无需再校验上限。</p>
      *
-     * @param stockId 库存记录 ID
+     * @param stockId  库存记录 ID
      * @param quantity 回补数量，必须为正数
      * @return 受影响行数：1 表示回补成功
      */

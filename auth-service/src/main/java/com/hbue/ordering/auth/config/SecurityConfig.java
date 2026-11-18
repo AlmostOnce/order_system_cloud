@@ -1,23 +1,18 @@
 package com.hbue.ordering.auth.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
-import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.io.IOException;
@@ -45,7 +40,7 @@ public class SecurityConfig {
     /**
      * 配置认证服务安全过滤链。
      *
-     * @param http HTTP 安全配置
+     * @param http       HTTP 安全配置
      * @param jwtDecoder JWT 解码器
      * @return 安全过滤链
      * @throws Exception 安全配置异常
@@ -119,10 +114,10 @@ public class SecurityConfig {
      * <p>Redis 黑名单检查在标准 JWT 校验之后执行。Redis 状态不可用或无法明确
      * 确认令牌未被注销时，解码会失败，不会降级为放行。</p>
      *
-     * @param publicKeyResource RSA 公钥资源
-     * @param issuer JWT 签发方
+     * @param publicKeyResource      RSA 公钥资源
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作组件
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      */
     @Bean
@@ -172,10 +167,10 @@ public class SecurityConfig {
     /**
      * 解码 JWT 并拒绝黑名单中的访问令牌。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作组件
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已校验的 JWT
      * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */

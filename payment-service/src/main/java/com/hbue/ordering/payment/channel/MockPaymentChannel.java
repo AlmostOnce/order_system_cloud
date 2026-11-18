@@ -23,11 +23,15 @@ import java.util.UUID;
 @Component
 public class MockPaymentChannel implements PaymentChannel {
 
-    /** 渠道交易号的时间格式。 */
+    /**
+     * 渠道交易号的时间格式。
+     */
     private static final DateTimeFormatter TRADE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
-    /** 渠道配置属性。 */
+    /**
+     * 渠道配置属性。
+     */
     private final PaymentChannelProperties properties;
 
     /**
@@ -69,7 +73,7 @@ public class MockPaymentChannel implements PaymentChannel {
     /**
      * 模拟渠道不提供主动查询，恒返回 UNKNOWN；最终支付结果通过签名异步通知传回。
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo      业务支付单号
      * @param channelTradeNo 渠道交易号
      * @return 状态 UNKNOWN 的查询结果
      */
@@ -85,7 +89,7 @@ public class MockPaymentChannel implements PaymentChannel {
     /**
      * 校验异步通知签名与时间戳窗口。
      *
-     * @param request 渠道通知请求体
+     * @param request   渠道通知请求体
      * @param signature 渠道侧携带的十六进制签名
      * @return 验签通过时返回 true
      */

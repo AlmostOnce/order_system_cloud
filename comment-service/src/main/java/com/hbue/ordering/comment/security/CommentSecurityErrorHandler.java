@@ -27,7 +27,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class CommentSecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
-    /** 应用共享的 JSON 序列化组件。 */
+    /**
+     * 应用共享的 JSON 序列化组件。
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -42,8 +44,8 @@ public class CommentSecurityErrorHandler implements AuthenticationEntryPoint, Ac
     /**
      * 为缺少令牌或无效令牌返回 HTTP 401。
      *
-     * @param request 当前请求
-     * @param response 待写入响应
+     * @param request   当前请求
+     * @param response  待写入响应
      * @param exception 认证失败原因，仅用于过滤链分派
      * @throws IOException 响应写入失败时抛出
      */
@@ -57,8 +59,8 @@ public class CommentSecurityErrorHandler implements AuthenticationEntryPoint, Ac
     /**
      * 为已认证但缺少顾客角色的请求返回 HTTP 403。
      *
-     * @param request 当前请求
-     * @param response 待写入响应
+     * @param request   当前请求
+     * @param response  待写入响应
      * @param exception 权限不足原因
      * @throws IOException 响应写入失败时抛出
      */
@@ -72,8 +74,8 @@ public class CommentSecurityErrorHandler implements AuthenticationEntryPoint, Ac
     /**
      * 写入 UTF-8 JSON 格式的安全错误响应。
      *
-     * @param response 待写入响应
-     * @param status HTTP 状态码
+     * @param response  待写入响应
+     * @param status    HTTP 状态码
      * @param errorCode 对应的项目错误码
      * @throws IOException JSON 写入失败时抛出
      */

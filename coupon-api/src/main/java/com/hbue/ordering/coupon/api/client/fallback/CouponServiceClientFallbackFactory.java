@@ -22,7 +22,9 @@ public class CouponServiceClientFallbackFactory implements FallbackFactory<Coupo
 
     private static final Logger log = LoggerFactory.getLogger(CouponServiceClientFallbackFactory.class);
 
-    /** 记录远程失败原因，并返回不可能伪装成功的内部客户端。 */
+    /**
+     * 记录远程失败原因，并返回不可能伪装成功的内部客户端。
+     */
     @Override
     public CouponServiceClient create(Throwable cause) {
         log.error("调用 coupon-service 内部接口失败", cause);

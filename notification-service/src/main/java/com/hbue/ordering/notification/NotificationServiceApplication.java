@@ -11,13 +11,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @org.springframework.context.annotation.Import(com.hbue.ordering.user.api.client.fallback.UserScopeInternalClientFallbackFactory.class)
 @EnableScheduling
 @org.springframework.cloud.openfeign.EnableFeignClients(clients = {
-    com.hbue.ordering.order.api.client.OrderChatClient.class,
-    com.hbue.ordering.user.api.client.ChatUserClient.class,
-    com.hbue.ordering.user.api.client.UserScopeInternalClient.class
+        com.hbue.ordering.order.api.client.OrderChatClient.class,
+        com.hbue.ordering.user.api.client.ChatUserClient.class,
+        com.hbue.ordering.user.api.client.UserScopeInternalClient.class
 })
 public class NotificationServiceApplication {
     /**
      * 启动通知服务并由Spring管理通知、聊天、数据库和定时投递组件。
      */
-    public static void main(String[] args) { SpringApplication.run(NotificationServiceApplication.class, args); }
+    public static void main(String[] args) {
+        SpringApplication.run(NotificationServiceApplication.class, args);
+    }
 }

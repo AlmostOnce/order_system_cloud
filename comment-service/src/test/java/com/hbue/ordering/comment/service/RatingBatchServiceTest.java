@@ -1,13 +1,15 @@
 package com.hbue.ordering.comment.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
 import com.hbue.ordering.comment.mapper.RatingBatchMapper;
 import com.hbue.ordering.comment.service.impl.RatingBatchServiceImpl;
 import com.hbue.ordering.common.core.exception.BusinessException;
-import java.util.List;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
 
 class RatingBatchServiceTest {
     @Test
@@ -20,6 +22,7 @@ class RatingBatchServiceTest {
         verify(repository).windows(List.of(3L));
         verify(repository, never()).products(anyList());
     }
+
     @Test
     void rejectsInvalidOrOversizedRequests() {
         var repository = mock(RatingBatchMapper.class);

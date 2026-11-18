@@ -20,15 +20,23 @@ import java.util.List;
 @AllArgsConstructor
 public class ProductCategoryMenuVO {
 
-    /** 分类 ID。 */
+    /**
+     * 分类 ID。
+     */
     private Long categoryId;
 
-    /** 分类名称。 */
+    /**
+     * 分类名称。
+     */
     private String categoryName;
 
-    /** 分类排序值。 */
+    /**
+     * 分类排序值。
+     */
     private Integer sortOrder;
 
-    /** 当前分类下的在售菜品。 */
+    /**
+     * 当前分类下的在售菜品。
+     */
     private List<MenuProductVO> products;
 }

@@ -1,10 +1,6 @@
 package com.hbue.ordering.order.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -24,74 +20,114 @@ import java.time.LocalDateTime;
 @TableName("orders")
 public class OrderDO {
 
-  /** 订单表自增主键。 */
-  @TableId(value = "order_id", type = IdType.AUTO)
-  private Long orderId;
+    /**
+     * 订单表自增主键。
+     */
+    @TableId(value = "order_id", type = IdType.AUTO)
+    private Long orderId;
 
-  /** 对外使用的订单编号，不等同于数据库主键。 */
-  private String orderNo;
+    /**
+     * 对外使用的订单编号，不等同于数据库主键。
+     */
+    private String orderNo;
 
-  /** 下单用户 ID；订单归属校验以此字段为准。 */
-  private Long userId;
+    /**
+     * 下单用户 ID；订单归属校验以此字段为准。
+     */
+    private Long userId;
 
-  /** 接单档口 ID；用于商品核价和商家数据范围校验。 */
-  private Long windowId;
+    /**
+     * 接单档口 ID；用于商品核价和商家数据范围校验。
+     */
+    private Long windowId;
 
-  /** 服务端根据商品服务价格和购买数量计算的订单总金额。 */
-  private BigDecimal totalAmount;
+    /**
+     * 服务端根据商品服务价格和购买数量计算的订单总金额。
+     */
+    private BigDecimal totalAmount;
 
-  /** 下单时锁定的用户券 ID；不建立跨服务数据库外键。 */
-  @TableField("user_coupon_id")
-  private Long userCouponId;
+    /**
+     * 下单时锁定的用户券 ID；不建立跨服务数据库外键。
+     */
+    @TableField("user_coupon_id")
+    private Long userCouponId;
 
-  /** 下单时的优惠券名称快照，历史订单不随模板改名变化。 */
-  @TableField("coupon_title_snapshot")
-  private String couponTitleSnapshot;
+    /**
+     * 下单时的优惠券名称快照，历史订单不随模板改名变化。
+     */
+    @TableField("coupon_title_snapshot")
+    private String couponTitleSnapshot;
 
-  /** 订单优惠总额快照；无券订单为零。 */
-  @TableField("discount_amount")
-  private BigDecimal discountAmount;
+    /**
+     * 订单优惠总额快照；无券订单为零。
+     */
+    @TableField("discount_amount")
+    private BigDecimal discountAmount;
 
-  /** 用户应付金额快照；支付服务只按此金额创建支付单。 */
-  @TableField("payable_amount")
-  private BigDecimal payableAmount;
+    /**
+     * 用户应付金额快照；支付服务只按此金额创建支付单。
+     */
+    @TableField("payable_amount")
+    private BigDecimal payableAmount;
 
-  /** 数据库保存的当前订单状态中文值。 */
-  private String status;
+    /**
+     * 数据库保存的当前订单状态中文值。
+     */
+    private String status;
 
-  /** 顾客提交的订单备注。 */
-  private String remark;
+    /**
+     * 顾客提交的订单备注。
+     */
+    private String remark;
 
-  /** 顾客提交的幂等键；在用户维度唯一标识一次创建意图。 */
-  @TableField("idempotency_key")
-  private String idempotencyKey;
+    /**
+     * 顾客提交的幂等键；在用户维度唯一标识一次创建意图。
+     */
+    @TableField("idempotency_key")
+    private String idempotencyKey;
 
-  /** 规范化订单请求的摘要，用于拒绝同一幂等键对应不同请求内容。 */
-  @TableField("request_hash")
-  private String requestHash;
+    /**
+     * 规范化订单请求的摘要，用于拒绝同一幂等键对应不同请求内容。
+     */
+    @TableField("request_hash")
+    private String requestHash;
 
-  /** 订单支付成功后生成或保存的取餐码。 */
-  @com.fasterxml.jackson.annotation.JsonIgnore
-  @lombok.ToString.Exclude
-  private String pickupCode;
+    /**
+     * 订单支付成功后生成或保存的取餐码。
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @lombok.ToString.Exclude
+    private String pickupCode;
 
-  /** 订单状态版本号；每次成功状态迁移递增，用于防止并发覆盖。 */
-  @Version
-  private Integer version;
+    /**
+     * 订单状态版本号；每次成功状态迁移递增，用于防止并发覆盖。
+     */
+    @Version
+    private Integer version;
 
-  /** 订单创建时间。 */
-  private LocalDateTime createdAt;
+    /**
+     * 订单创建时间。
+     */
+    private LocalDateTime createdAt;
 
-  /** 首次支付确认时间，来源于支付服务的 success_time，后续状态变化与退款不得改写。 */
-  @TableField("paid_at")
-  private LocalDateTime paidAt;
+    /**
+     * 首次支付确认时间，来源于支付服务的 success_time，后续状态变化与退款不得改写。
+     */
+    @TableField("paid_at")
+    private LocalDateTime paidAt;
 
-  /** 创建时固定的支付截止时间，使用数据库UTC+8时间。 */
-  private LocalDateTime expiresAt;
+    /**
+     * 创建时固定的支付截止时间，使用数据库UTC+8时间。
+     */
+    private LocalDateTime expiresAt;
 
-  /** 订单最近一次更新时间。 */
-  private LocalDateTime updatedAt;
+    /**
+     * 订单最近一次更新时间。
+     */
+    private LocalDateTime updatedAt;
 
-  /** 首次核销完成时间，退款活动不能延长售后72小时申请期限。 */
-  private LocalDateTime completedAt;
+    /**
+     * 首次核销完成时间，退款活动不能延长售后72小时申请期限。
+     */
+    private LocalDateTime completedAt;
 }

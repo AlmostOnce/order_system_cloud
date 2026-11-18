@@ -13,19 +13,25 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** CUSTOMER 首页推荐接口；用户编号只能从已验签 JWT 经身份服务解析，不接受客户端 userId。 */
+/**
+ * CUSTOMER 首页推荐接口；用户编号只能从已验签 JWT 经身份服务解析，不接受客户端 userId。
+ */
 @Validated
 @RestController
 @RequestMapping("/recommendations")
 public class RecommendationController {
     private final RecommendationQueryService recommendations;
 
-    /** 注入推荐查询；当前 JWT 主体已经由资源服务器解码器转换为内部用户主键。 */
+    /**
+     * 注入推荐查询；当前 JWT 主体已经由资源服务器解码器转换为内部用户主键。
+     */
     public RecommendationController(RecommendationQueryService recommendations) {
         this.recommendations = recommendations;
     }
 
-    /** 当前学生首页推荐；餐厅筛选可选，返回数量限制为1至10，默认10。 */
+    /**
+     * 当前学生首页推荐；餐厅筛选可选，返回数量限制为1至10，默认10。
+     */
     @GetMapping("/home")
     @PreAuthorize("hasRole('CUSTOMER')")
     public com.hbue.ordering.common.response.ApiResponse<RecommendationHomeVO> home(

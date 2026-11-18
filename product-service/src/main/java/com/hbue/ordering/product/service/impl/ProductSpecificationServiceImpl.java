@@ -16,12 +16,13 @@ import com.hbue.ordering.product.model.ProductSpecificationGroupDO;
 import com.hbue.ordering.product.model.ProductSpecificationOptionDO;
 import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
-import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.math.BigDecimal;
 import java.util.*;
 
@@ -31,23 +32,37 @@ import java.util.*;
  */
 @Service
 public class ProductSpecificationServiceImpl implements ProductSpecificationService {
-    /** 商品Mapper，用于读取归属及锁住单个菜品，串行化规格更新。 */
+    /**
+     * 商品Mapper，用于读取归属及锁住单个菜品，串行化规格更新。
+     */
     private final ProductMapper products;
-    /** 规格组Mapper，只按商品归属查询和软停用。 */
+    /**
+     * 规格组Mapper，只按商品归属查询和软停用。
+     */
     private final ProductSpecificationGroupMapper groups;
-    /** 选项Mapper，操作范围始终由目标商品的规格组限定。 */
+    /**
+     * 选项Mapper，操作范围始终由目标商品的规格组限定。
+     */
     private final ProductSpecificationOptionMapper options;
-    /** 复用现有窗口范围校验，管理越权返回403。 */
+    /**
+     * 复用现有窗口范围校验，管理越权返回403。
+     */
     private final DataScopeService scopes;
-    /** 提交成功后清理窗口菜单，避免回滚或未提交值进入缓存。 */
+    /**
+     * 提交成功后清理窗口菜单，避免回滚或未提交值进入缓存。
+     */
     private final ProductMenuCacheService menus;
-    /** 与规格修改同事务登记索引刷新，发布失败由现有Outbox重试。 */
+    /**
+     * 与规格修改同事务登记索引刷新，发布失败由现有Outbox重试。
+     */
     private final ProductSearchOutboxWriter outbox;
 
-    /** 注入现有商品、权限、缓存和Outbox能力，不引入第二套持久化框架。 */
+    /**
+     * 注入现有商品、权限、缓存和Outbox能力，不引入第二套持久化框架。
+     */
     public ProductSpecificationServiceImpl(ProductMapper products, ProductSpecificationGroupMapper groups,
-            ProductSpecificationOptionMapper options, DataScopeService scopes,
-            ProductMenuCacheService menus, ProductSearchOutboxWriter outbox) {
+                                           ProductSpecificationOptionMapper options, DataScopeService scopes,
+                                           ProductMenuCacheService menus, ProductSearchOutboxWriter outbox) {
         this.products = products;
         this.groups = groups;
         this.options = options;
@@ -56,7 +71,9 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
         this.outbox = outbox;
     }
 
-    /** 管理读取先验证商品存在及所属窗口范围，再批量查询当前启用配置。 */
+    /**
+     * 管理读取先验证商品存在及所属窗口范围，再批量查询当前启用配置。
+     */
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ProductSpecificationGroupVO> get(Long operatorId, Long productId) {
@@ -71,7 +88,7 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
     @Override
     @Transactional
     public List<ProductSpecificationGroupVO> replace(Long operatorId, Long productId,
-            ProductSpecificationsSaveRequest request) {
+                                                     ProductSpecificationsSaveRequest request) {
         if (productId == null || productId <= 0) throw badRequest("菜品编号无效");
         // 首次读取即加行锁，避免先做快照读、等待并发提交后仍用旧快照读取上一版配置。
         ProductDO product = products.selectForSpecificationUpdate(productId);
@@ -125,7 +142,9 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
         // 与商品管理一致，事务提交之后才删菜单；回滚时不执行回调。
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
-            public void afterCommit() { menus.evictWindowMenu(product.getWindowId()); }
+            public void afterCommit() {
+                menus.evictWindowMenu(product.getWindowId());
+            }
         });
         return loadActive(List.of(productId)).getOrDefault(productId, List.of());
     }
@@ -161,7 +180,9 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
         return result;
     }
 
-    /** 校验商品正整数编号、存在性及操作者范围；范围校验不能由前端隐藏按钮替代。 */
+    /**
+     * 校验商品正整数编号、存在性及操作者范围；范围校验不能由前端隐藏按钮替代。
+     */
     private ProductDO requireProduct(Long operatorId, Long productId) {
         if (productId == null || productId <= 0) throw badRequest("菜品编号无效");
         ProductDO product = products.selectById(productId);
@@ -175,7 +196,7 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
      * 名称先去首尾空白并忽略大小写比较；编号去重防止同一记录被重复覆盖，金额限制与SQL精度一致。
      */
     private void validate(ProductSpecificationsSaveRequest request,
-            Map<Long, ProductSpecificationGroupDO> oldGroups, Map<Long, ProductSpecificationOptionDO> oldOptions) {
+                          Map<Long, ProductSpecificationGroupDO> oldGroups, Map<Long, ProductSpecificationOptionDO> oldOptions) {
         if (request == null || request.getGroups() == null || request.getGroups().size() > 10)
             throw badRequest("规格组必须为数组，最多10组");
         Set<String> groupNames = new HashSet<>();
@@ -210,12 +231,24 @@ public class ProductSpecificationServiceImpl implements ProductSpecificationServ
         }
     }
 
-    /** 名称必须实际有内容，原始长度和去空白后长度均不超过SQL列限制。 */
-    private boolean validName(String name) { return name != null && !name.isBlank() && name.length() <= 50; }
+    /**
+     * 名称必须实际有内容，原始长度和去空白后长度均不超过SQL列限制。
+     */
+    private boolean validName(String name) {
+        return name != null && !name.isBlank() && name.length() <= 50;
+    }
 
-    /** 统一名称去空白及大小写规则，防止管理端以大小写或空格创建重复启用名。 */
-    private String normalizedName(String name) { return name.strip().toLowerCase(Locale.ROOT); }
+    /**
+     * 统一名称去空白及大小写规则，防止管理端以大小写或空格创建重复启用名。
+     */
+    private String normalizedName(String name) {
+        return name.strip().toLowerCase(Locale.ROOT);
+    }
 
-    /** 配置不合法统一返回400；异常抛出后整个规格事务回滚。 */
-    private BusinessException badRequest(String message) { return new BusinessException(CommonErrorCode.BAD_REQUEST, message); }
+    /**
+     * 配置不合法统一返回400；异常抛出后整个规格事务回滚。
+     */
+    private BusinessException badRequest(String message) {
+        return new BusinessException(CommonErrorCode.BAD_REQUEST, message);
+    }
 }

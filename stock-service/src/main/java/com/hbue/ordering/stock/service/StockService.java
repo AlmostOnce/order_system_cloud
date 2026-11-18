@@ -1,9 +1,10 @@
 package com.hbue.ordering.stock.service;
 
-import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
+import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
+
 import java.util.List;
 
 /**
@@ -26,7 +27,9 @@ public interface StockService {
      */
     List<StockVO> getBatchStocks(StockBatchQueryRequest request);
 
-    /** 批量读取窗口当前库存；无库存记录时返回空列表。 */
+    /**
+     * 批量读取窗口当前库存；无库存记录时返回空列表。
+     */
     List<StockVO> getWindowStocks(Long windowId);
 
     /**
@@ -53,7 +56,7 @@ public interface StockService {
     /**
      * 查询指定档口菜品的库存快照。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存视图；无库存记录时返回 null
      */

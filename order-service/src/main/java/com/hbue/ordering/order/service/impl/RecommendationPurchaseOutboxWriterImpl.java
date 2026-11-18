@@ -18,17 +18,26 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RecommendationPurchaseOutboxWriterImpl implements RecommendationPurchaseOutboxWriter {
-    /** 订单、全部明细和Outbox均在order_db中，重读可见本事务刚刚完成的变更。 */
+    /**
+     * 订单、全部明细和Outbox均在order_db中，重读可见本事务刚刚完成的变更。
+     */
     private final OrderMapper orders;
     private final OrderItemMapper items;
     private final RecommendationPurchaseOutboxMapper outbox;
-    /** 使用Spring提供的JSON配置，LocalDateTime编码与项目消息协议保持一致。 */
+    /**
+     * 使用Spring提供的JSON配置，LocalDateTime编码与项目消息协议保持一致。
+     */
     private final ObjectMapper json;
 
-    /** 注入订单事实及事件持久化能力，不接受客户端事件或个人身份字段。 */
+    /**
+     * 注入订单事实及事件持久化能力，不接受客户端事件或个人身份字段。
+     */
     public RecommendationPurchaseOutboxWriterImpl(OrderMapper orders, OrderItemMapper items,
-            RecommendationPurchaseOutboxMapper outbox, ObjectMapper json) {
-        this.orders = orders; this.items = items; this.outbox = outbox; this.json = json;
+                                                  RecommendationPurchaseOutboxMapper outbox, ObjectMapper json) {
+        this.orders = orders;
+        this.items = items;
+        this.outbox = outbox;
+        this.json = json;
     }
 
     /**

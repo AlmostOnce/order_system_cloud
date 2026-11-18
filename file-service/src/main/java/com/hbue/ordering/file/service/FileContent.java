@@ -11,20 +11,26 @@ package com.hbue.ordering.file.service;
  */
 public class FileContent {
 
-    /** 文件字节内容。 */
+    /**
+     * 文件字节内容。
+     */
     private final byte[] content;
 
-    /** MIME 类型。 */
+    /**
+     * MIME 类型。
+     */
     private final String contentType;
 
-    /** 原始文件名。 */
+    /**
+     * 原始文件名。
+     */
     private final String originalName;
 
     /**
      * 创建文件内容载体。
      *
-     * @param content 文件字节内容
-     * @param contentType MIME 类型
+     * @param content      文件字节内容
+     * @param contentType  MIME 类型
      * @param originalName 原始文件名
      */
     public FileContent(byte[] content, String contentType, String originalName) {

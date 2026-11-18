@@ -2,12 +2,16 @@ package com.hbue.ordering.order.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.order.mapper.SalesOutboxMapper;
-import com.hbue.ordering.order.ranking.*;
+import com.hbue.ordering.order.ranking.OrderPaidSalesEvent;
+import com.hbue.ordering.order.ranking.SalesOutboxRow;
+import com.hbue.ordering.order.ranking.SalesRankingMessaging;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.stream.function.StreamBridge;
 import org.springframework.messaging.support.ErrorMessage;
+
 import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -18,7 +22,8 @@ class SalesRankingMessagingTest {
         var stream = mock(StreamBridge.class);
         var json = new ObjectMapper();
         var row = new SalesOutboxRow();
-        row.setOrderId(7L); row.setEventId("order-paid-sales:7");
+        row.setOrderId(7L);
+        row.setEventId("order-paid-sales:7");
         row.setPayload(json.writeValueAsString(OrderPaidSalesEvent.of(7L)));
         when(mapper.pending()).thenReturn(List.of(row));
         when(stream.send(eq("salesPaid-out-0"), any())).thenReturn(false);
@@ -33,7 +38,8 @@ class SalesRankingMessagingTest {
         var stream = mock(StreamBridge.class);
         var json = new ObjectMapper();
         var row = new SalesOutboxRow();
-        row.setOrderId(7L); row.setEventId("order-paid-sales:7");
+        row.setOrderId(7L);
+        row.setEventId("order-paid-sales:7");
         row.setPayload(json.writeValueAsString(OrderPaidSalesEvent.of(7L)));
         when(mapper.pending()).thenReturn(List.of(row));
         when(stream.send(eq("salesPaid-out-0"), any())).thenReturn(true);

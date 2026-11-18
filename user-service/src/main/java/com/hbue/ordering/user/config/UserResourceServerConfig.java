@@ -1,7 +1,7 @@
 package com.hbue.ordering.user.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.user.security.UserAccessDeniedHandler;
 import com.hbue.ordering.user.security.UserAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,12 +16,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -52,17 +47,21 @@ import java.util.Objects;
 @EnableMethodSecurity
 public class UserResourceServerConfig {
 
-    /** 未认证请求处理器。 */
+    /**
+     * 未认证请求处理器。
+     */
     private final UserAuthenticationEntryPoint authenticationEntryPoint;
 
-    /** 无权限请求处理器。 */
+    /**
+     * 无权限请求处理器。
+     */
     private final UserAccessDeniedHandler accessDeniedHandler;
 
     /**
      * 创建用户服务资源服务器配置。
      *
      * @param authenticationEntryPoint 未认证请求处理器
-     * @param accessDeniedHandler 无权限请求处理器
+     * @param accessDeniedHandler      无权限请求处理器
      */
     public UserResourceServerConfig(
             UserAuthenticationEntryPoint authenticationEntryPoint,
@@ -138,11 +137,11 @@ public class UserResourceServerConfig {
      * <p>解码器只持有公钥，不具备签发能力。Redis 不能明确确认 jti 未被注销时，
      * 本次解码失败并由资源服务器返回未认证响应。</p>
      *
-     * @param resourceLoader Spring 资源加载器
-     * @param publicKeyLocation RSA 公钥资源位置
-     * @param issuer JWT 签发方
+     * @param resourceLoader         Spring 资源加载器
+     * @param publicKeyLocation      RSA 公钥资源位置
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      * @throws IllegalStateException 公钥文件读取失败时抛出
      */
@@ -180,10 +179,10 @@ public class UserResourceServerConfig {
     /**
      * 解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过校验的 JWT
      * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */

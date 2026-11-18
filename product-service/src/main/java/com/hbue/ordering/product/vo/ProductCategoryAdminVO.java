@@ -20,24 +20,38 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ProductCategoryAdminVO {
 
-    /** 分类 ID。 */
+    /**
+     * 分类 ID。
+     */
     private Long categoryId;
 
-    /** 所属窗口 ID。 */
+    /**
+     * 所属窗口 ID。
+     */
     private Long windowId;
 
-    /** 分类名称。 */
+    /**
+     * 分类名称。
+     */
     private String categoryName;
 
-    /** 分类排序值。 */
+    /**
+     * 分类排序值。
+     */
     private Integer sortOrder;
 
-    /** 分类状态：1 启用，0 停用。 */
+    /**
+     * 分类状态：1 启用，0 停用。
+     */
     private Integer status;
 
-    /** 创建时间。 */
+    /**
+     * 创建时间。
+     */
     private LocalDateTime createdAt;
 
-    /** 修改时间。 */
+    /**
+     * 修改时间。
+     */
     private LocalDateTime updatedAt;
 }

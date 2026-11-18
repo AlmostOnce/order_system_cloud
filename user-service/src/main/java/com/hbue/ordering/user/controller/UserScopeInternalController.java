@@ -7,11 +7,7 @@ import com.hbue.ordering.user.api.vo.UserScopeVO;
 import com.hbue.ordering.user.model.UserDataScopeDO;
 import com.hbue.ordering.user.service.UserDataScopeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,16 +27,20 @@ import java.util.List;
 @RequestMapping("/internal/users")
 public class UserScopeInternalController {
 
-    /** 数据范围业务服务。 */
+    /**
+     * 数据范围业务服务。
+     */
     private final UserDataScopeService userDataScopeService;
 
-    /** 内部调用令牌校验器。 */
+    /**
+     * 内部调用令牌校验器。
+     */
     private final InternalScopeTokenVerifier internalScopeTokenVerifier;
 
     /**
      * 创建数据范围内部查询接口。
      *
-     * @param userDataScopeService 数据范围业务服务
+     * @param userDataScopeService       数据范围业务服务
      * @param internalScopeTokenVerifier 内部调用令牌校验器
      */
     public UserScopeInternalController(
@@ -54,7 +54,7 @@ public class UserScopeInternalController {
     /**
      * 查询指定用户的数据范围。
      *
-     * @param userId 用户 ID
+     * @param userId        用户 ID
      * @param internalToken 服务间共享密钥
      * @return 用户数据范围
      * @throws com.hbue.ordering.common.core.exception.BusinessException 共享密钥无效时拒绝内部查询

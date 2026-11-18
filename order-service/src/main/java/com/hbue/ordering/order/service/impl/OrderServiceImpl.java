@@ -6,20 +6,20 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
-import com.hbue.ordering.order.dto.request.OrderCreateRequest;
-import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.coupon.api.client.CouponServiceClient;
 import com.hbue.ordering.coupon.api.dto.CouponLockRequest;
 import com.hbue.ordering.coupon.api.dto.CouponReleaseRequest;
 import com.hbue.ordering.coupon.api.vo.CouponLockVO;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
+import com.hbue.ordering.order.dto.request.OrderCreateRequest;
+import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
-import com.hbue.ordering.order.recommendation.OrderSpecificationSnapshot;
-import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
 import com.hbue.ordering.order.notification.CancellationNotificationTcc;
+import com.hbue.ordering.order.recommendation.OrderSpecificationSnapshot;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
@@ -37,15 +37,15 @@ import com.hbue.ordering.stock.api.dto.StockItemRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
+import feign.FeignException;
 import org.apache.seata.spring.annotation.GlobalTransactional;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import feign.FeignException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -55,16 +55,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 订单业务服务实现。
@@ -79,52 +70,83 @@ public class OrderServiceImpl
 
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
 
-    /** 单个订单允许的最大菜品行数。 */
+    /**
+     * 单个订单允许的最大菜品行数。
+     */
     private static final int MAX_ORDER_ITEMS = OrderCreateRequest.MAX_ITEM_COUNT;
 
-    /** 新订单的初始状态。 */
+    /**
+     * 新订单的初始状态。
+     */
     private static final String INITIAL_ORDER_STATUS = "待支付";
 
-    /** 订单表 DECIMAL(10,2) 能保存的最大金额。 */
+    /**
+     * 订单表 DECIMAL(10,2) 能保存的最大金额。
+     */
     private static final BigDecimal MAX_ORDER_AMOUNT =
             new BigDecimal("99999999.99");
 
-    /** 审计动作：商家推进订单状态。 */
+    /**
+     * 审计动作：商家推进订单状态。
+     */
     private static final String ORDER_STATUS_ADVANCE = "ORDER_STATUS_ADVANCE";
 
-    /** 审计目标类型：订单。 */
+    /**
+     * 审计目标类型：订单。
+     */
     private static final String ORDER_TARGET_TYPE = "ORDER";
 
-    /** 用户服务远程客户端。 */
+    /**
+     * 用户服务远程客户端。
+     */
     private final UserServiceClient userServiceClient;
 
-    /** 商品服务核价客户端。 */
+    /**
+     * 商品服务核价客户端。
+     */
     private final ProductServiceClient productServiceClient;
 
-    /** 订单头和明细原子持久化服务。 */
+    /**
+     * 订单头和明细原子持久化服务。
+     */
     private final OrderPersistenceService orderPersistenceService;
 
-    /** 订单明细 Mapper。 */
+    /**
+     * 订单明细 Mapper。
+     */
     private final OrderItemMapper orderItemMapper;
 
-    /** 数据范围判定服务。 */
+    /**
+     * 数据范围判定服务。
+     */
     private final DataScopeService dataScopeService;
 
-    /** 管理操作审计日志记录器。 */
+    /**
+     * 管理操作审计日志记录器。
+     */
     private final ManagementAuditLogger auditLogger;
 
-    /** 库存服务内部扣减客户端。 */
+    /**
+     * 库存服务内部扣减客户端。
+     */
     private final StockServiceClient stockServiceClient;
 
-    /** 优惠券服务内部客户端；锁券/释放随当前 Seata 全局事务提交或回滚。 */
+    /**
+     * 优惠券服务内部客户端；锁券/释放随当前 Seata 全局事务提交或回滚。
+     */
     private final CouponServiceClient couponServiceClient;
 
-    /** 服务间内部接口共享密钥，调用库存与优惠券服务时通过请求头传递。 */
+    /**
+     * 服务间内部接口共享密钥，调用库存与优惠券服务时通过请求头传递。
+     */
     private final String internalScopeToken;
 
     private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
+
     @Autowired
-    void setPaymentClose(com.hbue.ordering.order.feign.PaymentCloseClient client) { this.paymentClose=client; }
+    void setPaymentClose(com.hbue.ordering.order.feign.PaymentCloseClient client) {
+        this.paymentClose = client;
+    }
 
     @Value("${notification.cancel-tcc.enabled:false}")
     private boolean cancellationNotificationEnabled;
@@ -138,15 +160,15 @@ public class OrderServiceImpl
     /**
      * 创建订单业务服务。
      *
-     * @param userServiceClient 用户服务远程客户端
-     * @param productServiceClient 商品服务核价客户端
+     * @param userServiceClient       用户服务远程客户端
+     * @param productServiceClient    商品服务核价客户端
      * @param orderPersistenceService 订单原子持久化服务
-     * @param orderItemMapper 订单明细 Mapper
-     * @param dataScopeService 数据范围判定服务
-     * @param auditLogger 管理操作审计日志记录器
-     * @param stockServiceClient 库存服务内部扣减客户端
-     * @param couponServiceClient 优惠券服务内部锁定与释放客户端
-     * @param internalScopeToken 服务间内部接口共享密钥
+     * @param orderItemMapper         订单明细 Mapper
+     * @param dataScopeService        数据范围判定服务
+     * @param auditLogger             管理操作审计日志记录器
+     * @param stockServiceClient      库存服务内部扣减客户端
+     * @param couponServiceClient     优惠券服务内部锁定与释放客户端
+     * @param internalScopeToken      服务间内部接口共享密钥
      */
     public OrderServiceImpl(
             UserServiceClient userServiceClient,
@@ -194,7 +216,7 @@ public class OrderServiceImpl
     /**
      * 查询当前用户的订单详情。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId  当前登录用户 ID
      * @param orderId 订单 ID
      * @return 订单及其菜品快照
      */
@@ -225,9 +247,9 @@ public class OrderServiceImpl
      * 保存优惠金额快照并扣减库存。任一环节失败（包括券服务拒绝、库存不足或远程不可用）
      * 都会回滚订单、优惠券锁定和库存分支，避免留下没有对应订单的资源占用。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId         当前登录用户 ID
      * @param idempotencyKey 客户端幂等键
-     * @param request 窗口、菜品清单、可选用户券 ID 和备注
+     * @param request        窗口、菜品清单、可选用户券 ID 和备注
      * @return 新订单详情；同键同请求时返回已有订单
      */
     @Override
@@ -312,8 +334,8 @@ public class OrderServiceImpl
     /**
      * 按服务端商品报价锁定顾客选择的券并保存金额快照；客户端提交的金额从不参与优惠计算。
      *
-     * @param order 已先写入订单库并生成订单号的订单
-     * @param items 已由商品服务核价形成的订单明细
+     * @param order        已先写入订单库并生成订单号的订单
+     * @param items        已由商品服务核价形成的订单明细
      * @param userCouponId 顾客选择的本人持券 ID；为空时不调用优惠券服务
      */
     private void applySelectedCoupon(OrderDO order, List<OrderItemDO> items, Long userCouponId) {
@@ -379,14 +401,15 @@ public class OrderServiceImpl
      * 按各行原价占比计算分摊，金额以分为单位；最后一行承接剩余金额，保证总额严格守恒。
      * 当早期行的四舍五入可能使剩余优惠超过后续商品金额时，向当前行补足最低必要分值，
      * 避免把某一行优惠分摊成负实付金额或产生负尾差。
-     * @param order 服务端已计算的订单总金额快照
-     * @param items 按订单行顺序排列的商品金额快照
+     *
+     * @param order        服务端已计算的订单总金额快照
+     * @param items        按订单行顺序排列的商品金额快照
      * @param userCouponId 已由优惠券服务成功锁定的用户券 ID
-     * @param couponTitle 下单时固定的优惠券标题
-     * @param discount 优惠券服务核定的两位小数优惠金额
+     * @param couponTitle  下单时固定的优惠券标题
+     * @param discount     优惠券服务核定的两位小数优惠金额
      */
     private void allocateCouponDiscount(OrderDO order, List<OrderItemDO> items, Long userCouponId,
-            String couponTitle, BigDecimal discount) {
+                                        String couponTitle, BigDecimal discount) {
         BigDecimal grossAmount = order.getTotalAmount();
         BigDecimal remainingDiscount = discount;
         BigDecimal remainingGross = grossAmount;
@@ -439,7 +462,7 @@ public class OrderServiceImpl
      * 绝不会出现「订单已落库但库存未扣减」的超卖窗口。</p>
      *
      * @param orderNo 订单号，作为库存流水的幂等业务单据号
-     * @param userId 下单用户 ID，作为库存流水操作者
+     * @param userId  下单用户 ID，作为库存流水操作者
      * @param request 创建订单请求，提供档口与菜品明细
      */
     private void deductStock(
@@ -520,28 +543,28 @@ public class OrderServiceImpl
     /**
      * 顾客取消自己尚未支付的订单。
      *
-     * @param userId 当前登录顾客 ID
+     * @param userId  当前登录顾客 ID
      * @param orderId 订单 ID
      * @return 订单状态变更结果
      */
     @Override
     @GlobalTransactional(name = "cancel-order-restore-stock", rollbackFor = Exception.class)
     public OrderStatusVO cancelOrder(Long userId, Long orderId) {
-        return cancelPendingOrder(userId,orderId,false);
+        return cancelPendingOrder(userId, orderId, false);
     }
 
     @Override
-    @GlobalTransactional(name="expire-order-restore-stock",rollbackFor=Exception.class)
+    @GlobalTransactional(name = "expire-order-restore-stock", rollbackFor = Exception.class)
     public OrderStatusVO cancelExpiredOrder(Long orderId) {
-        OrderDO current=getOrderForStatusChange(orderId);
-        if(getCurrentStatus(current)!=OrderStatus.PENDING_PAYMENT)
+        OrderDO current = getOrderForStatusChange(orderId);
+        if (getCurrentStatus(current) != OrderStatus.PENDING_PAYMENT)
             return OrderStatusVO.builder().orderId(orderId).status(current.getStatus()).build();
-        if(System.currentTimeMillis()<com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(current))
-            throw new BusinessException(CommonErrorCode.CONFLICT,"订单尚未到支付截止时间");
-        return cancelPendingOrder(current.getUserId(),orderId,true);
+        if (System.currentTimeMillis() < com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(current))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单尚未到支付截止时间");
+        return cancelPendingOrder(current.getUserId(), orderId, true);
     }
 
-    private OrderStatusVO cancelPendingOrder(Long userId,Long orderId,boolean automatic) {
+    private OrderStatusVO cancelPendingOrder(Long userId, Long orderId, boolean automatic) {
         // 先确认订单归属；随后状态机校验确保已支付或履约中的订单不能由顾客取消。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         if (userId == null || !userId.equals(orderDO.getUserId())) {
@@ -564,22 +587,24 @@ public class OrderServiceImpl
         }
 
         ApiResponse<PaymentCloseVO> closure = paymentClose.close(orderId, internalScopeToken);
-        if(closure==null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode()))
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"暂时无法确认支付关闭结果，请稍后重试");
+        if (closure == null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode()))
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法确认支付关闭结果，请稍后重试");
         var closeResult = closure.getData();
-        if (closeResult == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"支付服务没有返回关单结果");
-        if("PAID".equals(closeResult.status())) {
+        if (closeResult == null)
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "支付服务没有返回关单结果");
+        if ("PAID".equals(closeResult.status())) {
             // 关单与支付成功竞争时，支付服务返回其持久化的 success_time，订单不能自行用当前时间补猜。
-            if (closeResult.paidAt() == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"无法确认支付成功时间，请稍后重试");
+            if (closeResult.paidAt() == null)
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "无法确认支付成功时间，请稍后重试");
             return markOrderPaid(orderId, closeResult.paidAt());
         }
-        if(!"CLOSED".equals(closeResult.status()))
-            throw new BusinessException(CommonErrorCode.CONFLICT,"支付结果待确认，不能取消订单");
+        if (!"CLOSED".equals(closeResult.status()))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "支付结果待确认，不能取消订单");
         // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
-        orderDO=getOrderForStatusChange(orderId);
-        if(getCurrentStatus(orderDO)==OrderStatus.CANCELLED)
+        orderDO = getOrderForStatusChange(orderId);
+        if (getCurrentStatus(orderDO) == OrderStatus.CANCELLED)
             return OrderStatusVO.builder().orderId(orderId).status(OrderStatus.CANCELLED.getLabel()).build();
-        if(getCurrentStatus(orderDO)!=OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
+        if (getCurrentStatus(orderDO) != OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
 
         // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
         // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
@@ -599,8 +624,8 @@ public class OrderServiceImpl
             response = stockServiceClient.restore(internalScopeToken,
                     StockRestoreRequest.builder()
                             .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
-                            .items(stockItems).operatorId(automatic?null:userId)
-                            .remark(automatic?"订单十五分钟未支付自动取消":"顾客取消待支付订单").build());
+                            .items(stockItems).operatorId(automatic ? null : userId)
+                            .remark(automatic ? "订单十五分钟未支付自动取消" : "顾客取消待支付订单").build());
         } catch (RuntimeException exception) {
             log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
@@ -654,8 +679,8 @@ public class OrderServiceImpl
      * <p>先做细粒度数据范围校验：订单属私有数据，越权与不存在对外表现一致，
      * 统一返回 404；再校验状态机（待支付→已支付由支付回调独占，此处必然拒绝）。</p>
      *
-     * @param operatorId 当前登录操作者 ID
-     * @param orderId 订单 ID
+     * @param operatorId   当前登录操作者 ID
+     * @param orderId      订单 ID
      * @param targetStatus 目标状态
      * @return 订单状态变更结果
      */
@@ -830,7 +855,7 @@ public class OrderServiceImpl
     /**
      * 执行带旧状态及版本号条件的原子状态更新。
      *
-     * @param orderDO 已读取的订单
+     * @param orderDO      已读取的订单
      * @param targetStatus 已校验的目标状态
      * @return 订单状态变更结果
      */
@@ -1011,7 +1036,7 @@ public class OrderServiceImpl
     /**
      * 将请求菜品和商品核价结果组装为订单明细快照。
      *
-     * @param request 创建订单请求
+     * @param request       创建订单请求
      * @param productQuotes 商品服务核价结果
      * @return 已计算行金额的订单明细列表
      */
@@ -1102,11 +1127,11 @@ public class OrderServiceImpl
     /**
      * 组装服务端控制的订单持久化字段。
      *
-     * @param userId 当前用户 ID
+     * @param userId         当前用户 ID
      * @param idempotencyKey 客户端幂等键
-     * @param request 创建订单请求
-     * @param requestHash 规范化请求摘要
-     * @param totalAmount 服务端计算的订单总金额
+     * @param request        创建订单请求
+     * @param requestHash    规范化请求摘要
+     * @param totalAmount    服务端计算的订单总金额
      * @return 新订单持久化对象
      */
     private OrderDO buildOrder(
@@ -1147,7 +1172,7 @@ public class OrderServiceImpl
      * 检查重放请求摘要并返回已保存的订单及明细。
      *
      * @param existingOrder 已有订单
-     * @param requestHash 本次请求摘要
+     * @param requestHash   本次请求摘要
      * @return 已有订单详情
      */
     private OrderDetailVO replayOrder(
@@ -1245,7 +1270,7 @@ public class OrderServiceImpl
     /**
      * 在当前服务内部拼接菜品 ID 和规格键，避免报价索引把不同规格混为一行。
      *
-     * @param productId 商品 ID
+     * @param productId    商品 ID
      * @param selectionKey 规范化选择键
      * @return 唯一报价索引键
      */
@@ -1257,7 +1282,7 @@ public class OrderServiceImpl
      * 按 UTF-8 编码并使用长度前缀写入摘要，避免字段拼接歧义。
      *
      * @param digest SHA-256 摘要器
-     * @param value 请求字段
+     * @param value  请求字段
      */
     private void updateDigest(MessageDigest digest, String value) {
         // 每个字段前写入 UTF-8 字节长度，避免直接拼接导致字段边界不明确。
@@ -1281,8 +1306,9 @@ public class OrderServiceImpl
         List<String> statuses = switch (status) {
             case "all" -> null;
             case "pending" -> List.of(OrderStatus.PENDING_PAYMENT.getLabel());
-            case "active" -> List.of(OrderStatus.PAID.getLabel(), OrderStatus.PREPARING.getLabel(), OrderStatus.WAITING_FOR_PICKUP.getLabel());
-            case "completed" -> List.of(OrderStatus.COMPLETED.getLabel(),OrderStatus.REFUNDED.getLabel());
+            case "active" ->
+                    List.of(OrderStatus.PAID.getLabel(), OrderStatus.PREPARING.getLabel(), OrderStatus.WAITING_FOR_PICKUP.getLabel());
+            case "completed" -> List.of(OrderStatus.COMPLETED.getLabel(), OrderStatus.REFUNDED.getLabel());
             case "cancelled" -> List.of(OrderStatus.CANCELLED.getLabel());
             default -> throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单筛选状态不正确");
         };

@@ -18,12 +18,16 @@ import java.util.function.Consumer;
 public class SalesStatisticsMessaging {
     private final SalesStatisticsService statistics;
 
-    /** 消费函数只编排统计服务；Broker 的重试规则由 application-statistics-mq.yml 定义。 */
+    /**
+     * 消费函数只编排统计服务；Broker 的重试规则由 application-statistics-mq.yml 定义。
+     */
     public SalesStatisticsMessaging(SalesStatisticsService statistics) {
         this.statistics = statistics;
     }
 
-    /** 将订单支付事件交给幂等投影；异常向外传播以触发 Broker 重投。 */
+    /**
+     * 将订单支付事件交给幂等投影；异常向外传播以触发 Broker 重投。
+     */
     @Bean
     public Consumer<SalesPaidEvent> salesStatisticsPaid() {
         return statistics::consume;
@@ -39,9 +43,13 @@ public class SalesStatisticsMessaging {
         return statistics::consume;
     }
 
-    /** 显式重抛消费错误，避免默认错误通道仅记录日志后误确认消息。 */
+    /**
+     * 显式重抛消费错误，避免默认错误通道仅记录日志后误确认消息。
+     */
     @Bean
     public Consumer<ErrorMessage> salesStatisticsRetryError() {
-        return error -> { throw new IllegalStateException("销量读模型消费失败，交由 RocketMQ 重试", error.getPayload()); };
+        return error -> {
+            throw new IllegalStateException("销量读模型消费失败，交由 RocketMQ 重试", error.getPayload());
+        };
     }
 }

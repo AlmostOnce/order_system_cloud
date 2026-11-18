@@ -9,12 +9,13 @@ import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.recommendation.RecommendationPurchaseSnapshotFactory;
 import com.hbue.ordering.order.service.RecommendationPurchaseSnapshotQueryService;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 通过订单权威库提供有界历史回填，不读取推荐库或其他服务数据库，不允许按客户端userId导出。
@@ -22,24 +23,31 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RecommendationPurchaseSnapshotQueryServiceImpl implements RecommendationPurchaseSnapshotQueryService {
-    /** 每页业务上限，额外读取一条仅用于判定是否还有后续订单。 */
+    /**
+     * 每页业务上限，额外读取一条仅用于判定是否还有后续订单。
+     */
     private static final int MAX_LIMIT = 100;
-    /** 订单与明细均属order_db，本页不持有业务写锁或调用远程服务。 */
+    /**
+     * 订单与明细均属order_db，本页不持有业务写锁或调用远程服务。
+     */
     private final OrderMapper orders;
     private final OrderItemMapper items;
 
-    /** 注入权威事实读取接口，批量读取避免随页大小增加数据库往返次数。 */
+    /**
+     * 注入权威事实读取接口，批量读取避免随页大小增加数据库往返次数。
+     */
     public RecommendationPurchaseSnapshotQueryServiceImpl(OrderMapper orders, OrderItemMapper items) {
-        this.orders = orders; this.items = items;
+        this.orders = orders;
+        this.items = items;
     }
 
     /**
      * 按订单主键正序回填。实时消费应先启动，后来才支付的旧订单由实时事件补齐，不承诺跨页全局冻结。
      *
      * @param afterOrderId 排他下界；首次为0，后续使用响应游标，不接受负数
-     * @param limit 一页1至100个订单，不按明细行截断完整订单
+     * @param limit        一页1至100个订单，不按明细行截断完整订单
      * @return 当前源版本完整快照及下一游标，空页不执行明细IN查询
-     * @throws BusinessException 参数非法时返回标准400
+     * @throws BusinessException     参数非法时返回标准400
      * @throws IllegalStateException 缺失明细或损坏事实时整页失败，不推进游标而漏掉订单
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

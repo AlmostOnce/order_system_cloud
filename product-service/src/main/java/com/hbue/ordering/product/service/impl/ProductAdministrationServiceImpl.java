@@ -1,13 +1,13 @@
 package com.hbue.ordering.product.service.impl;
 
-import com.hbue.ordering.common.web.media.FileReferences;
-import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
+import com.hbue.ordering.common.web.media.FileReferences;
+import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.dto.request.ProductCategorySaveRequest;
@@ -16,10 +16,10 @@ import com.hbue.ordering.product.dto.request.WindowSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
-import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.service.WindowImageGallery;
 import com.hbue.ordering.product.vo.ProductAdminVO;
@@ -47,28 +47,44 @@ import java.util.List;
 public class ProductAdministrationServiceImpl
         implements ProductAdministrationService {
 
-    /** 启用状态值。 */
+    /**
+     * 启用状态值。
+     */
     private static final int ACTIVE_STATUS = 1;
 
-    /** 在售状态值。 */
+    /**
+     * 在售状态值。
+     */
     private static final int ON_SALE_STATUS = 1;
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 分类数据 Mapper。 */
+    /**
+     * 分类数据 Mapper。
+     */
     private final ProductCategoryMapper productCategoryMapper;
 
-    /** 菜品数据 Mapper。 */
+    /**
+     * 菜品数据 Mapper。
+     */
     private final ProductMapper productMapper;
 
-    /** 数据范围判定服务。 */
+    /**
+     * 数据范围判定服务。
+     */
     private final DataScopeService dataScopeService;
 
-    /** 商品菜单缓存读写组件。 */
+    /**
+     * 商品菜单缓存读写组件。
+     */
     private final ProductMenuCacheService menuCacheService;
 
-    /** 商品布隆过滤器管理器。 */
+    /**
+     * 商品布隆过滤器管理器。
+     */
     private final ProductBloomFilterManager bloomFilterManager;
     private final ManagedImageClient images;
     private final ProductSearchOutboxWriter searchOutbox;
@@ -76,12 +92,12 @@ public class ProductAdministrationServiceImpl
     /**
      * 创建目录管理服务。
      *
-     * @param diningWindowMapper 窗口数据 Mapper
+     * @param diningWindowMapper    窗口数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
-     * @param productMapper 菜品数据 Mapper
-     * @param dataScopeService 数据范围判定服务
-     * @param menuCacheService 商品菜单缓存读写组件
-     * @param bloomFilterManager 商品布隆过滤器管理器
+     * @param productMapper         菜品数据 Mapper
+     * @param dataScopeService      数据范围判定服务
+     * @param menuCacheService      商品菜单缓存读写组件
+     * @param bloomFilterManager    商品布隆过滤器管理器
      */
     public ProductAdministrationServiceImpl(
             DiningWindowMapper diningWindowMapper,
@@ -119,7 +135,9 @@ public class ProductAdministrationServiceImpl
         return toWindowVO(requireWindow(windowId));
     }
 
-    /** 整体替换图片数组，单条UPDATE同步封面；并发请求采用最后写入值，不存在逐张追加越限。 */
+    /**
+     * 整体替换图片数组，单条UPDATE同步封面；并发请求采用最后写入值，不存在逐张追加越限。
+     */
     @Override
     @Transactional
     public WindowAdminVO updateWindowImages(Long operatorId, Long windowId, List<String> fileKeys) {
@@ -134,7 +152,9 @@ public class ProductAdministrationServiceImpl
         return toWindowVO(requireWindow(windowId));
     }
 
-    /** 图片与封面在同一条SQL更新，失败时整笔事务回滚，不删除文件服务中可能仍被使用的文件。 */
+    /**
+     * 图片与封面在同一条SQL更新，失败时整笔事务回滚，不删除文件服务中可能仍被使用的文件。
+     */
     private void saveWindowImages(Long windowId, List<String> keys) {
         int updated = diningWindowMapper.update(null, new UpdateWrapper<DiningWindowDO>()
                 .eq("window_id", windowId)
@@ -143,7 +163,9 @@ public class ProductAdministrationServiceImpl
         if (updated != 1) throw notFound("窗口不存在");
     }
 
-    /** 新旧请求字段互斥；不传图片字段保留全部，传新列表则完整替换。 */
+    /**
+     * 新旧请求字段互斥；不传图片字段保留全部，传新列表则完整替换。
+     */
     private List<String> requestedWindowImages(WindowSaveRequest request, DiningWindowDO existing, Long operatorId, Long windowId) {
         List<String> old = existing == null ? List.of() : WindowImageGallery.read(existing);
         if (request.getImageFileKeys() != null && request.getImageFileKey() != null) {
@@ -168,7 +190,9 @@ public class ProductAdministrationServiceImpl
         return toProductVO(requireProduct(productId));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<WindowAdminVO> listWindows(Long operatorId) {
         List<DiningWindowDO> windows = diningWindowMapper.selectList(
@@ -187,7 +211,9 @@ public class ProductAdministrationServiceImpl
         return results;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public WindowAdminVO createWindow(
@@ -229,7 +255,9 @@ public class ProductAdministrationServiceImpl
         return toWindowVO(persistedWindow == null ? window : persistedWindow);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public WindowAdminVO updateWindow(
@@ -275,7 +303,9 @@ public class ProductAdministrationServiceImpl
         return toWindowVO(requireWindow(windowId));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void disableWindow(Long operatorId, Long windowId) {
@@ -294,7 +324,9 @@ public class ProductAdministrationServiceImpl
         evictWindowMenuAfterCommit(windowId);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<ProductCategoryAdminVO> listCategories(
             Long operatorId,
@@ -316,7 +348,9 @@ public class ProductAdministrationServiceImpl
         return results;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public ProductCategoryAdminVO createCategory(
@@ -349,7 +383,9 @@ public class ProductAdministrationServiceImpl
         );
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public ProductCategoryAdminVO updateCategory(
@@ -381,7 +417,9 @@ public class ProductAdministrationServiceImpl
         return toCategoryVO(requireCategory(categoryId));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void disableCategory(Long operatorId, Long categoryId) {
@@ -399,7 +437,9 @@ public class ProductAdministrationServiceImpl
         evictWindowMenuAfterCommit(category.getWindowId());
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public List<ProductAdminVO> listProducts(Long operatorId, Long windowId) {
         validateId(windowId, "窗口");
@@ -419,7 +459,9 @@ public class ProductAdministrationServiceImpl
         return results;
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public ProductAdminVO getProduct(Long operatorId, Long productId) {
         validateId(productId, "菜品");
@@ -428,7 +470,9 @@ public class ProductAdministrationServiceImpl
         return toProductVO(product);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public ProductAdminVO createProduct(
@@ -464,7 +508,9 @@ public class ProductAdministrationServiceImpl
         return toProductVO(persistedProduct == null ? product : persistedProduct);
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public ProductAdminVO updateProduct(
@@ -507,7 +553,9 @@ public class ProductAdministrationServiceImpl
         return toProductVO(requireProduct(productId));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @Transactional
     public void disableProduct(Long operatorId, Long productId) {
@@ -545,7 +593,7 @@ public class ProductAdministrationServiceImpl
     /**
      * 校验商品分类存在、属于目标窗口，且在售菜品只能使用启用分类。
      *
-     * @param windowId 目标窗口 ID
+     * @param windowId   目标窗口 ID
      * @param categoryId 分类 ID
      * @param saleStatus 菜品售卖状态
      */
@@ -639,7 +687,7 @@ public class ProductAdministrationServiceImpl
     /**
      * 校验路径 ID 为正整数。
      *
-     * @param id 路径 ID
+     * @param id           路径 ID
      * @param resourceName 资源名称
      */
     private void validateId(Long id, String resourceName) {

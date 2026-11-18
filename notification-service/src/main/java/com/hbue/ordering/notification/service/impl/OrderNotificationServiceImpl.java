@@ -1,17 +1,18 @@
 package com.hbue.ordering.notification.service.impl;
 
-import com.hbue.ordering.notification.messaging.OrderNotificationEvent;
 import com.hbue.ordering.notification.mapper.NotificationMapper;
+import com.hbue.ordering.notification.messaging.OrderNotificationEvent;
 import com.hbue.ordering.notification.service.OrderNotificationService;
-import java.util.UUID;
+import com.hbue.ordering.notification.websocket.NotificationSocketBus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import com.hbue.ordering.notification.websocket.NotificationSocketBus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.UUID;
 
 /**
  * 订单状态事件落库服务。数据库唯一约束吸收MQ重投，只有本地通知事务提交后才尝试在线提示。
@@ -22,8 +23,15 @@ public class OrderNotificationServiceImpl implements OrderNotificationService {
     private final NotificationMapper repository;
     private final NotificationSocketBus socketBus;
     private static final Logger log = LoggerFactory.getLogger(OrderNotificationServiceImpl.class);
-    /** 注入通知Mapper和在线提示总线；入库与提交后提示的顺序由accept方法事务保证。 */
-    public OrderNotificationServiceImpl(NotificationMapper repository, NotificationSocketBus socketBus) { this.repository = repository; this.socketBus = socketBus; }
+
+    /**
+     * 注入通知Mapper和在线提示总线；入库与提交后提示的顺序由accept方法事务保证。
+     */
+    public OrderNotificationServiceImpl(NotificationMapper repository, NotificationSocketBus socketBus) {
+        this.repository = repository;
+        this.socketBus = socketBus;
+    }
+
     /**
      * 幂等持久化已提交的订单状态事件。注册事务提交后的提示回调；只有确认为同事件重投才吸收唯一键异常。
      */
@@ -36,9 +44,13 @@ public class OrderNotificationServiceImpl implements OrderNotificationService {
                             "退款申请被拒绝".equals(event.status()) ? "退款申请未通过，请查看处理原因或申请介入" : "订单状态已更新为" + event.status());
             // 必须等待通知记录提交；事务回滚时不会向客户端发送虚假的通知变化。
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() {
-                    try { socketBus.publish(event.recipientId()); }
-                    catch (RuntimeException error) { log.warn("实时通知发送失败，用户可通过列表补齐"); }
+                @Override
+                public void afterCommit() {
+                    try {
+                        socketBus.publish(event.recipientId());
+                    } catch (RuntimeException error) {
+                        log.warn("实时通知发送失败，用户可通过列表补齐");
+                    }
                 }
             });
         } catch (DuplicateKeyException error) {

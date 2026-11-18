@@ -1,7 +1,7 @@
 package com.hbue.ordering.auth.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -41,8 +41,8 @@ public class RegisterRequest {
     @lombok.ToString.Exclude
     private String password;
 
-    @NotBlank(message="请先验证注册邮箱")
-    @jakarta.validation.constraints.Pattern(regexp="[a-f0-9]{64}",message="邮箱验证凭据无效")
+    @NotBlank(message = "请先验证注册邮箱")
+    @jakarta.validation.constraints.Pattern(regexp = "[a-f0-9]{64}", message = "邮箱验证凭据无效")
     @lombok.ToString.Exclude
     private String emailVerificationToken;
 }

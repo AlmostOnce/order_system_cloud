@@ -21,14 +21,18 @@ import org.springframework.web.bind.annotation.RequestHeader;
         fallbackFactory = CouponServiceClientFallbackFactory.class)
 public interface CouponServiceClient {
 
-    /** 以订单服务核实的用户、窗口与商品金额尝试锁定一张券。 */
+    /**
+     * 以订单服务核实的用户、窗口与商品金额尝试锁定一张券。
+     */
     @PostMapping("/internal/coupons/lock")
     ApiResponse<CouponLockVO> lock(
             @RequestHeader("X-Internal-Token") String internalToken,
             @RequestBody CouponLockRequest request
     );
 
-    /** 只释放绑定到指定订单且仍处于 LOCKED 的券。 */
+    /**
+     * 只释放绑定到指定订单且仍处于 LOCKED 的券。
+     */
     @PostMapping("/internal/coupons/release")
     ApiResponse<Void> release(
             @RequestHeader("X-Internal-Token") String internalToken,

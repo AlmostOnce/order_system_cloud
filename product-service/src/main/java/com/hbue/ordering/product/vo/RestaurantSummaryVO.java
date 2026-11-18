@@ -18,15 +18,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RestaurantSummaryVO {
 
-    /** 餐厅 ID。 */
+    /**
+     * 餐厅 ID。
+     */
     private Long restaurantId;
 
-    /** 餐厅编码。 */
+    /**
+     * 餐厅编码。
+     */
     private String restaurantCode;
 
-    /** 餐厅名称。 */
+    /**
+     * 餐厅名称。
+     */
     private String restaurantName;
 
-    /** 餐厅位置。 */
+    /**
+     * 餐厅位置。
+     */
     private String location;
 }

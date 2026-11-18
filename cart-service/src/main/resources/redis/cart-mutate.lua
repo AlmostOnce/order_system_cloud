@@ -158,8 +158,8 @@ if action == 'add' then
         if redis.call('HLEN', key) >= maxItems then
             return -2
         end
-        item = {windowId = windowId, productId = productId, selectionKey = selectionKey,
-                quantity = 0, checked = true, specificationTextSnapshot = ''}
+        item = { windowId = windowId, productId = productId, selectionKey = selectionKey,
+                 quantity = 0, checked = true, specificationTextSnapshot = '' }
     end
     local quantity = item.quantity + tonumber(value)
     if quantity < 1 or quantity > maxQuantity then

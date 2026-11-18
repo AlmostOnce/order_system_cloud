@@ -14,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class RestaurantAdministrationControllerTest {
 
-    /** 餐厅管理接口必须限制为餐厅经理与总经理。 */
+    /**
+     * 餐厅管理接口必须限制为餐厅经理与总经理。
+     */
     @Test
     void shouldRestrictRestaurantEndpointsToManagers() {
         PreAuthorize authorization = RestaurantAdministrationController.class

@@ -7,18 +7,23 @@ import com.hbue.ordering.recommendation.model.RecommendationProductFeatureDO;
 import com.hbue.ordering.recommendation.service.RecommendationProductFeatureWriter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** 原子替换商品窗口的推荐读模型；只在上游给出完整成功快照后撤下缺失商品。 */
+/**
+ * 原子替换商品窗口的推荐读模型；只在上游给出完整成功快照后撤下缺失商品。
+ */
 @Service
 public class RecommendationProductFeatureWriterImpl implements RecommendationProductFeatureWriter {
     private final RecommendationProductFeatureMapper products;
     private final ObjectMapper json;
 
-    /** 注入本地商品投影与 JSON 编码器，避免推荐服务直连商品数据库。 */
+    /**
+     * 注入本地商品投影与 JSON 编码器，避免推荐服务直连商品数据库。
+     */
     public RecommendationProductFeatureWriterImpl(RecommendationProductFeatureMapper products, ObjectMapper json) {
         this.products = products;
         this.json = json;
@@ -45,7 +50,9 @@ public class RecommendationProductFeatureWriterImpl implements RecommendationPro
         else products.markMissingUnavailable(windowId, List.copyOf(ids));
     }
 
-    /** 单菜刷新根据商品域当前结果更新或撤架；其余窗口目录不受影响。 */
+    /**
+     * 单菜刷新根据商品域当前结果更新或撤架；其余窗口目录不受影响。
+     */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void replaceProduct(Long windowId, Long productId, List<ProductRecommendationDocument> documents) {
@@ -63,7 +70,9 @@ public class RecommendationProductFeatureWriterImpl implements RecommendationPro
         products.upsertDocument(toRow(document, LocalDateTime.now()));
     }
 
-    /** 只在商品服务成功返回完整窗口清单后清理已消失窗口，避免单个窗口读取失败清空有效候选。 */
+    /**
+     * 只在商品服务成功返回完整窗口清单后清理已消失窗口，避免单个窗口读取失败清空有效候选。
+     */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void markWindowsMissing(List<Long> activeWindowIds) {
@@ -75,7 +84,9 @@ public class RecommendationProductFeatureWriterImpl implements RecommendationPro
         else products.markWindowsMissingUnavailable(activeWindowIds.stream().distinct().toList());
     }
 
-    /** 上游快照需与请求窗口、商品价格和规格选项保持一致；不接收推荐服务自行推导的商品状态。 */
+    /**
+     * 上游快照需与请求窗口、商品价格和规格选项保持一致；不接收推荐服务自行推导的商品状态。
+     */
     private void validate(ProductRecommendationDocument document, Long windowId, Set<Long> ids) {
         if (document == null || document.productId() == null || document.productId() <= 0
                 || !windowId.equals(document.windowId()) || document.restaurantId() == null
@@ -96,12 +107,15 @@ public class RecommendationProductFeatureWriterImpl implements RecommendationPro
             for (ProductRecommendationDocument.SpecificationOption option : group.options()) {
                 if (option == null || option.optionId() == null || option.optionId() <= 0
                         || option.optionName() == null || option.optionName().isBlank()
-                        || !optionIds.add(option.optionId())) throw new IllegalArgumentException("商品规格选项快照无效");
+                        || !optionIds.add(option.optionId()))
+                    throw new IllegalArgumentException("商品规格选项快照无效");
             }
         }
     }
 
-    /** 保存当前基础售价和规格配置；未保存规格加价，避免推荐投影被误用作权威核价数据。 */
+    /**
+     * 保存当前基础售价和规格配置；未保存规格加价，避免推荐投影被误用作权威核价数据。
+     */
     private RecommendationProductFeatureDO toRow(ProductRecommendationDocument document, LocalDateTime updatedAt) {
         try {
             RecommendationProductFeatureDO row = new RecommendationProductFeatureDO();

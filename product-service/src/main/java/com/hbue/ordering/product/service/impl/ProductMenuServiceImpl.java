@@ -1,11 +1,10 @@
 package com.hbue.ordering.product.service.impl;
 
-import com.hbue.ordering.product.vo.ProductImageVO;
-import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.DistributedLockService;
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.cache.ProductCacheKeys;
 import com.hbue.ordering.product.cache.ProductMenuCacheService;
@@ -19,20 +18,11 @@ import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
 import com.hbue.ordering.product.service.ProductSpecificationService;
-import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
 import com.hbue.ordering.product.service.WindowImageGallery;
-import com.hbue.ordering.product.vo.MenuProductVO;
-import com.hbue.ordering.product.vo.ProductCategoryMenuVO;
-import com.hbue.ordering.product.vo.RestaurantSummaryVO;
-import com.hbue.ordering.product.vo.WindowMenuVO;
-import com.hbue.ordering.product.vo.WindowSummaryVO;
+import com.hbue.ordering.product.vo.*;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 从商品目录组装顾客可见的窗口菜单，并协调缓存、布隆过滤器与回源查询。
@@ -47,49 +37,71 @@ import java.util.Map;
 @Service
 public class ProductMenuServiceImpl implements ProductMenuService {
 
-    /** 启用状态值。 */
+    /**
+     * 启用状态值。
+     */
     private static final int ACTIVE_STATUS = 1;
 
-    /** 在售状态值。 */
+    /**
+     * 在售状态值。
+     */
     private static final int ON_SALE_STATUS = 1;
 
-    /** 餐厅未配置展示排序或所属餐厅已停用时使用的兜底排序值，排在已配置餐厅之后。 */
+    /**
+     * 餐厅未配置展示排序或所属餐厅已停用时使用的兜底排序值，排在已配置餐厅之后。
+     */
     private static final int UNRANKED_SORT_ORDER = Integer.MAX_VALUE;
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 餐厅数据 Mapper。 */
+    /**
+     * 餐厅数据 Mapper。
+     */
     private final RestaurantMapper restaurantMapper;
 
-    /** 分类数据 Mapper。 */
+    /**
+     * 分类数据 Mapper。
+     */
     private final ProductCategoryMapper productCategoryMapper;
 
-    /** 菜品数据 Mapper。 */
+    /**
+     * 菜品数据 Mapper。
+     */
     private final ProductMapper productMapper;
 
-    /** 商品菜单缓存读写组件。 */
+    /**
+     * 商品菜单缓存读写组件。
+     */
     private final ProductMenuCacheService menuCacheService;
 
-    /** 商品布隆过滤器管理器。 */
+    /**
+     * 商品布隆过滤器管理器。
+     */
     private final ProductBloomFilterManager bloomFilterManager;
 
-    /** 规格批量读取服务，避免对菜单每个菜品逐一查询。 */
+    /**
+     * 规格批量读取服务，避免对菜单每个菜品逐一查询。
+     */
     private final ProductSpecificationService specifications;
 
-    /** 分布式锁组件。 */
+    /**
+     * 分布式锁组件。
+     */
     private final DistributedLockService distributedLockService;
 
     /**
      * 创建窗口菜单查询服务。
      *
-     * @param diningWindowMapper 窗口数据 Mapper
-     * @param restaurantMapper 餐厅数据 Mapper
-     * @param productCategoryMapper 分类数据 Mapper
-     * @param productMapper 菜品数据 Mapper
-     * @param menuCacheService 商品菜单缓存读写组件
-     * @param bloomFilterManager 商品布隆过滤器管理器
-     * @param specifications 规格批量查询服务
+     * @param diningWindowMapper     窗口数据 Mapper
+     * @param restaurantMapper       餐厅数据 Mapper
+     * @param productCategoryMapper  分类数据 Mapper
+     * @param productMapper          菜品数据 Mapper
+     * @param menuCacheService       商品菜单缓存读写组件
+     * @param bloomFilterManager     商品布隆过滤器管理器
+     * @param specifications         规格批量查询服务
      * @param distributedLockService 分布式锁组件
      */
     public ProductMenuServiceImpl(
@@ -112,7 +124,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         this.specifications = specifications;
     }
 
-    /** 批量读取顾客可见菜品图片，限制一次最多50项。 */
+    /**
+     * 批量读取顾客可见菜品图片，限制一次最多50项。
+     */
     @Override
     public List<ProductImageVO> getProductImages(List<Long> productIds) {
         if (productIds == null || productIds.isEmpty() || productIds.size() > 50
@@ -335,9 +349,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     /**
      * 组装分类与菜品；被停用分类下的菜品不会出现在顾客菜单中。
      *
-     * @param window 启用窗口
+     * @param window     启用窗口
      * @param categories 启用分类
-     * @param products 当前在售菜品
+     * @param products   当前在售菜品
      * @return 窗口菜单视图
      */
     private WindowMenuVO assembleMenu(
@@ -436,7 +450,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
      * <p>档口未挂餐厅、所属餐厅已停用或餐厅未配置排序值时，一律取兜底值排到最后，
      * 保证排序结果稳定且不会因空值抛出异常。</p>
      *
-     * @param sortOrders 餐厅 ID 到展示排序值的映射
+     * @param sortOrders   餐厅 ID 到展示排序值的映射
      * @param restaurantId 餐厅 ID
      * @return 展示排序值
      */

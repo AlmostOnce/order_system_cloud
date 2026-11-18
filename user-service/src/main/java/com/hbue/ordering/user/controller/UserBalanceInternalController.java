@@ -6,12 +6,7 @@ import com.hbue.ordering.user.api.dto.UserBalanceDeductCommand;
 import com.hbue.ordering.user.api.vo.UserBalanceDeductResultVO;
 import com.hbue.ordering.user.service.UserBalanceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户余额内部扣款接口。
@@ -27,16 +22,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/users")
 public class UserBalanceInternalController {
 
-    /** 用户余额业务服务。 */
+    /**
+     * 用户余额业务服务。
+     */
     private final UserBalanceService userBalanceService;
 
-    /** 内部调用令牌校验器。 */
+    /**
+     * 内部调用令牌校验器。
+     */
     private final InternalScopeTokenVerifier internalScopeTokenVerifier;
 
     /**
      * 创建余额扣款内部接口。
      *
-     * @param userBalanceService 用户余额业务服务
+     * @param userBalanceService         用户余额业务服务
      * @param internalScopeTokenVerifier 内部调用令牌校验器
      */
     public UserBalanceInternalController(
@@ -50,9 +49,9 @@ public class UserBalanceInternalController {
     /**
      * 扣减指定用户余额并按业务单据幂等记账。
      *
-     * @param userId 用户 ID
+     * @param userId        用户 ID
      * @param internalToken 服务间共享密钥
-     * @param command 余额扣款命令
+     * @param command       余额扣款命令
      * @return 扣款结果
      * @throws com.hbue.ordering.common.core.exception.BusinessException 内部共享密钥无效或扣款业务校验失败时由统一异常处理转换为响应
      */
@@ -73,9 +72,9 @@ public class UserBalanceInternalController {
 
     @PostMapping("/{userId}/balance/close")
     public ApiResponse<String> close(@PathVariable("userId") Long userId,
-            @RequestHeader(value="X-Internal-Token",required=false) String token,
-            @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command) {
+                                     @RequestHeader(value = "X-Internal-Token", required = false) String token,
+                                     @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command) {
         internalScopeTokenVerifier.verify(token);
-        return ApiResponse.success(userBalanceService.closeSettlement(userId,command));
+        return ApiResponse.success(userBalanceService.closeSettlement(userId, command));
     }
 }

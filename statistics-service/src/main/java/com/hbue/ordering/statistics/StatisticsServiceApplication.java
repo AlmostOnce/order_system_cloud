@@ -15,7 +15,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients(clients = com.hbue.ordering.order.api.client.OrderSalesInternalClient.class)
 @EnableScheduling
 public class StatisticsServiceApplication {
-    /** 启动统计服务并由 Spring 管理 HTTP、MQ、数据库和 Redis 投影组件。 */
+    /**
+     * 启动统计服务并由 Spring 管理 HTTP、MQ、数据库和 Redis 投影组件。
+     */
     public static void main(String[] args) {
         SpringApplication.run(StatisticsServiceApplication.class, args);
     }

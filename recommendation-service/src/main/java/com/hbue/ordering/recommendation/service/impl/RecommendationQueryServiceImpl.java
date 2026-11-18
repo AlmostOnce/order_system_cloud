@@ -5,31 +5,23 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.api.dto.ProductRecommendationDocument;
 import com.hbue.ordering.product.api.dto.ProductRecommendationValidationRequest;
 import com.hbue.ordering.product.api.recommendationclient.ProductRecommendationSourceClient;
-import com.hbue.ordering.stock.api.client.StockServiceClient;
-import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
-import com.hbue.ordering.stock.api.vo.StockVO;
-import com.hbue.ordering.recommendation.mapper.RecommendationFavoriteStateMapper;
-import com.hbue.ordering.recommendation.mapper.RecommendationHotProductMapper;
-import com.hbue.ordering.recommendation.mapper.RecommendationOrderItemMapper;
-import com.hbue.ordering.recommendation.mapper.RecommendationOrderSnapshotMapper;
-import com.hbue.ordering.recommendation.mapper.RecommendationProductFeatureMapper;
-import com.hbue.ordering.recommendation.mapper.RecommendationSearchIntentMapper;
+import com.hbue.ordering.recommendation.mapper.*;
 import com.hbue.ordering.recommendation.model.RecommendationProductFeatureDO;
 import com.hbue.ordering.recommendation.service.RecommendationAlgorithm;
 import com.hbue.ordering.recommendation.service.RecommendationQueryService;
 import com.hbue.ordering.recommendation.vo.RecommendationHomeVO;
+import com.hbue.ordering.stock.api.client.StockServiceClient;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
+import com.hbue.ordering.stock.api.vo.StockVO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
-/** 首页推荐查询编排；先读本地投影排序，再批量复核商品当前展示事实。 */
+import java.time.LocalDateTime;
+import java.util.*;
+
+/**
+ * 首页推荐查询编排；先读本地投影排序，再批量复核商品当前展示事实。
+ */
 @Service
 public class RecommendationQueryServiceImpl implements RecommendationQueryService {
     private static final int MAX_CANDIDATES = 2000;
@@ -46,13 +38,15 @@ public class RecommendationQueryServiceImpl implements RecommendationQueryServic
     private final StockServiceClient stockSource;
     private final String internalToken;
 
-    /** 注入只读推荐投影、确定性算法和唯一商品事实复核契约。 */
+    /**
+     * 注入只读推荐投影、确定性算法和唯一商品事实复核契约。
+     */
     public RecommendationQueryServiceImpl(RecommendationProductFeatureMapper products,
-            RecommendationOrderSnapshotMapper orders, RecommendationOrderItemMapper orderItems,
-            RecommendationFavoriteStateMapper favorites, RecommendationSearchIntentMapper searches,
-            RecommendationHotProductMapper hotProducts, RecommendationAlgorithm algorithm,
-            ProductRecommendationSourceClient productSource, StockServiceClient stockSource,
-            @Value("${internal.scope.token:}") String internalToken) {
+                                          RecommendationOrderSnapshotMapper orders, RecommendationOrderItemMapper orderItems,
+                                          RecommendationFavoriteStateMapper favorites, RecommendationSearchIntentMapper searches,
+                                          RecommendationHotProductMapper hotProducts, RecommendationAlgorithm algorithm,
+                                          ProductRecommendationSourceClient productSource, StockServiceClient stockSource,
+                                          @Value("${internal.scope.token:}") String internalToken) {
         this.products = products;
         this.orders = orders;
         this.orderItems = orderItems;
@@ -152,7 +146,9 @@ public class RecommendationQueryServiceImpl implements RecommendationQueryServic
         return response(ranked.mode(), responseItems);
     }
 
-    /** 每次查询生成关联 ID 供页面/后续曝光统计关联，不携带内部用户或原始评分。 */
+    /**
+     * 每次查询生成关联 ID 供页面/后续曝光统计关联，不携带内部用户或原始评分。
+     */
     private RecommendationHomeVO response(String mode, List<RecommendationHomeVO.Item> items) {
         return new RecommendationHomeVO(UUID.randomUUID().toString(), RecommendationAlgorithm.ALGORITHM_VERSION,
                 mode, LocalDateTime.now(), List.copyOf(items));

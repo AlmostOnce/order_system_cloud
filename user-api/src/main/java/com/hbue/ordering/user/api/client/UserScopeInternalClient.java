@@ -29,7 +29,7 @@ public interface UserScopeInternalClient {
     /**
      * 查询指定用户的数据范围。
      *
-     * @param userId 用户 ID
+     * @param userId        用户 ID
      * @param internalToken 服务间共享密钥
      * @return 统一响应中的平台、档口和餐厅范围；调用失败由 fallback 返回服务不可用响应
      */

@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
  *
  * @param favoriteId 收藏关系游标
  * @param targetType 目标类型
- * @param targetId 商品服务中的窗口或菜品 ID
- * @param createdAt 收藏时间
+ * @param targetId   商品服务中的窗口或菜品 ID
+ * @param createdAt  收藏时间
  */
 public record UserFavoriteItemVO(Long favoriteId,
                                  FavoriteTargetType targetType,

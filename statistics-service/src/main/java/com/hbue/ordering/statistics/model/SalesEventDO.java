@@ -13,16 +13,28 @@ import java.time.LocalDateTime;
 @Data
 @TableName("statistics_sales_events")
 public class SalesEventDO {
-    /** 稳定事件键，格式为 order-paid-sales:{orderId}。 */
+    /**
+     * 稳定事件键，格式为 order-paid-sales:{orderId}。
+     */
     private String eventId;
-    /** 来源订单主键，只在统计库内去重，不向学生端返回。 */
+    /**
+     * 来源订单主键，只在统计库内去重，不向学生端返回。
+     */
     private Long orderId;
-    /** 下单时所属窗口主键快照。 */
+    /**
+     * 下单时所属窗口主键快照。
+     */
     private Long windowId;
-    /** 支付服务确认的首次支付时间。 */
+    /**
+     * 支付服务确认的首次支付时间。
+     */
     private LocalDateTime paidAt;
-    /** 接收时的消息契约版本。 */
+    /**
+     * 接收时的消息契约版本。
+     */
     private Integer eventVersion;
-    /** 统计服务首次保存事件的时间。 */
+    /**
+     * 统计服务首次保存事件的时间。
+     */
     private LocalDateTime createdAt;
 }

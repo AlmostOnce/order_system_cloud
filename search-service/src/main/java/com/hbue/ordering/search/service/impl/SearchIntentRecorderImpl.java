@@ -27,23 +27,37 @@ import java.util.regex.Pattern;
  */
 @Service
 public class SearchIntentRecorderImpl implements SearchIntentRecorder {
-    /** 只接受显式主动搜索标识，避免旧客户端、分页或空标识被误记为新意图。 */
+    /**
+     * 只接受显式主动搜索标识，避免旧客户端、分页或空标识被误记为新意图。
+     */
     private static final Pattern QUERY_ID = Pattern.compile("[A-Za-z0-9_-]{16,64}");
-    /** 仅记录失败类别，不包含请求/响应详情或搜索原文。 */
+    /**
+     * 仅记录失败类别，不包含请求/响应详情或搜索原文。
+     */
     private static final Logger log = LoggerFactory.getLogger(SearchIntentRecorderImpl.class);
-    /** 已验签UUID到当前有效内部身份的既有解析器，调用发生在后台工作线程。 */
+    /**
+     * 已验签UUID到当前有效内部身份的既有解析器，调用发生在后台工作线程。
+     */
     private final JwtUserIdentity identities;
-    /** 使用内部凭据的推荐采集客户端，不读取Servlet上下文。 */
+    /**
+     * 使用内部凭据的推荐采集客户端，不读取Servlet上下文。
+     */
     private final RecommendationSearchIntentClient recommendations;
-    /** 任务数量有界且拒绝后不在请求线程运行的专用执行器。 */
+    /**
+     * 任务数量有界且拒绝后不在请求线程运行的专用执行器。
+     */
     private final ThreadPoolTaskExecutor executor;
-    /** 后端共享凭据只用于内部请求头，不进入日志和终端返回值。 */
+    /**
+     * 后端共享凭据只用于内部请求头，不进入日志和终端返回值。
+     */
     private final String internalToken;
 
-    /** 注入已有身份解析和内部客户端，线程池及远程超时由搜索服务独立限定。 */
+    /**
+     * 注入已有身份解析和内部客户端，线程池及远程超时由搜索服务独立限定。
+     */
     public SearchIntentRecorderImpl(JwtUserIdentity identities, RecommendationSearchIntentClient recommendations,
-            @Qualifier("searchIntentExecutor") ThreadPoolTaskExecutor executor,
-            @Value("${internal.scope.token:}") String internalToken) {
+                                    @Qualifier("searchIntentExecutor") ThreadPoolTaskExecutor executor,
+                                    @Value("${internal.scope.token:}") String internalToken) {
         this.identities = identities;
         this.recommendations = recommendations;
         this.executor = executor;
@@ -54,16 +68,16 @@ public class SearchIntentRecorderImpl implements SearchIntentRecorder {
      * 仅将成功首屏且显式带queryId的搜索入队；分页、旧客户端以及无效输入不采集。
      * 队列只保存UUID、凭据版本和有界搜索快照，不保存JWT原始令牌，也不依赖请求线程的身份上下文。
      *
-     * @param verified 已由资源服务器验签、issuer/过期和注销黑名单校验的JWT
-     * @param queryId 本次主动搜索标识，重试沿用该标识；没有则不采集
-     * @param result 搜索成功返回的页，空结果允许采集，异常搜索不得调用本方法
+     * @param verified     已由资源服务器验签、issuer/过期和注销黑名单校验的JWT
+     * @param queryId      本次主动搜索标识，重试沿用该标识；没有则不采集
+     * @param result       搜索成功返回的页，空结果允许采集，异常搜索不得调用本方法
      * @param restaurantId 已校验的搜索餐厅范围
-     * @param windowId 已校验的搜索档口范围
-     * @param categoryId 已校验的搜索分类范围
+     * @param windowId     已校验的搜索档口范围
+     * @param categoryId   已校验的搜索分类范围
      */
     @Override
     public void recordSuccessfulFirstPage(Jwt verified, String queryId, ProductSearchPageVO result,
-            Long restaurantId, Long windowId, Long categoryId) {
+                                          Long restaurantId, Long windowId, Long categoryId) {
         if (queryId == null || result == null || result.page() != 1) return;
         try {
             if (!QUERY_ID.matcher(queryId).matches() || verified == null || result.items() == null) {
@@ -106,7 +120,7 @@ public class SearchIntentRecorderImpl implements SearchIntentRecorder {
      * 队列任务不重试、不向终端报错；推荐服务成功入库前不宣称已经采集成功。
      */
     private void send(String uuid, long credentialVersion, String queryId, String keyword,
-            Long restaurantId, Long windowId, Long categoryId, List<Long> rankedProductIds) {
+                      Long restaurantId, Long windowId, Long categoryId, List<Long> rankedProductIds) {
         try {
             Long userId = identities.resolveCurrentIdentity(uuid, credentialVersion);
             if (userId == null || userId <= 0 || internalToken == null || internalToken.isBlank()) {

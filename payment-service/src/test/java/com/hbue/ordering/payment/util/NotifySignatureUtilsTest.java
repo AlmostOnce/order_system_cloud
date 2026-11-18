@@ -3,10 +3,7 @@ package com.hbue.ordering.payment.util;
 import com.hbue.ordering.payment.dto.request.ChannelNotifyRequest;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 渠道通知签名工具测试：覆盖模拟渠道生成端与验签端共用的一致性。
@@ -59,7 +56,7 @@ class NotifySignatureUtilsTest {
                 "18.50",
                 "SUCCESS",
                 System.currentTimeMillis()
-                - NotifySignatureUtils.TIMESTAMP_WINDOW_MS - 1_000L
+                        - NotifySignatureUtils.TIMESTAMP_WINDOW_MS - 1_000L
         );
         String signature = NotifySignatureUtils.sign(
                 SECRET,

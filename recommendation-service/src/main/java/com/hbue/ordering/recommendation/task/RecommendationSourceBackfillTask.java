@@ -28,7 +28,9 @@ public class RecommendationSourceBackfillTask {
     private static final String ORDER_SOURCE = "purchase-orders";
     private static final String FAVORITE_SOURCE = "favorite-relations";
     private static final int PAGE_SIZE = 100;
-    /** 每次定时最多读取固定数量页面，避免历史积压长期占用服务线程。 */
+    /**
+     * 每次定时最多读取固定数量页面，避免历史积压长期占用服务线程。
+     */
     private static final int MAX_PAGES_PER_RUN = 10;
 
     private final RecommendationSourceCursorMapper cursors;
@@ -39,12 +41,14 @@ public class RecommendationSourceBackfillTask {
     private final String internalToken;
     private final String orderInternalToken;
 
-    /** 两类内部服务使用项目现有凭据；订单令牌与普通内部作用域令牌分开。 */
+    /**
+     * 两类内部服务使用项目现有凭据；订单令牌与普通内部作用域令牌分开。
+     */
     public RecommendationSourceBackfillTask(RecommendationSourceCursorMapper cursors,
-            RecommendationPurchaseSourceClient purchaseSource, RecommendationFavoriteSourceClient favoriteSource,
-            RecommendationPurchaseProjectionService purchases, RecommendationFavoriteProjectionService favorites,
-            @Value("${internal.scope.token:}") String internalToken,
-            @Value("${internal.order.token:}") String orderInternalToken) {
+                                            RecommendationPurchaseSourceClient purchaseSource, RecommendationFavoriteSourceClient favoriteSource,
+                                            RecommendationPurchaseProjectionService purchases, RecommendationFavoriteProjectionService favorites,
+                                            @Value("${internal.scope.token:}") String internalToken,
+                                            @Value("${internal.order.token:}") String orderInternalToken) {
         this.cursors = cursors;
         this.purchaseSource = purchaseSource;
         this.favoriteSource = favoriteSource;
@@ -58,13 +62,15 @@ public class RecommendationSourceBackfillTask {
      * 定时续跑两类历史快照；单一来源失败不会阻断另一类，后续周期按持久断点重试。
      */
     @Scheduled(initialDelayString = "${recommendation.backfill.initial-delay-ms:15000}",
-               fixedDelayString = "${recommendation.backfill.delay-ms:60000}")
+            fixedDelayString = "${recommendation.backfill.delay-ms:60000}")
     public void backfill() {
         readOrderPages();
         readFavoritePages();
     }
 
-    /** 订单全量快照版本覆盖规则使历史页与并发实时支付/退款消息可以任意先后到达。 */
+    /**
+     * 订单全量快照版本覆盖规则使历史页与并发实时支付/退款消息可以任意先后到达。
+     */
     private void readOrderPages() {
         try {
             cursors.ensureExists(ORDER_SOURCE);
@@ -157,14 +163,18 @@ public class RecommendationSourceBackfillTask {
         return response.getData();
     }
 
-    /** 断点行必须已成功创建；缺失时停止推进避免静默从头开始。 */
+    /**
+     * 断点行必须已成功创建；缺失时停止推进避免静默从头开始。
+     */
     private RecommendationSourceCursorDO requiredCursor(String name) {
         RecommendationSourceCursorDO cursor = cursors.select(name);
         if (cursor == null) throw new IllegalStateException("推荐历史回填断点不存在");
         return cursor;
     }
 
-    /** 更新影响行数为零表示结构异常，不得继续向后跳过尚未落库的页面。 */
+    /**
+     * 更新影响行数为零表示结构异常，不得继续向后跳过尚未落库的页面。
+     */
     private void advance(String source, long value, Long upperBound, boolean completed) {
         if (cursors.advance(source, value, upperBound, completed) != 1) {
             throw new IllegalStateException("推荐历史回填断点推进失败");

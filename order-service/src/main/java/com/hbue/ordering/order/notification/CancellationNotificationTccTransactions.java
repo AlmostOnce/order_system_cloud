@@ -1,18 +1,23 @@
 package com.hbue.ordering.order.notification;
 
+import com.hbue.ordering.order.mapper.CancellationNotificationTccMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import com.hbue.ordering.order.mapper.CancellationNotificationTccMapper;
 
-/** TCC 二阶段通过独立 Spring 事务代理执行，保证状态与 outbox 原子提交。 */
+/**
+ * TCC 二阶段通过独立 Spring 事务代理执行，保证状态与 outbox 原子提交。
+ */
 @Service
 public class CancellationNotificationTccTransactions {
     private final CancellationNotificationTccMapper store;
     private final OrderNotificationOutboxWriter outbox;
+
     public CancellationNotificationTccTransactions(CancellationNotificationTccMapper store, OrderNotificationOutboxWriter outbox) {
-        this.store = store; this.outbox = outbox;
+        this.store = store;
+        this.outbox = outbox;
     }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean prepare(String xid, long orderId, int version, long recipientId) {
         store.insertIfMissing(xid, orderId, version, recipientId, "PREPARED");
@@ -21,16 +26,19 @@ public class CancellationNotificationTccTransactions {
             throw new IllegalStateException("取消通知事务已结束或参数不一致");
         return true;
     }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean confirm(String xid) {
         var row = store.lock(xid);
-        if (row == null || "CANCELLED".equals(row.status())) throw new IllegalStateException("取消通知尚未准备或已回滚");
+        if (row == null || "CANCELLED".equals(row.status()))
+            throw new IllegalStateException("取消通知尚未准备或已回滚");
         if ("CONFIRMED".equals(row.status())) return true;
         if (!"PREPARED".equals(row.status())) throw new IllegalStateException("取消通知状态不正确");
         outbox.record(OrderNotificationEvent.of(row.orderId(), row.orderVersion(), row.recipientId(), "已取消"));
         store.setStatus(xid, "CONFIRMED");
         return true;
     }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean cancel(String xid, long orderId, int version, long recipientId) {
         store.insertIfMissing(xid, orderId, version, recipientId, "CANCELLED");

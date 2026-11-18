@@ -17,15 +17,22 @@ public class NotificationWebSocketConfig implements WebSocketConfigurer {
     private final NotificationSocketHandler handler;
     private final NotificationHandshakeInterceptor interceptor;
     private final String[] origins;
-    /** 注入当前配置所需组件；初始化只建立依赖关系，实际业务操作由请求入口触发。 */
+
+    /**
+     * 注入当前配置所需组件；初始化只建立依赖关系，实际业务操作由请求入口触发。
+     */
     public NotificationWebSocketConfig(NotificationSocketHandler handler, NotificationHandshakeInterceptor interceptor,
-            @Value("${notification.websocket.allowed-origins:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}") String origins) {
-        this.handler = handler; this.interceptor = interceptor; this.origins = origins.split(",");
+                                       @Value("${notification.websocket.allowed-origins:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}") String origins) {
+        this.handler = handler;
+        this.interceptor = interceptor;
+        this.origins = origins.split(",");
     }
+
     /**
      * 注册现有共享连接端点、握手拦截器及来源白名单，不为每笔订单开放独立端口。
      */
-    @Override public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/notifications/ws").addInterceptors(interceptor).setAllowedOrigins(origins);
     }
 }

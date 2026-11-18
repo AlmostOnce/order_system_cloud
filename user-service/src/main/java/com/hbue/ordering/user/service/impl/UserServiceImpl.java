@@ -1,6 +1,5 @@
 package com.hbue.ordering.user.service.impl;
 
-import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -8,17 +7,18 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.role.RoleCode;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
+import com.hbue.ordering.user.dto.request.ChangeOwnEmailRequest;
+import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
-import com.hbue.ordering.user.dto.request.UpdateProfileRequest;
-import com.hbue.ordering.user.dto.request.ChangeOwnEmailRequest;
-import com.hbue.ordering.user.vo.UserProfileVO;
+import com.hbue.ordering.user.service.EmailVerification;
 import com.hbue.ordering.user.service.UserDataScopeService;
 import com.hbue.ordering.user.service.UserService;
-import com.hbue.ordering.user.service.EmailVerification;
+import com.hbue.ordering.user.vo.UserProfileVO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -109,9 +109,9 @@ public class UserServiceImpl
     /**
      * 创建用户业务服务。
      *
-     * @param passwordEncoder 密码加密器
+     * @param passwordEncoder      密码加密器
      * @param userDataScopeService 用户数据范围业务服务
-     * @param auditLogger 管理操作审计记录器
+     * @param auditLogger          管理操作审计记录器
      */
     public UserServiceImpl(
             PasswordEncoder passwordEncoder,
@@ -120,7 +120,7 @@ public class UserServiceImpl
             EmailVerification emailVerificationService,
             com.hbue.ordering.user.service.EmailOwnershipService emailOwnership
     ) {
-        this.emailOwnership=emailOwnership;
+        this.emailOwnership = emailOwnership;
         this.passwordEncoder = passwordEncoder;
         this.userDataScopeService = userDataScopeService;
         this.auditLogger = auditLogger;
@@ -257,10 +257,10 @@ public class UserServiceImpl
     @Override
     @Transactional
     public UserBasicVO register(UserRegisterCommand command) {
-        if(command==null || command.getUsername()==null || command.getUsername().trim().length()<2 || command.getUsername().trim().length()>64
-                || command.getPassword()==null || command.getPassword().isBlank() || command.getPassword().length()<6 || command.getPassword().length()>64
-                || command.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length>72)
-            throw new BusinessException(CommonErrorCode.BAD_REQUEST,"昵称或密码格式不正确");
+        if (command == null || command.getUsername() == null || command.getUsername().trim().length() < 2 || command.getUsername().trim().length() > 64
+                || command.getPassword() == null || command.getPassword().isBlank() || command.getPassword().length() < 6 || command.getPassword().length() > 64
+                || command.getPassword().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "昵称或密码格式不正确");
         command.setUsername(command.getUsername().trim());
         if (command.getEmail() == null || command.getEmail().isBlank() || command.getEmail().length() > 254) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "邮箱不能为空或超出长度限制");
@@ -279,7 +279,7 @@ public class UserServiceImpl
             );
         }
 
-        emailOwnership.consumeRegistration(command.getEmail(),command.getEmailVerificationToken());
+        emailOwnership.consumeRegistration(command.getEmail(), command.getEmailVerificationToken());
         // 组装用户持久化对象。
         UserDO userDO = new UserDO();
         userDO.setUserUuid(java.util.UUID.randomUUID().toString());
@@ -371,8 +371,8 @@ public class UserServiceImpl
     /**
      * 安全引导系统管理员账号。
      *
-     * @param username 管理员用户名
-     * @param email 管理员邮箱
+     * @param username    管理员用户名
+     * @param email       管理员邮箱
      * @param rawPassword 管理员明文密码
      * @return 是否实际创建了新账号
      * @throws BusinessException 检查到用户名或邮箱被其他账号占用时抛出
@@ -397,8 +397,8 @@ public class UserServiceImpl
      * <p>账号与范围在同一本地事务内提交：写 user_data_scopes 失败时整体回滚，
      * 不会留下"有总经理但没有范围"的半个状态。</p>
      *
-     * @param username 总经理用户名
-     * @param email 总经理邮箱
+     * @param username    总经理用户名
+     * @param email       总经理邮箱
      * @param rawPassword 总经理明文密码
      * @return 是否实际创建了新账号
      * @throws BusinessException 账号冲突或创建全平台范围失败时抛出，事务会回滚账号创建
@@ -428,9 +428,9 @@ public class UserServiceImpl
     /**
      * 修改指定用户的角色编码。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param roleCode 目标角色编码
+     * @param roleCode     目标角色编码
      * @return 变更后的用户基础信息
      * @throws BusinessException 操作者无效、目标用户不存在、角色非法或试图修改本人角色时抛出
      */
@@ -509,9 +509,9 @@ public class UserServiceImpl
     /**
      * 启用或禁用指定账号。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param status 目标状态：1 启用，0 禁用
+     * @param status       目标状态：1 启用，0 禁用
      * @throws BusinessException 状态值非法、用户不存在或禁用最后一个启用的系统管理员时抛出
      */
     @Override
@@ -597,10 +597,10 @@ public class UserServiceImpl
      * 用户名被其他账号占用、邮箱被任何其他账号占用、或目标角色处于禁用/删除状态时
      * 抛出冲突；其余情况创建账号并返回持久化对象。</p>
      *
-     * @param username 引导用户名
-     * @param email 引导邮箱
+     * @param username    引导用户名
+     * @param email       引导邮箱
      * @param rawPassword 引导明文密码
-     * @param roleCode 固定角色编码
+     * @param roleCode    固定角色编码
      * @return 新建的用户持久化对象；已存在目标角色时返回 null
      */
     private UserDO createBootstrapAccount(
@@ -685,14 +685,17 @@ public class UserServiceImpl
         return UserBasicVO.builder()
                 .userId(userDO.getUserId())
                 .credentialVersion(userDO.getCredentialVersion())
-                .emailVerified(userDO.getEmailVerifiedAt()!=null)
+                .emailVerified(userDO.getEmailVerifiedAt() != null)
                 .userUuid(userDO.getUserUuid())
                 .userNo(userDO.getUserNo())
                 .username(userDO.getUsername())
                 .roleCode(userDO.getRoleCode())
                 .build();
     }
-    /** 唯一索引处理极低概率的并发随机号碰撞；昵称、邮箱冲突仍由调用方处理。 */
+
+    /**
+     * 唯一索引处理极低概率的并发随机号碰撞；昵称、邮箱冲突仍由调用方处理。
+     */
     private void saveWithUserNo(UserDO user) {
         for (int attempt = 0; attempt < 10; attempt++) {
             try {
@@ -708,7 +711,9 @@ public class UserServiceImpl
         throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法分配用户号，请稍后重试");
     }
 
-    /** 使用独立随机号，不从内部主键或 UUID 截取；唯一索引作为最终约束。 */
+    /**
+     * 使用独立随机号，不从内部主键或 UUID 截取；唯一索引作为最终约束。
+     */
     private String generateUserNo() {
         for (int attempt = 0; attempt < 20; attempt++) {
             String candidate = Long.toString(USER_NUMBER_RANDOM.nextLong(1_000_000_000L, 10_000_000_000L));

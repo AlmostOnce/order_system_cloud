@@ -22,13 +22,19 @@ import org.springframework.stereotype.Component;
 @Component
 public class PaymentFeignConfig implements RequestInterceptor {
 
-    /** 内部令牌请求头名称，与各服务内部接口保持一致。 */
+    /**
+     * 内部令牌请求头名称，与各服务内部接口保持一致。
+     */
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
-    /** 订单服务内部接口路径前缀。 */
+    /**
+     * 订单服务内部接口路径前缀。
+     */
     private static final String ORDER_INTERNAL_PATH = "/internal/orders/";
 
-    /** 订单内部接口共享密钥，与 order-service 的 payment.internal.order-token 保持一致。 */
+    /**
+     * 订单内部接口共享密钥，与 order-service 的 payment.internal.order-token 保持一致。
+     */
     private final String internalOrderToken;
 
     /**

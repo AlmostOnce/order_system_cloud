@@ -4,15 +4,20 @@ import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.service.OrderWindowNameService;
+import org.junit.jupiter.api.Test;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
-/** 完成后售后会更新订单，聊天期限只能以首次核销时间计算，不能随updatedAt续期。 */
+/**
+ * 完成后售后会更新订单，聊天期限只能以首次核销时间计算，不能随updatedAt续期。
+ */
 class OrderChatContextTest {
-    @Test void laterOrderUpdateDoesNotExtendChatWindow() {
+    @Test
+    void laterOrderUpdateDoesNotExtendChatWindow() {
         var orders = mock(OrderService.class);
         var names = mock(OrderWindowNameService.class);
         var tokens = mock(InternalScopeTokenVerifier.class);

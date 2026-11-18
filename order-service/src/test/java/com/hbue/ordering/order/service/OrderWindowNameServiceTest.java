@@ -1,17 +1,21 @@
 package com.hbue.ordering.order.service;
 
+import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.service.impl.OrderWindowNameServiceImpl;
 import com.hbue.ordering.order.vo.OrderDetailVO;
 import com.hbue.ordering.product.api.client.WindowInternalClient;
-import com.hbue.ordering.common.response.ApiResponse;
+import org.junit.jupiter.api.Test;
+
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.*;
 
 class OrderWindowNameServiceTest {
-    @Test void duplicateWindowsUseOneBatchAndPreserveOrderData() {
+    @Test
+    void duplicateWindowsUseOneBatchAndPreserveOrderData() {
         var client = mock(WindowInternalClient.class);
         when(client.getWindowNames(List.of(2L), "internal")).thenReturn(ApiResponse.success(Map.of(2L, "川味小厨")));
         var result = new OrderWindowNameServiceImpl(client, "internal").enrich(List.of(
@@ -22,7 +26,9 @@ class OrderWindowNameServiceTest {
         assertEquals("已完成", result.getFirst().getStatus());
         verify(client, times(1)).getWindowNames(List.of(2L), "internal");
     }
-    @Test void nameFailureDoesNotHideOrder() {
+
+    @Test
+    void nameFailureDoesNotHideOrder() {
         var client = mock(WindowInternalClient.class);
         when(client.getWindowNames(List.of(2L), "internal")).thenThrow(new IllegalStateException());
         var result = new OrderWindowNameServiceImpl(client, "internal").enrich(List.of(

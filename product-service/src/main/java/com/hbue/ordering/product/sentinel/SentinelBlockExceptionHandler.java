@@ -28,11 +28,15 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class SentinelBlockExceptionHandler implements BlockExceptionHandler {
 
-    /** 当前类的日志对象。 */
+    /**
+     * 当前类的日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(SentinelBlockExceptionHandler.class);
 
-    /** JSON 序列化工具。 */
+    /**
+     * JSON 序列化工具。
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -47,10 +51,10 @@ public class SentinelBlockExceptionHandler implements BlockExceptionHandler {
     /**
      * 写入统一格式的服务暂不可用响应。
      *
-     * @param request 当前 HTTP 请求
-     * @param response 当前 HTTP 响应
+     * @param request      当前 HTTP 请求
+     * @param response     当前 HTTP 响应
      * @param resourceName 触发的 Sentinel 资源名
-     * @param exception 拦截异常（限流或降级）
+     * @param exception    拦截异常（限流或降级）
      * @throws IOException 响应写入异常
      */
     @Override

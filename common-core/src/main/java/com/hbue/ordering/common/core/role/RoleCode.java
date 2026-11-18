@@ -12,31 +12,45 @@ package com.hbue.ordering.common.core.role;
  */
 public enum RoleCode {
 
-    /** 顾客：只能操作本人数据。 */
+    /**
+     * 顾客：只能操作本人数据。
+     */
     CUSTOMER("CUSTOMER", "顾客"),
 
-    /** 档口负责人：管理所辖档口。 */
+    /**
+     * 档口负责人：管理所辖档口。
+     */
     STALL_MANAGER("STALL_MANAGER", "档口负责人"),
 
-    /** 餐厅经理：管理所属餐厅，并授予本餐厅内的档口范围。 */
+    /**
+     * 餐厅经理：管理所属餐厅，并授予本餐厅内的档口范围。
+     */
     RESTAURANT_MANAGER("RESTAURANT_MANAGER", "餐厅经理"),
 
-    /** 总经理：全平台经营数据，并授予任意餐厅范围。 */
+    /**
+     * 总经理：全平台经营数据，并授予任意餐厅范围。
+     */
     GENERAL_MANAGER("GENERAL_MANAGER", "总经理"),
 
-    /** 系统管理员：技术角色，管账号与角色，不碰业务数据。 */
+    /**
+     * 系统管理员：技术角色，管账号与角色，不碰业务数据。
+     */
     SYSTEM_ADMIN("SYSTEM_ADMIN", "系统管理员");
 
-    /** 数据库中保存的角色编码。 */
+    /**
+     * 数据库中保存的角色编码。
+     */
     private final String code;
 
-    /** 角色中文名称。 */
+    /**
+     * 角色中文名称。
+     */
     private final String label;
 
     /**
      * 创建角色编码。
      *
-     * @param code 数据库中保存的角色编码
+     * @param code  数据库中保存的角色编码
      * @param label 角色中文名称
      */
     RoleCode(String code, String label) {

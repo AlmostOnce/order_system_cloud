@@ -3,24 +3,17 @@ package com.hbue.ordering.order.controller;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.api.dto.CouponConsumeConfirmationRequest;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
+import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.security.InternalTokenVerifier;
 import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
-import com.hbue.ordering.order.api.dto.OrderPaidCommand;
-import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
-import org.springframework.web.bind.annotation.RequestBody;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 订单服务内部接口，仅供支付与优惠券服务经服务发现调用。
@@ -39,22 +32,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/orders")
 public class OrderInternalController {
 
-    /** 内部令牌请求头名称。 */
+    /**
+     * 内部令牌请求头名称。
+     */
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
-    /** 订单业务服务。 */
+    /**
+     * 订单业务服务。
+     */
     private final OrderService orderService;
 
-    /** 内部令牌校验器。 */
+    /**
+     * 内部令牌校验器。
+     */
     private final InternalTokenVerifier internalTokenVerifier;
 
-    /** 支付后优惠券核销 Outbox 回执处理器。 */
+    /**
+     * 支付后优惠券核销 Outbox 回执处理器。
+     */
     private final CouponConsumeOutboxWriter couponConsumeOutboxWriter;
 
     /**
      * 创建订单服务内部接口。
      *
-     * @param orderService 订单业务服务
+     * @param orderService          订单业务服务
      * @param internalTokenVerifier 内部令牌校验器
      */
     public OrderInternalController(
@@ -70,7 +71,7 @@ public class OrderInternalController {
     /**
      * 查询订单内部视图，供创建支付单时校验归属与状态。
      *
-     * @param token 内部调用令牌
+     * @param token   内部调用令牌
      * @param orderId 订单 ID
      * @return 内部订单视图
      */
@@ -94,7 +95,7 @@ public class OrderInternalController {
     /**
      * 支付成功后推进订单状态：待支付到已支付。
      *
-     * @param token 内部调用令牌
+     * @param token   内部调用令牌
      * @param orderId 订单 ID
      * @param request 支付服务已经持久化的支付成功时间；订单服务不使用本机时间推测
      * @return 订单状态变更结果
@@ -107,7 +108,8 @@ public class OrderInternalController {
             @RequestBody OrderPaidCommand request
     ) {
         verifyInternalToken(token);
-        if (request == null || request.paidAt() == null) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付成功时间");
+        if (request == null || request.paidAt() == null)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付成功时间");
         return ApiResponse.success(orderService.markOrderPaid(orderId, request.paidAt()));
     }
 
@@ -117,7 +119,7 @@ public class OrderInternalController {
      * <p>内部共享密钥校验通过后，返回真实订单 paid_at、窗口及下单菜品原始份数；
      * 该契约不包含用户、金额或支付凭据，也不经过 Gateway 对外开放。</p>
      *
-     * @param token 统计服务配置的内部共享密钥
+     * @param token   统计服务配置的内部共享密钥
      * @param orderId 来源订单主键
      * @return 订单服务当前保存的不可变支付销量事实
      */
@@ -132,7 +134,8 @@ public class OrderInternalController {
 
     /**
      * 接收券服务在本地核销事务提交后的回执，使 Outbox 不会仅凭 Broker 接收就永久结案。
-     * @param token 服务间共享令牌
+     *
+     * @param token   服务间共享令牌
      * @param request 已核销事件的身份快照
      * @return 同一事件首次确认或安全重放时均返回成功
      */

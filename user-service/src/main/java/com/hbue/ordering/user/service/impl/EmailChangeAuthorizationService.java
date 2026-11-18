@@ -6,6 +6,10 @@ import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.user.mapper.UserMapper;
 import com.hbue.ordering.user.model.UserDO;
 import com.hbue.ordering.user.service.EmailChangeAuthorization;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,21 +17,20 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
 
-/** 登录密码校验后签发短时、绑定当前用户且仅可成功消费一次的邮箱变更凭据。 */
+/**
+ * 登录密码校验后签发短时、绑定当前用户且仅可成功消费一次的邮箱变更凭据。
+ */
 @Service
 public class EmailChangeAuthorizationService implements EmailChangeAuthorization {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Duration TOKEN_TTL = Duration.ofMinutes(10);
     private static final String KEY_PREFIX = "email:change:authorization:";
     private static final DefaultRedisScript<Long> CONSUME_IF_MATCH = new DefaultRedisScript<>("""
-        local current = redis.call('GET', KEYS[1])
-        if current and current == ARGV[1] then return redis.call('DEL', KEYS[1]) end
-        return 0
-        """, Long.class);
+            local current = redis.call('GET', KEYS[1])
+            if current and current == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+            return 0
+            """, Long.class);
 
     private final UserMapper users;
     private final PasswordEncoder passwords;
@@ -82,7 +85,9 @@ public class EmailChangeAuthorizationService implements EmailChangeAuthorization
         if (!Long.valueOf(1).equals(consumed)) throw authorizationExpired();
     }
 
-    private String key(Long userId) { return KEY_PREFIX + userId; }
+    private String key(Long userId) {
+        return KEY_PREFIX + userId;
+    }
 
     private String sha256(String value) {
         try {

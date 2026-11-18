@@ -9,10 +9,14 @@ import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
-/** 优惠券模板访问接口；库存预占和状态变更使用带条件的数据库更新防止并发越权。 */
+/**
+ * 优惠券模板访问接口；库存预占和状态变更使用带条件的数据库更新防止并发越权。
+ */
 public interface CouponTemplateMapper extends BaseMapper<CouponTemplateDO> {
 
-    /** 领取清单最多返回 100 个模板，并由数据库时间与剩余库存共同筛选。 */
+    /**
+     * 领取清单最多返回 100 个模板，并由数据库时间与剩余库存共同筛选。
+     */
     @Select("""
             SELECT t.coupon_template_id AS templateId, t.title AS title,
                    t.min_spend AS minSpend, t.discount_amount AS discountAmount,
@@ -36,7 +40,9 @@ public interface CouponTemplateMapper extends BaseMapper<CouponTemplateDO> {
             """)
     List<CouponTemplateRow> listClaimableRows();
 
-    /** 管理列表有硬上限，避免无分页参数时读取全部历史模板。 */
+    /**
+     * 管理列表有硬上限，避免无分页参数时读取全部历史模板。
+     */
     @Select("""
             SELECT t.coupon_template_id AS templateId, t.title AS title,
                    t.min_spend AS minSpend, t.discount_amount AS discountAmount,
@@ -57,11 +63,15 @@ public interface CouponTemplateMapper extends BaseMapper<CouponTemplateDO> {
             """)
     List<CouponTemplateRow> listAdminRows();
 
-    /** 对模板行加锁，串行化同模板的停止发放、停止使用和领取确认。 */
+    /**
+     * 对模板行加锁，串行化同模板的停止发放、停止使用和领取确认。
+     */
     @Select("SELECT * FROM coupon_template WHERE coupon_template_id = #{templateId} FOR UPDATE")
     CouponTemplateDO findByIdForUpdate(@Param("templateId") Long templateId);
 
-    /** 使用单条带条件更新预占发放量；并发领取最后一张券时最多一条请求成功。 */
+    /**
+     * 使用单条带条件更新预占发放量；并发领取最后一张券时最多一条请求成功。
+     */
     @Update("""
             UPDATE coupon_template
             SET claimed_quantity = claimed_quantity + 1

@@ -15,7 +15,7 @@ import java.util.List;
  * 用户 ID 不放入请求体，而由控制器从已验证 JWT 获取。</p>
  *
  * @param targetType 窗口或菜品类型
- * @param targetIds 当前页面需要展示状态的目标 ID，最多 100 个
+ * @param targetIds  当前页面需要展示状态的目标 ID，最多 100 个
  */
 public record FavoriteStatusRequest(
         @NotNull(message = "请选择收藏类型") FavoriteTargetType targetType,

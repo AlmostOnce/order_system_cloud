@@ -6,8 +6,9 @@ import com.hbue.ordering.order.service.SalesRankingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.messaging.support.ErrorMessage;
+import org.springframework.messaging.support.MessageBuilder;
+
 import java.util.function.Consumer;
 
 /**
@@ -22,8 +23,12 @@ public class SalesRankingMessaging {
     private final ObjectMapper json;
     private final StreamBridge stream;
     private final SalesRankingService rankings;
+
     public SalesRankingMessaging(SalesOutboxMapper outbox, ObjectMapper json, StreamBridge stream, SalesRankingService rankings) {
-        this.outbox = outbox; this.json = json; this.stream = stream; this.rankings = rankings;
+        this.outbox = outbox;
+        this.json = json;
+        this.stream = stream;
+        this.rankings = rankings;
     }
 
     public Consumer<OrderPaidSalesEvent> salesRankingPaid() {
@@ -36,7 +41,9 @@ public class SalesRankingMessaging {
 
     public Consumer<ErrorMessage> salesRankingRetryError() {
         // 默认错误处理可能仅记录并丢弃；必须抛回 RocketMQ adapter 才会 RECONSUME_LATER。
-        return error -> { throw new IllegalStateException("销量事件消费失败，交由 Broker 重试", error.getPayload()); };
+        return error -> {
+            throw new IllegalStateException("销量事件消费失败，交由 Broker 重试", error.getPayload());
+        };
     }
 
     public void publishPending() {

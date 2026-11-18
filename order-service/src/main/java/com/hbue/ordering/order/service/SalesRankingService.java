@@ -8,17 +8,19 @@ import com.hbue.ordering.common.redis.DistributedLockService;
 import com.hbue.ordering.order.mapper.SalesRankingMapper;
 import com.hbue.ordering.order.model.PaidSalesLine;
 import com.hbue.ordering.order.vo.SalesRankingVO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.*;
 
-/** MQ 增量更新，历史重建和定时对账使用同一个受 fencing 保护的临界区。 */
+/**
+ * MQ 增量更新，历史重建和定时对账使用同一个受 fencing 保护的临界区。
+ */
+
 /** 已迁往 statistics-service 的旧实现；不再由 Spring 注册或接受生产请求。 */
 @Deprecated(forRemoval = false)
 public class SalesRankingService {
@@ -35,10 +37,12 @@ public class SalesRankingService {
     private static final DefaultRedisScript<Long> APPLY = script("apply-paid-sales-v2.lua");
     @SuppressWarnings("rawtypes")
     private static final DefaultRedisScript<List> READ = new DefaultRedisScript<>();
+
     static {
         READ.setLocation(new ClassPathResource("rankings/read-sales-v2.lua"));
         READ.setResultType(List.class);
     }
+
     private final StringRedisTemplate redis;
     private final SalesRankingMapper mapper;
     private final DistributedLockService locks;
@@ -46,11 +50,15 @@ public class SalesRankingService {
 
     public SalesRankingService(StringRedisTemplate redis, SalesRankingMapper mapper,
                                DistributedLockService locks, ObjectMapper json) {
-        this.redis = redis; this.mapper = mapper; this.locks = locks; this.json = json;
+        this.redis = redis;
+        this.mapper = mapper;
+        this.locks = locks;
+        this.json = json;
     }
 
     public SalesRankingVO list(int limit) {
-        if (limit < 1 || limit > 100) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "榜单数量应在 1 到 100 之间");
+        if (limit < 1 || limit > 100)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "榜单数量应在 1 到 100 之间");
         try {
             SalesRankingVO cached = read(limit);
             if (cached != null) return cached;
@@ -81,9 +89,12 @@ public class SalesRankingService {
             if (lines.isEmpty()) throw new IllegalStateException("销量事件未找到已支付订单");
             var totals = group(lines);
             List<String> args = new ArrayList<>();
-            args.add(nextGeneration()); args.add(orderId.toString()); args.add(Instant.now().toString());
+            args.add(nextGeneration());
+            args.add(orderId.toString());
+            args.add(Instant.now().toString());
             for (var entry : totals.entrySet()) {
-                args.add(entry.getKey()); args.add(Long.toString(entry.getValue().quantity));
+                args.add(entry.getKey());
+                args.add(Long.toString(entry.getValue().quantity));
                 args.add(metadata(entry.getValue()));
             }
             Long result = redis.execute(APPLY, KEYS, args.toArray());
@@ -113,10 +124,13 @@ public class SalesRankingService {
         Set<Long> orderIds = new TreeSet<>();
         for (var line : lines) orderIds.add(line.getOrderId());
         List<String> args = new ArrayList<>();
-        args.add(generation); args.add(updatedAt); args.add(Integer.toString(orderIds.size()));
+        args.add(generation);
+        args.add(updatedAt);
+        args.add(Integer.toString(orderIds.size()));
         for (Long orderId : orderIds) args.add(orderId.toString());
         for (var entry : totals.entrySet()) {
-            args.add(entry.getKey()); args.add(Long.toString(entry.getValue().quantity));
+            args.add(entry.getKey());
+            args.add(Long.toString(entry.getValue().quantity));
             args.add(metadata(entry.getValue()));
         }
         Long result = redis.execute(REBUILD, KEYS, args.toArray());
@@ -165,10 +179,16 @@ public class SalesRankingService {
 
     private static DefaultRedisScript<Long> script(String resource) {
         var script = new DefaultRedisScript<Long>();
-        script.setLocation(new ClassPathResource("rankings/" + resource)); script.setResultType(Long.class);
+        script.setLocation(new ClassPathResource("rankings/" + resource));
+        script.setResultType(Long.class);
         return script;
     }
-    private static class Total { long quantity; PaidSalesLine latest; }
+
+    private static class Total {
+        long quantity;
+        PaidSalesLine latest;
+    }
+
     private BusinessException unavailable() {
         return new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "销量榜暂时无法获取，请稍后下拉刷新");
     }

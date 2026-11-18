@@ -82,7 +82,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     /**
      * 创建并保存 Refresh Token。
      *
-     * @param userId 用户 ID
+     * @param userId   用户 ID
      * @param username 用户名
      * @param roleCode 角色编码
      * @return Refresh Token
@@ -93,11 +93,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             Long userId,
             String username,
             String roleCode
-    ) { return createRefreshToken(userId, username, roleCode, 0); }
+    ) {
+        return createRefreshToken(userId, username, roleCode, 0);
+    }
 
     @Override
     public String createRefreshToken(Long userId, String username, String roleCode, long credentialVersion) {
-        if(credentialVersion<0)throw new IllegalArgumentException("凭据版本无效");
+        if (credentialVersion < 0) throw new IllegalArgumentException("凭据版本无效");
         // 使用随机 UUID 生成不携带业务信息的 Refresh Token。
         String refreshToken = UUID.randomUUID()
                 .toString()
@@ -109,7 +111,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         // 组装刷新 Token 对应的用户信息。
         Map<String, String> values = new HashMap<>();
         values.put(FIELD_USER_ID, String.valueOf(userId));
-        values.put("credential_version",String.valueOf(credentialVersion));
+        values.put("credential_version", String.valueOf(credentialVersion));
         values.put(FIELD_USERNAME, username);
         values.put(FIELD_ROLE_CODE, roleCode);
 

@@ -1,11 +1,12 @@
 package com.hbue.ordering.notification.messaging;
 
 import com.hbue.ordering.notification.service.OrderNotificationService;
-import java.util.function.Consumer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.support.ErrorMessage;
+
+import java.util.function.Consumer;
 
 /**
  * 订单MQ消费绑定。业务异常交还队列重试，不能捕获后假装消费成功；启用状态由通知配置控制。
@@ -20,11 +21,14 @@ public class OrderNotificationConsumer {
     Consumer<OrderNotificationEvent> orderNotification(OrderNotificationService service) {
         return service::accept;
     }
+
     /**
      * 注册消费错误处理器并继续抛出失败，避免框架将业务失败当作已经成功消费。
      */
     @Bean
     Consumer<ErrorMessage> orderNotificationRetryError() {
-        return error -> { throw new IllegalStateException("订单通知消费失败，交由消息队列重试", error.getPayload()); };
+        return error -> {
+            throw new IllegalStateException("订单通知消费失败，交由消息队列重试", error.getPayload());
+        };
     }
 }

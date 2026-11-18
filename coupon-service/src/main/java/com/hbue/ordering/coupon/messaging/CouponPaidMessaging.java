@@ -1,18 +1,20 @@
 package com.hbue.ordering.coupon.messaging;
 
-import com.hbue.ordering.coupon.api.dto.CouponPaidEvent;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.coupon.api.dto.CouponPaidEvent;
+import com.hbue.ordering.coupon.service.CouponService;
 import com.hbue.ordering.order.api.client.OrderCouponConsumeAckClient;
 import com.hbue.ordering.order.api.dto.CouponConsumeConfirmationRequest;
-import com.hbue.ordering.coupon.service.CouponService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.function.Consumer;
 
-/** RocketMQ 支付成功事件入口；函数名称与 coupon-mq profile 中的 binding 对应。 */
+/**
+ * RocketMQ 支付成功事件入口；函数名称与 coupon-mq profile 中的 binding 对应。
+ */
 @Configuration
 public class CouponPaidMessaging {
     /**

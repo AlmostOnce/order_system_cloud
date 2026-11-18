@@ -1,8 +1,6 @@
 package com.hbue.ordering.search.support;
 
 import com.hbue.ordering.search.document.MenuProductDocument;
-import java.util.Map;
-import java.util.Set;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.IndexOperations;
 import org.springframework.data.elasticsearch.core.index.AliasAction;
@@ -11,6 +9,9 @@ import org.springframework.data.elasticsearch.core.index.AliasActions;
 import org.springframework.data.elasticsearch.core.index.AliasData;
 import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.stereotype.Component;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 管理搜索别名和新旧物理索引；旧索引保留以便恢复。
@@ -30,7 +31,9 @@ public class SearchIndexManager {
         this.indexLock = indexLock;
     }
 
-    /** 首次升级时将已有索引接入别名，不删除原有文档。 */
+    /**
+     * 首次升级时将已有索引接入别名，不删除原有文档。
+     */
     public void initialize() {
         indexLock.withWriteLock(() -> {
             if (elasticsearch.indexOps(IndexCoordinates.of(ALIAS)).exists()) return null;
@@ -42,7 +45,9 @@ public class SearchIndexManager {
         });
     }
 
-    /** 根据菜品文档映射创建新的物理索引。 */
+    /**
+     * 根据菜品文档映射创建新的物理索引。
+     */
     public void createIndex(String name) {
         IndexOperations template = elasticsearch.indexOps(MenuProductDocument.class);
         IndexOperations target = elasticsearch.indexOps(IndexCoordinates.of(name));
@@ -51,7 +56,9 @@ public class SearchIndexManager {
         }
     }
 
-    /** 原子切换别名，调用方须持有索引写锁。 */
+    /**
+     * 原子切换别名，调用方须持有索引写锁。
+     */
     public void switchAlias(String targetIndex) {
         IndexOperations operations = elasticsearch.indexOps(IndexCoordinates.of(ALIAS));
         Map<String, Set<AliasData>> previous = operations.getAliases(ALIAS);

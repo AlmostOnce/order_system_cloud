@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/orders")
 public class OrderPickupController {
     private final OrderPickupService pickup;
-    public OrderPickupController(OrderPickupService pickup) { this.pickup = pickup; }
+
+    public OrderPickupController(OrderPickupService pickup) {
+        this.pickup = pickup;
+    }
 
     @GetMapping("/{orderId}/pickup-code")
     @PreAuthorize("hasRole('CUSTOMER')")

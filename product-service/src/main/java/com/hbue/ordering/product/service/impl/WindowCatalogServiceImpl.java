@@ -1,20 +1,25 @@
 package com.hbue.ordering.product.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.service.WindowCatalogService;
-import com.hbue.ordering.common.core.error.CommonErrorCode;
-import com.hbue.ordering.common.core.exception.BusinessException;
+import org.springframework.stereotype.Service;
+
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
-import org.springframework.stereotype.Service;
 
 @Service
 public class WindowCatalogServiceImpl implements WindowCatalogService {
     private final DiningWindowMapper windows;
-    public WindowCatalogServiceImpl(DiningWindowMapper windows) { this.windows = windows; }
+
+    public WindowCatalogServiceImpl(DiningWindowMapper windows) {
+        this.windows = windows;
+    }
+
     @Override
     public Map<Long, String> names(List<Long> ids) {
         if (ids == null || ids.isEmpty() || ids.size() > 100 || ids.stream().anyMatch(id -> id == null || id <= 0))

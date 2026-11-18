@@ -3,32 +3,21 @@ package com.hbue.ordering.recommendation.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.recommendation.algorithm.SpecificationPreferenceNormalizer;
-import com.hbue.ordering.recommendation.model.RecommendationFavoriteStateDO;
-import com.hbue.ordering.recommendation.model.RecommendationHotProductDO;
-import com.hbue.ordering.recommendation.model.RecommendationOrderItemDO;
-import com.hbue.ordering.recommendation.model.RecommendationOrderSnapshotDO;
-import com.hbue.ordering.recommendation.model.RecommendationProductFeatureDO;
-import com.hbue.ordering.recommendation.model.RecommendationSearchIntentDO;
+import com.hbue.ordering.recommendation.model.*;
 import com.hbue.ordering.recommendation.service.RecommendationAlgorithm;
 import org.springframework.stereotype.Service;
+
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.text.Normalizer;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 首期可解释混合推荐实现；所有打分在推荐服务本地完成，不在首页请求里逐菜调用外部服务。 */
+/**
+ * 首期可解释混合推荐实现；所有打分在推荐服务本地完成，不在首页请求里逐菜调用外部服务。
+ */
 @Service
 public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
     private static final int MAX_PROFILE_ORDERS = 500;
@@ -44,7 +33,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
     private final ObjectMapper json;
     private final SpecificationPreferenceNormalizer specificationNormalizer = new SpecificationPreferenceNormalizer();
 
-    /** JSON 解析器用于本服务持久化的历史选项与查询结果快照；解析失败不能猜测用户偏好。 */
+    /**
+     * JSON 解析器用于本服务持久化的历史选项与查询结果快照；解析失败不能猜测用户偏好。
+     */
     public RecommendationAlgorithmImpl(ObjectMapper json) {
         this.json = json;
     }
@@ -55,14 +46,14 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
      */
     @Override
     public RecommendationAlgorithm.RankedResult rank(Long userId, Long restaurantId, int limit,
-            List<RecommendationProductFeatureDO> candidates,
-            List<RecommendationProductFeatureDO> historicalProducts,
-            List<RecommendationOrderSnapshotDO> orders,
-            List<RecommendationOrderItemDO> lines,
-            List<RecommendationFavoriteStateDO> favorites,
-            List<RecommendationSearchIntentDO> searches,
-            List<RecommendationHotProductDO> hot,
-            LocalDateTime now) {
+                                                     List<RecommendationProductFeatureDO> candidates,
+                                                     List<RecommendationProductFeatureDO> historicalProducts,
+                                                     List<RecommendationOrderSnapshotDO> orders,
+                                                     List<RecommendationOrderItemDO> lines,
+                                                     List<RecommendationFavoriteStateDO> favorites,
+                                                     List<RecommendationSearchIntentDO> searches,
+                                                     List<RecommendationHotProductDO> hot,
+                                                     LocalDateTime now) {
         if (candidates == null || orders == null || lines == null || favorites == null || searches == null || hot == null) {
             throw new IllegalArgumentException("推荐输入快照不能为空");
         }
@@ -134,8 +125,10 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         }
 
         Map<Long, RecommendationProductFeatureDO> featureById = new LinkedHashMap<>();
-        for (RecommendationProductFeatureDO feature : historicalProducts) featureById.put(feature.getProductId(), feature);
-        for (RecommendationProductFeatureDO candidate : candidates) featureById.put(candidate.getProductId(), candidate);
+        for (RecommendationProductFeatureDO feature : historicalProducts)
+            featureById.put(feature.getProductId(), feature);
+        for (RecommendationProductFeatureDO candidate : candidates)
+            featureById.put(candidate.getProductId(), candidate);
         Map<Long, Map<String, Double>> vectors = contentVectors(featureById.values());
         Map<String, Double> profile = userProfile(vectors, itemInterest);
         Map<Long, Double> queryScores = searchScores(searches, now, restaurantId);
@@ -183,7 +176,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return new RecommendationAlgorithm.RankedResult(personalized ? "PERSONALIZED" : "COLD_START", diversify(ranked, limit));
     }
 
-    /** 向量以名称、分类文本、描述、窗口及窗口内分类构成，不把“可选规格”误作实际口味。 */
+    /**
+     * 向量以名称、分类文本、描述、窗口及窗口内分类构成，不把“可选规格”误作实际口味。
+     */
     private Map<Long, Map<String, Double>> contentVectors(Iterable<RecommendationProductFeatureDO> features) {
         Map<Long, Map<String, Double>> raw = new HashMap<>();
         Map<String, Integer> documentFrequency = new HashMap<>();
@@ -220,7 +215,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return normalized;
     }
 
-    /** 名称权重大于描述；中文切为字符二元组，拉丁文本按小写词项累计词频。 */
+    /**
+     * 名称权重大于描述；中文切为字符二元组，拉丁文本按小写词项累计词频。
+     */
     private void addText(Map<String, Double> vector, String text, double weight) {
         if (text == null || text.isBlank()) return;
         String normalized = Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
@@ -239,9 +236,11 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         }
     }
 
-    /** 把本人有效商品兴趣向量按 E 分数求和并单位化；零画像安全返回空向量。 */
+    /**
+     * 把本人有效商品兴趣向量按 E 分数求和并单位化；零画像安全返回空向量。
+     */
     private Map<String, Double> userProfile(Map<Long, Map<String, Double>> vectors,
-            Map<Long, Double> interests) {
+                                            Map<Long, Double> interests) {
         Map<String, Double> profile = new HashMap<>();
         for (var interest : interests.entrySet()) {
             Map<String, Double> vector = vectors.get(interest.getKey());
@@ -252,9 +251,11 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return profile;
     }
 
-    /** 对近期成功搜索的首屏排名求折扣倒数分，分页和重试已由 queryId 幂等入口合并。 */
+    /**
+     * 对近期成功搜索的首屏排名求折扣倒数分，分页和重试已由 queryId 幂等入口合并。
+     */
     private Map<Long, Double> searchScores(List<RecommendationSearchIntentDO> searches,
-            LocalDateTime now, Long restaurantId) {
+                                           LocalDateTime now, Long restaurantId) {
         Map<Long, Double> result = new HashMap<>();
         double denominator = 0;
         int usedQueries = 0;
@@ -285,7 +286,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return result;
     }
 
-    /** 根据用户实际购买时保存的结构化选项快照生成兴趣标签，绝不从可选项或自由文本猜测。 */
+    /**
+     * 根据用户实际购买时保存的结构化选项快照生成兴趣标签，绝不从可选项或自由文本猜测。
+     */
     private Set<String> selectedTasteTags(String snapshot) {
         Set<String> tags = new HashSet<>();
         if (snapshot == null || snapshot.isBlank()) return tags;
@@ -305,7 +308,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         }
     }
 
-    /** 当前商品规格只提供可能匹配的标签，不会单独增加用户偏好权重。 */
+    /**
+     * 当前商品规格只提供可能匹配的标签，不会单独增加用户偏好权重。
+     */
     private Set<String> availableTasteTags(String specificationGroups) {
         Set<String> tags = new HashSet<>();
         if (specificationGroups == null || specificationGroups.isBlank()) return tags;
@@ -327,7 +332,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         }
     }
 
-    /** 命中的明确口味维度按其购买强度占比得分，未命中未知选项不会被当成讨厌。 */
+    /**
+     * 命中的明确口味维度按其购买强度占比得分，未命中未知选项不会被当成讨厌。
+     */
     private double tasteMatch(Map<String, Double> preferences, Set<String> available) {
         if (preferences.isEmpty()) return 0;
         double total = 0;
@@ -339,7 +346,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return total <= 0 ? 0 : matched / total;
     }
 
-    /** 计算单位化向量余弦；空画像或空商品向量返回0，不产生NaN。 */
+    /**
+     * 计算单位化向量余弦；空画像或空商品向量返回0，不产生NaN。
+     */
     private double cosine(Map<String, Double> left, Map<String, Double> right) {
         if (left.isEmpty() || right.isEmpty()) return 0;
         double dot = 0;
@@ -347,7 +356,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return Math.max(0, Math.min(1, dot));
     }
 
-    /** 对稀疏向量做 L2 归一化；零向量保持空值。 */
+    /**
+     * 对稀疏向量做 L2 归一化；零向量保持空值。
+     */
     private void normalize(Map<String, Double> vector) {
         double normSquared = vector.values().stream().mapToDouble(value -> value * value).sum();
         if (normSquared <= 0) {
@@ -358,9 +369,11 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         vector.replaceAll((term, value) -> value / norm);
     }
 
-    /** 决定可向顾客展示的原因代码，不返回评分或原始搜索词。 */
+    /**
+     * 决定可向顾客展示的原因代码，不返回评分或原始搜索词。
+     */
     private String reason(Long productId, double itemInterest, Set<Long> productFavorites, double flavor,
-            double query, double window, double content, double hot) {
+                          double query, double window, double content, double hot) {
         if (itemInterest > 0 && !productFavorites.contains(productId)) return "PURCHASED";
         if (productFavorites.contains(productId)) return "FAVORITED";
         if (flavor > 0) return "FLAVOR_MATCH";
@@ -371,13 +384,17 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return "EXPLORE";
     }
 
-    /** 为探索候选生成按两小时轮换、对同用户同时间窗稳定的打散键。 */
+    /**
+     * 为探索候选生成按两小时轮换、对同用户同时间窗稳定的打散键。
+     */
     private long tieKey(Long userId, Long productId, long bucket) {
         int hash = (userId + ":" + productId + ":" + bucket).hashCode();
         return Integer.toUnsignedLong(hash);
     }
 
-    /** 多样性先限制每窗口2道；候选不足时逐轮放宽，仍不足就少返回而不复制商品。 */
+    /**
+     * 多样性先限制每窗口2道；候选不足时逐轮放宽，仍不足就少返回而不复制商品。
+     */
     private List<RecommendationAlgorithm.RankedItem> diversify(List<RecommendationAlgorithm.RankedItem> ranked, int limit) {
         for (int perWindow = 2; perWindow <= limit; perWindow++) {
             List<RecommendationAlgorithm.RankedItem> selected = new ArrayList<>(limit);
@@ -385,7 +402,8 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
             Map<Long, Integer> counts = new HashMap<>();
             for (RecommendationAlgorithm.RankedItem item : ranked) {
                 Long windowId = item.product().getWindowId();
-                if (counts.getOrDefault(windowId, 0) >= perWindow || !selectedIds.add(item.product().getProductId())) continue;
+                if (counts.getOrDefault(windowId, 0) >= perWindow || !selectedIds.add(item.product().getProductId()))
+                    continue;
                 selected.add(item);
                 counts.merge(windowId, 1, Integer::sum);
                 if (selected.size() == limit) return selected;
@@ -395,18 +413,24 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         return ranked.stream().limit(limit).toList();
     }
 
-    /** 半衰期衰减；未来时间按年龄0处理，避免时钟偏差产生大于1的权重。 */
+    /**
+     * 半衰期衰减；未来时间按年龄0处理，避免时钟偏差产生大于1的权重。
+     */
     private double decay(double ageDays, double halfLifeDays) {
         return Math.pow(2.0, -Math.max(0.0, ageDays) / halfLifeDays);
     }
 
-    /** 计算两时刻的非负天数，旧时间戳缺失时按已衰减掉处理。 */
+    /**
+     * 计算两时刻的非负天数，旧时间戳缺失时按已衰减掉处理。
+     */
     private double daysBetween(LocalDateTime occurredAt, LocalDateTime now) {
         if (occurredAt == null) return Double.POSITIVE_INFINITY;
         return Math.max(0, Duration.between(occurredAt, now).toSeconds() / 86400.0);
     }
 
-    /** 合并两个 ID 集合并去空，避免为同一商品重复构造特征。 */
+    /**
+     * 合并两个 ID 集合并去空，避免为同一商品重复构造特征。
+     */
     private Set<Long> union(Set<Long> first, Set<Long> second) {
         Set<Long> values = new HashSet<>(first);
         values.addAll(second);

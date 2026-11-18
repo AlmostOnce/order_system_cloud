@@ -1,7 +1,7 @@
 package com.hbue.ordering.stock.service.impl;
 
-import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockItemRequest;
@@ -90,32 +90,46 @@ public class StockServiceImpl implements StockService {
                 .toList();
     }
 
-    /** 日志记录器。 */
+    /**
+     * 日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(StockServiceImpl.class);
 
-    /** Redis 预扣成功，失败时需要补偿。 */
+    /**
+     * Redis 预扣成功，失败时需要补偿。
+     */
     private static final int SNAPSHOT_DEDUCTED = 1;
 
-    /** Redis 不可用或快照缺失，本次跳过预扣，直接走数据库。 */
+    /**
+     * Redis 不可用或快照缺失，本次跳过预扣，直接走数据库。
+     */
     private static final int SNAPSHOT_SKIPPED = 0;
 
-    /** 库存主表数据访问接口。 */
+    /**
+     * 库存主表数据访问接口。
+     */
     private final StockMapper stockMapper;
 
-    /** 库存流水数据访问接口。 */
+    /**
+     * 库存流水数据访问接口。
+     */
     private final StockFlowMapper stockFlowMapper;
 
-    /** 库存快照 Redis 原子操作组件。 */
+    /**
+     * 库存快照 Redis 原子操作组件。
+     */
     private final StockRedisScript stockRedisScript;
 
-    /** 与库存流水同事务写入，等待 Seata 全局事务结束后再异步发布。 */
+    /**
+     * 与库存流水同事务写入，等待 Seata 全局事务结束后再异步发布。
+     */
     private final StockEventOutboxWriter stockEventOutboxWriter;
 
     /**
      * 创建库存业务实现。
      *
-     * @param stockMapper 库存主表数据访问接口
-     * @param stockFlowMapper 库存流水数据访问接口
+     * @param stockMapper      库存主表数据访问接口
+     * @param stockFlowMapper  库存流水数据访问接口
      * @param stockRedisScript 库存快照 Redis 原子操作组件
      */
     public StockServiceImpl(
@@ -175,7 +189,7 @@ public class StockServiceImpl implements StockService {
     /**
      * 查询指定档口菜品的库存快照（以数据库为准）。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存视图；无记录时返回 null
      */
@@ -199,8 +213,8 @@ public class StockServiceImpl implements StockService {
      *
      * <p>步骤：加行锁读库存 → 幂等预检 → Redis 原子预扣 → 乐观锁条件扣减 → 写扣减流水。</p>
      *
-     * @param request 扣减请求
-     * @param item 单行菜品明细
+     * @param request          扣减请求
+     * @param item             单行菜品明细
      * @param preDeductedItems 已预扣 Redis 快照的明细集合，用于失败补偿
      */
     private void deductSingleItem(
@@ -287,7 +301,7 @@ public class StockServiceImpl implements StockService {
      * <p>步骤：加行锁读库存 → 查回补流水判重 → 校验确有扣减记录 → 加回数量 → 写回补流水 → 重置快照。</p>
      *
      * @param request 回补请求
-     * @param item 单行菜品明细
+     * @param item    单行菜品明细
      */
     private void restoreSingleItem(StockRestoreRequest request, StockItemRequest item) {
         Long windowId = request.getWindowId();
@@ -378,10 +392,10 @@ public class StockServiceImpl implements StockService {
      * <p>Redis 访问异常时降级返回「跳过预扣」，由数据库独立完成扣减判断，
      * 保证 Redis 故障不会阻断下单，也不会让 Redis 成为事实来源。</p>
      *
-     * @param stock 当前库存记录
+     * @param stock    当前库存记录
      * @param quantity 需要扣减的数量
      * @return 预扣成功返回 {@link #SNAPSHOT_DEDUCTED}；库存不足返回
-     *         {@link StockRedisScript#SNAPSHOT_INSUFFICIENT}；降级跳过返回 {@link #SNAPSHOT_SKIPPED}
+     * {@link StockRedisScript#SNAPSHOT_INSUFFICIENT}；降级跳过返回 {@link #SNAPSHOT_SKIPPED}
      */
     private int preDeductSnapshot(StockDO stock, Integer quantity) {
         Long windowId = stock.getWindowId();
@@ -416,7 +430,7 @@ public class StockServiceImpl implements StockService {
     /**
      * 补偿本请求中已预扣的 Redis 快照。
      *
-     * @param windowId 档口 ID
+     * @param windowId         档口 ID
      * @param preDeductedItems 已预扣的菜品明细
      */
     private void compensateSnapshots(Long windowId, List<StockItemRequest> preDeductedItems) {
@@ -431,8 +445,8 @@ public class StockServiceImpl implements StockService {
      * <p>快照是派生数据，重置失败只影响后续的快速过滤精度，定时对账会把漂移修正，
      * 因此不能因此让已经成功的回补事务失败。</p>
      *
-     * @param windowId 档口 ID
-     * @param productId 菜品 ID
+     * @param windowId     档口 ID
+     * @param productId    菜品 ID
      * @param availableQty 数据库中的可售数量
      */
     private void resetSnapshotQuietly(Long windowId, Long productId, Integer availableQty) {
@@ -446,14 +460,14 @@ public class StockServiceImpl implements StockService {
     /**
      * 组装库存流水记录。
      *
-     * @param bizType 业务类型
-     * @param bizRef 业务单据号
-     * @param stock 变更前的库存记录
-     * @param changeQty 变动数量（扣减为负、回补为正）
-     * @param beforeQty 变动前可售数量
-     * @param afterQty 变动后可售数量
+     * @param bizType    业务类型
+     * @param bizRef     业务单据号
+     * @param stock      变更前的库存记录
+     * @param changeQty  变动数量（扣减为负、回补为正）
+     * @param beforeQty  变动前可售数量
+     * @param afterQty   变动后可售数量
      * @param operatorId 操作者 user_id
-     * @param remark 备注
+     * @param remark     备注
      * @return 库存流水持久化对象
      */
     private StockFlowDO buildFlow(
@@ -484,10 +498,10 @@ public class StockServiceImpl implements StockService {
     /**
      * 构造统一的库存不足异常。
      *
-     * @param windowId 档口 ID
-     * @param productId 菜品 ID
+     * @param windowId     档口 ID
+     * @param productId    菜品 ID
      * @param availableQty 当前可售数量
-     * @param quantity 请求扣减数量
+     * @param quantity     请求扣减数量
      * @return 库存不足业务异常
      */
     private BusinessException notEnough(

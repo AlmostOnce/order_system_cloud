@@ -23,46 +23,50 @@ public interface UserMapper extends BaseMapper<UserDO> {
     UserDO selectRecoveryByEmail(@Param("email") String email);
 
     @Select("""
-        SELECT user_id,email,password_hash,credential_version FROM users
-        WHERE user_id=#{id} AND status=1 AND deleted_at IS NULL FOR UPDATE
-        """)
+            SELECT user_id,email,password_hash,credential_version FROM users
+            WHERE user_id=#{id} AND status=1 AND deleted_at IS NULL FOR UPDATE
+            """)
     UserDO selectPasswordRecoveryForUpdate(@Param("id") Long id);
 
     @Select("SELECT credential_version FROM users WHERE user_uuid=#{uuid} AND status=1 AND deleted_at IS NULL")
     Long selectCredentialVersion(@Param("uuid") String uuid);
 
     @Update("""
-        UPDATE users SET password_hash=#{hash}, credential_version=credential_version+1,
-            version=version+1, updated_at=NOW()
-        WHERE user_id=#{id} AND email=#{email} AND credential_version=#{credentialVersion}
-            AND status=1 AND deleted_at IS NULL
-        """)
+            UPDATE users SET password_hash=#{hash}, credential_version=credential_version+1,
+                version=version+1, updated_at=NOW()
+            WHERE user_id=#{id} AND email=#{email} AND credential_version=#{credentialVersion}
+                AND status=1 AND deleted_at IS NULL
+            """)
     int resetLoginPassword(@Param("id") Long id, @Param("email") String email,
-            @Param("credentialVersion") long credentialVersion, @Param("hash") String hash);
+                           @Param("credentialVersion") long credentialVersion, @Param("hash") String hash);
 
-    /** 内部头像批量查询，仅投影用户标识和文件键。 */
+    /**
+     * 内部头像批量查询，仅投影用户标识和文件键。
+     */
     @Select("""
-        <script>SELECT user_id, avatar_file_key FROM users
-        WHERE status = 1 AND deleted_at IS NULL AND user_id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
-        </script>
-        """)
+            <script>SELECT user_id, avatar_file_key FROM users
+            WHERE status = 1 AND deleted_at IS NULL AND user_id IN
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
     java.util.List<UserDO> selectAvatars(@Param("ids") java.util.List<Long> ids);
 
-    /** 串行化本人资料修改，避免并发换绑绕过对当前邮箱的核对。 */
+    /**
+     * 串行化本人资料修改，避免并发换绑绕过对当前邮箱的核对。
+     */
     @Select("SELECT user_id, username, email, password_hash, status, deleted_at FROM users WHERE user_id = #{userId} FOR UPDATE")
     UserDO selectProfileForUpdate(@Param("userId") Long userId);
 
     @Update("""
-        UPDATE users SET username = #{username}, version = version + 1, updated_at = NOW()
-        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
-        """)
+            UPDATE users SET username = #{username}, version = version + 1, updated_at = NOW()
+            WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+            """)
     int updateOwnProfile(@Param("userId") Long userId, @Param("username") String username);
 
     @Update("""
-        UPDATE users SET email = #{email}, email_verified_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = NOW()
-        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
-        """)
+            UPDATE users SET email = #{email}, email_verified_at = CURRENT_TIMESTAMP, version = version + 1, updated_at = NOW()
+            WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+            """)
     int updateOwnEmail(@Param("userId") Long userId, @Param("email") String email);
 
     @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND status = 1 AND deleted_at IS NULL")
@@ -71,11 +75,13 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("SELECT user_id FROM users WHERE user_uuid = #{userUuid} AND deleted_at IS NULL")
     Long selectExistingIdByUuid(@Param("userUuid") String userUuid);
 
-    /** 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。 */
+    /**
+     * 充值串行化同一用户的余额变动，锁内检查重复请求及余额上限。
+     */
     @Select("""
-        SELECT user_id, user_uuid, user_no, credential_version, email_verified_at, balance, pay_password_hash, status, deleted_at
-        FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
-        """)
+            SELECT user_id, user_uuid, user_no, credential_version, email_verified_at, balance, pay_password_hash, status, deleted_at
+            FROM users WHERE user_id = #{userId} AND deleted_at IS NULL FOR UPDATE
+            """)
     UserDO selectBalanceForUpdate(@Param("userId") Long userId);
 
     /**
@@ -85,22 +91,26 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("SELECT user_id,balance,status,deleted_at FROM users WHERE user_id=#{userId} FOR UPDATE")
     UserDO selectRefundAccountForUpdate(@Param("userId") Long userId);
 
-    /** 充值与消费共用同一余额行；原子累加，不覆盖并发扣款结果。 */
+    /**
+     * 充值与消费共用同一余额行；原子累加，不覆盖并发扣款结果。
+     */
     @Update("""
-        UPDATE users SET balance = balance + #{amount}, version = version + 1, updated_at = NOW()
-        WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
-          AND balance <= 99999999.99 - #{amount}
-        """)
+            UPDATE users SET balance = balance + #{amount}, version = version + 1, updated_at = NOW()
+            WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+              AND balance <= 99999999.99 - #{amount}
+            """)
     int creditBalance(@Param("userId") Long userId, @Param("amount") BigDecimal amount);
 
     @Select("SELECT user_id FROM users WHERE user_no = #{userNo}")
     Long selectIdByUserNo(@Param("userNo") String userNo);
 
-    /** 本人资料的字段白名单，不查询密码和支付凭据。 */
+    /**
+     * 本人资料的字段白名单，不查询密码和支付凭据。
+     */
     @Select("""
-        SELECT user_id, user_uuid, user_no, credential_version, email_verified_at, username, role_code, email, avatar_file_key, created_at, status
-        FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
-        """)
+            SELECT user_id, user_uuid, user_no, credential_version, email_verified_at, username, role_code, email, avatar_file_key, created_at, status
+            FROM users WHERE user_id = #{userId} AND status = 1 AND deleted_at IS NULL
+            """)
     UserDO selectOwnProfile(@Param("userId") Long userId);
 
     /**
@@ -111,25 +121,25 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            username,
-            role_code,
-            email,
-            balance,
-            password_hash,
-            avatar_file_key,
-            status,
-            version,
-            created_at,
-            updated_at,
-            deleted_at
-        FROM users
-        WHERE user_id = #{userId}
-          AND status = #{status}
-          AND deleted_at IS NULL
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                email,
+                balance,
+                password_hash,
+                avatar_file_key,
+                status,
+                version,
+                created_at,
+                updated_at,
+                deleted_at
+            FROM users
+            WHERE user_id = #{userId}
+              AND status = #{status}
+              AND deleted_at IS NULL
+            """)
     UserDO selectAvailableById(
             @Param("userId") Long userId,
             @Param("status") Integer status
@@ -143,23 +153,23 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * 与 {@link #selectByEmail(String)} 分别精确查询。</p>
      *
      * @param username 用户名
-     * @param email 邮箱
+     * @param email    邮箱
      * @return 已存在的用户
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            username,
-            role_code,
-            email,
-            status,
-            deleted_at
-        FROM users
-        WHERE username = #{username}
-           OR email = #{email}
-        LIMIT 1
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                email,
+                status,
+                deleted_at
+            FROM users
+            WHERE username = #{username}
+               OR email = #{email}
+            LIMIT 1
+            """)
     UserDO selectByUsernameOrEmail(
             @Param("username") String username,
             @Param("email") String email
@@ -175,18 +185,18 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象，不存在时返回 null
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            username,
-            role_code,
-            email,
-            status,
-            deleted_at
-        FROM users
-        WHERE username = #{username}
-        LIMIT 1
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                email,
+                status,
+                deleted_at
+            FROM users
+            WHERE username = #{username}
+            LIMIT 1
+            """)
     UserDO selectByUsername(@Param("username") String username);
 
     /**
@@ -199,18 +209,18 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象，不存在时返回 null
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            username,
-            role_code,
-            email,
-            status,
-            deleted_at
-        FROM users
-        WHERE email = #{email}
-        LIMIT 1
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                email,
+                status,
+                deleted_at
+            FROM users
+            WHERE email = #{email}
+            LIMIT 1
+            """)
     UserDO selectByEmail(@Param("email") String email);
 
     /**
@@ -223,18 +233,18 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象，不存在或已删除时返回 null
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            username,
-            role_code,
-            email,
-            status,
-            deleted_at
-        FROM users
-        WHERE user_id = #{userId}
-          AND deleted_at IS NULL
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                email,
+                status,
+                deleted_at
+            FROM users
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+            """)
     UserDO selectNotDeletedById(@Param("userId") Long userId);
 
     /**
@@ -245,18 +255,18 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象
      */
     @Select("""
-    SELECT
-        user_id,
-        user_uuid, user_no, credential_version, email_verified_at,
-        username,
-        role_code,
-        password_hash,
-        status,
-        deleted_at
-    FROM users
-    WHERE (user_no = CAST(#{account} AS BINARY) OR email = #{account})
-    LIMIT 1
-    """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                username,
+                role_code,
+                password_hash,
+                status,
+                deleted_at
+            FROM users
+            WHERE (user_no = CAST(#{account} AS BINARY) OR email = #{account})
+            LIMIT 1
+            """)
     UserDO selectByAccountForLogin(
             @Param("account") String account
     );
@@ -271,17 +281,17 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象，不存在或已删除时返回 null
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            balance,
-            pay_password_hash,
-            status,
-            deleted_at
-        FROM users
-        WHERE user_id = #{userId}
-          AND deleted_at IS NULL
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                balance,
+                pay_password_hash,
+                status,
+                deleted_at
+            FROM users
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+            """)
     UserDO selectBalanceById(@Param("userId") Long userId);
 
     /**
@@ -293,17 +303,17 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 用户持久化对象，不存在或已删除时返回 null
      */
     @Select("""
-        SELECT
-            user_id,
-            user_uuid, user_no, credential_version, email_verified_at,
-            password_hash,
-            pay_password_hash,
-            status,
-            deleted_at
-        FROM users
-        WHERE user_id = #{userId}
-          AND deleted_at IS NULL
-        """)
+            SELECT
+                user_id,
+                user_uuid, user_no, credential_version, email_verified_at,
+                password_hash,
+                pay_password_hash,
+                status,
+                deleted_at
+            FROM users
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+            """)
     UserDO selectPasswordsById(@Param("userId") Long userId);
 
     /**
@@ -317,15 +327,15 @@ public interface UserMapper extends BaseMapper<UserDO> {
      * @return 受影响行数，1 表示扣款成功
      */
     @Update("""
-        UPDATE users
-        SET balance = balance - #{amount},
-            version = version + 1,
-            updated_at = NOW()
-        WHERE user_id = #{userId}
-          AND status = 1
-          AND deleted_at IS NULL
-          AND balance >= #{amount}
-        """)
+            UPDATE users
+            SET balance = balance - #{amount},
+                version = version + 1,
+                updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND status = 1
+              AND deleted_at IS NULL
+              AND balance >= #{amount}
+            """)
     int deductBalance(
             @Param("userId") Long userId,
             @Param("amount") BigDecimal amount
@@ -334,22 +344,23 @@ public interface UserMapper extends BaseMapper<UserDO> {
     /**
      * 设置或修改支付密码哈希。
      *
-     * @param userId 用户 ID
+     * @param userId          用户 ID
      * @param payPasswordHash 支付密码哈希
      * @return 受影响行数，1 表示写入成功
      */
     @Update("""
-        UPDATE users
-        SET pay_password_hash = #{payPasswordHash},
-            version = version + 1,
-            updated_at = NOW()
-        WHERE user_id = #{userId}
-          AND deleted_at IS NULL
-        """)
+            UPDATE users
+            SET pay_password_hash = #{payPasswordHash},
+                version = version + 1,
+                updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+            """)
     int updatePayPassword(
             @Param("userId") Long userId,
             @Param("payPasswordHash") String payPasswordHash
     );
+
     @Select("SELECT user_id,email,password_hash,pay_password_hash,credential_version,status,deleted_at FROM users WHERE user_id=#{id}")
     UserDO selectPayPasswordRecovery(@Param("id") Long id);
 
@@ -358,14 +369,17 @@ public interface UserMapper extends BaseMapper<UserDO> {
 
     @Select("SELECT (email_verified_at IS NOT NULL) FROM users WHERE user_uuid=#{uuid} AND status=1 AND deleted_at IS NULL")
     Boolean selectEmailVerified(@Param("uuid") String uuid);
+
     @Select("SELECT user_id,email,email_verified_at,password_hash,credential_version,role_code,status,deleted_at FROM users WHERE user_id=#{id}")
     UserDO selectEmailEnrollment(@Param("id") Long id);
+
     @Select("SELECT user_id,email,email_verified_at,password_hash,credential_version,role_code,status,deleted_at FROM users WHERE user_id=#{id} FOR UPDATE")
     UserDO selectEmailEnrollmentForUpdate(@Param("id") Long id);
+
     @Update("""
-        UPDATE users SET email=#{email},email_verified_at=CURRENT_TIMESTAMP,
-          credential_version=credential_version+1,version=version+1,updated_at=CURRENT_TIMESTAMP
-        WHERE user_id=#{id} AND email_verified_at IS NULL AND status=1 AND deleted_at IS NULL
-        """)
-    int completeEmailEnrollment(@Param("id") Long id,@Param("email") String email);
+            UPDATE users SET email=#{email},email_verified_at=CURRENT_TIMESTAMP,
+              credential_version=credential_version+1,version=version+1,updated_at=CURRENT_TIMESTAMP
+            WHERE user_id=#{id} AND email_verified_at IS NULL AND status=1 AND deleted_at IS NULL
+            """)
+    int completeEmailEnrollment(@Param("id") Long id, @Param("email") String email);
 }

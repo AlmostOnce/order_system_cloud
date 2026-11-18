@@ -11,11 +11,7 @@ import com.hbue.ordering.coupon.dto.CouponTemplateCreateRequest;
 import com.hbue.ordering.coupon.dto.CouponTemplateRow;
 import com.hbue.ordering.coupon.enums.CouponTemplateStatus;
 import com.hbue.ordering.coupon.enums.UserCouponStatus;
-import com.hbue.ordering.coupon.mapper.CouponAdminActionMapper;
-import com.hbue.ordering.coupon.mapper.CouponTemplateMapper;
-import com.hbue.ordering.coupon.mapper.CouponTemplateWindowMapper;
-import com.hbue.ordering.coupon.mapper.CouponUseRecordMapper;
-import com.hbue.ordering.coupon.mapper.UserCouponMapper;
+import com.hbue.ordering.coupon.mapper.*;
 import com.hbue.ordering.coupon.model.CouponAdminActionDO;
 import com.hbue.ordering.coupon.model.CouponTemplateDO;
 import com.hbue.ordering.coupon.model.CouponUseRecordDO;
@@ -30,29 +26,38 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-/** 优惠券业务实现；数据库条件更新与唯一索引承担并发控制，不使用缓存作为库存事实。 */
+/**
+ * 优惠券业务实现；数据库条件更新与唯一索引承担并发控制，不使用缓存作为库存事实。
+ */
 @Service
 public class CouponServiceImpl implements CouponService {
-    /** 模板及可领取窗口关系访问入口。 */
+    /**
+     * 模板及可领取窗口关系访问入口。
+     */
     private final CouponTemplateMapper templateMapper;
     private final CouponTemplateWindowMapper templateWindowMapper;
-    /** 学生持券状态访问入口。 */
+    /**
+     * 学生持券状态访问入口。
+     */
     private final UserCouponMapper userCouponMapper;
-    /** 锁定、核销、释放的金额审计流水访问入口。 */
+    /**
+     * 锁定、核销、释放的金额审计流水访问入口。
+     */
     private final CouponUseRecordMapper useRecordMapper;
-    /** 管理动作审计访问入口。 */
+    /**
+     * 管理动作审计访问入口。
+     */
     private final CouponAdminActionMapper adminActionMapper;
-    /** 负责总经理平台数据范围确认。 */
+    /**
+     * 负责总经理平台数据范围确认。
+     */
     private final CouponAuthorizationService authorizationService;
 
-    /** 注入本服务依赖，所有数据写入边界留在当前 coupon_db。 */
+    /**
+     * 注入本服务依赖，所有数据写入边界留在当前 coupon_db。
+     */
     public CouponServiceImpl(
             CouponTemplateMapper templateMapper,
             CouponTemplateWindowMapper templateWindowMapper,
@@ -69,14 +74,18 @@ public class CouponServiceImpl implements CouponService {
         this.authorizationService = authorizationService;
     }
 
-    /** 查询仍在领取时间内且有余量的模板；数据库查询把结果限制在前 100 个模板内。 */
+    /**
+     * 查询仍在领取时间内且有余量的模板；数据库查询把结果限制在前 100 个模板内。
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CouponTemplateVO> listClaimable() {
         return mergeTemplateRows(templateMapper.listClaimableRows());
     }
 
-    /** 先原子占用一份发行量，再插入用户券；任何插入失败都会回滚发行量。 */
+    /**
+     * 先原子占用一份发行量，再插入用户券；任何插入失败都会回滚发行量。
+     */
     @Override
     @Transactional
     public UserCouponVO claim(Long userId, Long templateId) {
@@ -110,7 +119,9 @@ public class CouponServiceImpl implements CouponService {
         return toUserCoupon(userCoupon, template, readWindowIds(templateId));
     }
 
-    /** 只读取当前 JWT 用户自己的持券；过期券在同一事务内惰性迁移到 EXPIRED。 */
+    /**
+     * 只读取当前 JWT 用户自己的持券；过期券在同一事务内惰性迁移到 EXPIRED。
+     */
     @Override
     @Transactional
     public List<UserCouponVO> listMine(Long userId, String status) {
@@ -120,7 +131,9 @@ public class CouponServiceImpl implements CouponService {
         return mergeMineRows(userCouponMapper.listMineRows(userId, requestedStatus));
     }
 
-    /** 总经理管理列表；角色判断在 Controller，平台范围再向 user-service 复核。 */
+    /**
+     * 总经理管理列表；角色判断在 Controller，平台范围再向 user-service 复核。
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CouponTemplateVO> listAdminTemplates(Long operatorId) {
@@ -128,7 +141,9 @@ public class CouponServiceImpl implements CouponService {
         return mergeTemplateRows(templateMapper.listAdminRows());
     }
 
-    /** 创建仅由平台发行、平台预算承担的草稿模板，并在同一事务留下审计记录。 */
+    /**
+     * 创建仅由平台发行、平台预算承担的草稿模板，并在同一事务留下审计记录。
+     */
     @Override
     @Transactional
     public CouponTemplateVO createTemplate(Long operatorId, CouponTemplateCreateRequest request) {
@@ -165,7 +180,9 @@ public class CouponServiceImpl implements CouponService {
         return toTemplateVO(template, windowIds, template.getTotalQuantity());
     }
 
-    /** 只允许从草稿发布；发布、审计写入在一个本地事务内完成。 */
+    /**
+     * 只允许从草稿发布；发布、审计写入在一个本地事务内完成。
+     */
     @Override
     @Transactional
     public void publishTemplate(Long operatorId, Long templateId) {
@@ -180,7 +197,9 @@ public class CouponServiceImpl implements CouponService {
         transitionTemplate(template, operatorId, "PUBLISH", CouponTemplateStatus.PUBLISHED.name());
     }
 
-    /** 停止新增领取；已经发出的券仍可按有效期和订单窗口继续使用。 */
+    /**
+     * 停止新增领取；已经发出的券仍可按有效期和订单窗口继续使用。
+     */
     @Override
     @Transactional
     public void stopClaims(Long operatorId, Long templateId) {
@@ -196,7 +215,9 @@ public class CouponServiceImpl implements CouponService {
         transitionTemplate(template, operatorId, "STOP_CLAIMS", CouponTemplateStatus.CLAIM_STOPPED.name());
     }
 
-    /** 停止新锁券并撤销尚未进入订单的券；已锁定订单保留，避免覆盖支付中的事实。 */
+    /**
+     * 停止新锁券并撤销尚未进入订单的券；已锁定订单保留，避免覆盖支付中的事实。
+     */
     @Override
     @Transactional
     public void stopUse(Long operatorId, Long templateId) {
@@ -223,7 +244,9 @@ public class CouponServiceImpl implements CouponService {
         );
     }
 
-    /** 按模板→用户券的固定行锁顺序检查规则，防止停用与锁券竞态放入已停用券。 */
+    /**
+     * 按模板→用户券的固定行锁顺序检查规则，防止停用与锁券竞态放入已停用券。
+     */
     @Override
     @Transactional
     public CouponLockVO lock(CouponLockRequest request) {
@@ -314,7 +337,9 @@ public class CouponServiceImpl implements CouponService {
         return toLockVO(userCoupon, template, template.getDiscountAmount());
     }
 
-    /** 订单已确认 CLOSED 后由订单服务调用；订单无券或重复释放均不产生错误。 */
+    /**
+     * 订单已确认 CLOSED 后由订单服务调用；订单无券或重复释放均不产生错误。
+     */
     @Override
     @Transactional
     public void release(String orderNo) {
@@ -363,7 +388,9 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 支付确认事件只接受对应订单当前锁定的券；按 orderNo 幂等，异常抛出交由消息重试。 */
+    /**
+     * 支付确认事件只接受对应订单当前锁定的券；按 orderNo 幂等，异常抛出交由消息重试。
+     */
     @Override
     @Transactional
     public void markUsed(CouponPaidEvent event) {
@@ -405,7 +432,9 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 读取模板行并确认存在，FOR UPDATE 让管理状态变更与锁券按同一模板顺序串行化。 */
+    /**
+     * 读取模板行并确认存在，FOR UPDATE 让管理状态变更与锁券按同一模板顺序串行化。
+     */
     private CouponTemplateDO requireTemplateForUpdate(Long templateId) {
         requirePositiveId(templateId, "优惠券模板");
         CouponTemplateDO template = templateMapper.findByIdForUpdate(templateId);
@@ -415,7 +444,9 @@ public class CouponServiceImpl implements CouponService {
         return template;
     }
 
-    /** 使用条件更新切换模板状态，并在同一事务内追加管理审计。 */
+    /**
+     * 使用条件更新切换模板状态，并在同一事务内追加管理审计。
+     */
     private void transitionTemplate(
             CouponTemplateDO template,
             Long operatorId,
@@ -436,7 +467,9 @@ public class CouponServiceImpl implements CouponService {
         );
     }
 
-    /** 记录管理动作；状态写入失败时事务回滚，不留下无审计的管理结果。 */
+    /**
+     * 记录管理动作；状态写入失败时事务回滚，不留下无审计的管理结果。
+     */
     private void recordAdminAction(
             Long templateId,
             Long operatorId,
@@ -456,12 +489,16 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 读取窗口关系；全校券返回空集合。 */
+    /**
+     * 读取窗口关系；全校券返回空集合。
+     */
     private List<Long> readWindowIds(Long templateId) {
         return List.copyOf(templateWindowMapper.listWindowIds(templateId));
     }
 
-    /** 把模板与窗口联查行按模板聚合，保留领取时间及库存供领券校验展示，并剔除 LEFT JOIN 空窗口。 */
+    /**
+     * 把模板与窗口联查行按模板聚合，保留领取时间及库存供领券校验展示，并剔除 LEFT JOIN 空窗口。
+     */
     private List<CouponTemplateVO> mergeTemplateRows(List<CouponTemplateRow> rows) {
         Map<Long, TemplateAccumulator> grouped = new LinkedHashMap<>();
         for (CouponTemplateRow row : rows) {
@@ -494,7 +531,9 @@ public class CouponServiceImpl implements CouponService {
         return List.copyOf(result);
     }
 
-    /** 将我的券多窗口联查结果按用户券 ID 聚合；仅返回持有券有效期，不混入模板领取时间和库存。 */
+    /**
+     * 将我的券多窗口联查结果按用户券 ID 聚合；仅返回持有券有效期，不混入模板领取时间和库存。
+     */
     private List<UserCouponVO> mergeMineRows(List<CouponMineRow> rows) {
         Map<Long, MineAccumulator> grouped = new LinkedHashMap<>();
         for (CouponMineRow row : rows) {
@@ -524,7 +563,9 @@ public class CouponServiceImpl implements CouponService {
         return List.copyOf(result);
     }
 
-    /** 返回创建成功后的券视图。 */
+    /**
+     * 返回创建成功后的券视图。
+     */
     private CouponTemplateVO toTemplateVO(
             CouponTemplateDO template,
             List<Long> windowIds,
@@ -547,7 +588,9 @@ public class CouponServiceImpl implements CouponService {
                 .build();
     }
 
-    /** 为学生领券响应提供模板规则和适用窗口快照。 */
+    /**
+     * 为学生领券响应提供模板规则和适用窗口快照。
+     */
     private UserCouponVO toUserCoupon(
             UserCouponDO userCoupon,
             CouponTemplateDO template,
@@ -567,7 +610,9 @@ public class CouponServiceImpl implements CouponService {
                 .build();
     }
 
-    /** 构造订单服务保存金额和标题快照所需的锁券结果。 */
+    /**
+     * 构造订单服务保存金额和标题快照所需的锁券结果。
+     */
     private CouponLockVO toLockVO(
             UserCouponDO userCoupon,
             CouponTemplateDO template,
@@ -581,13 +626,17 @@ public class CouponServiceImpl implements CouponService {
         );
     }
 
-    /** 拒绝超出数据库 DECIMAL(12,2) 精度的金额，避免数据库静默舍入改变券规则。 */
+    /**
+     * 拒绝超出数据库 DECIMAL(12,2) 精度的金额，避免数据库静默舍入改变券规则。
+     */
     private boolean isMoney(BigDecimal value) {
         return value != null && value.stripTrailingZeros().scale() <= 2
                 && value.precision() <= 12;
     }
 
-    /** 管理模板只能保存两位小数且折扣小于门槛，以确保订单仍保留正数应付金额。 */
+    /**
+     * 管理模板只能保存两位小数且折扣小于门槛，以确保订单仍保留正数应付金额。
+     */
     private void validateTemplateRequest(CouponTemplateCreateRequest request) {
         if (request == null) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "优惠券配置不能为空");
@@ -614,7 +663,9 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 清理重复窗口 ID 并拒绝无效范围，避免同一模板写入关系主键冲突。 */
+    /**
+     * 清理重复窗口 ID 并拒绝无效范围，避免同一模板写入关系主键冲突。
+     */
     private List<Long> normalizedWindowIds(List<Long> requested) {
         if (requested == null || requested.isEmpty()) {
             return List.of();
@@ -629,7 +680,9 @@ public class CouponServiceImpl implements CouponService {
         return List.copyOf(distinct);
     }
 
-    /** 只接受已定义的学生券状态，避免将任意查询字符串拼入持久层过滤语义。 */
+    /**
+     * 只接受已定义的学生券状态，避免将任意查询字符串拼入持久层过滤语义。
+     */
     private String normalizeCouponStatus(String status) {
         if (status == null || status.isBlank()) {
             return null;
@@ -641,19 +694,25 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 通用正数 ID 验证用于服务层内部接口，不能只依赖 HTTP Bean Validation。 */
+    /**
+     * 通用正数 ID 验证用于服务层内部接口，不能只依赖 HTTP Bean Validation。
+     */
     private void requirePositiveId(Long id, String label) {
         if (id == null || id <= 0) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, label + " ID 无效");
         }
     }
 
-    /** 统一表达不可执行的券状态或资格冲突，由订单调用方据此中止当前事务。 */
+    /**
+     * 统一表达不可执行的券状态或资格冲突，由订单调用方据此中止当前事务。
+     */
     private BusinessException conflict(String message) {
         return new BusinessException(CommonErrorCode.CONFLICT, message);
     }
 
-    /** 持有一行模板数据以及按 ID 去重后的适用窗口集合。 */
+    /**
+     * 持有一行模板数据以及按 ID 去重后的适用窗口集合。
+     */
     private static final class TemplateAccumulator {
         private final CouponTemplateRow row;
         private final Set<Long> windowIds = new LinkedHashSet<>();
@@ -663,7 +722,9 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    /** 持有一行学生券数据以及按 ID 去重后的适用窗口集合。 */
+    /**
+     * 持有一行学生券数据以及按 ID 去重后的适用窗口集合。
+     */
     private static final class MineAccumulator {
         private final CouponMineRow row;
         private final Set<Long> windowIds = new LinkedHashSet<>();

@@ -34,7 +34,9 @@ public class SalesStatisticsService {
     private final OrderSalesInternalClient orders;
     private final String internalToken;
 
-    /** 注入本地投影、榜单缓存及仅供历史消息兼容的受保护订单快照客户端。 */
+    /**
+     * 注入本地投影、榜单缓存及仅供历史消息兼容的受保护订单快照客户端。
+     */
     public SalesStatisticsService(SalesProjectionService projectionService, SalesProjectionMapper mapper,
                                   SalesRankingCacheService rankingCache, OrderSalesInternalClient orders,
                                   @Value("${internal.scope.token}") String internalToken) {
@@ -45,7 +47,9 @@ public class SalesStatisticsService {
         this.internalToken = internalToken;
     }
 
-    /** 查询累计榜，limit 的范围由 Redis 服务层再做一次边界校验。 */
+    /**
+     * 查询累计榜，limit 的范围由 Redis 服务层再做一次边界校验。
+     */
     public SalesRankingVO listRanking(int limit) {
         return rankingCache.list(limit);
     }
@@ -67,16 +71,21 @@ public class SalesStatisticsService {
         rankingCache.apply(event, snapshot, version);
     }
 
-    /** 首页批量读取所有窗口当前自然月总份数，避免客户端对每个窗口发一次请求。 */
+    /**
+     * 首页批量读取所有窗口当前自然月总份数，避免客户端对每个窗口发一次请求。
+     */
     public WindowMonthlySalesVO listWindowMonthlySales() {
         String month = currentMonthKey();
         List<SalesWindowTotalDO> rows = mapper.selectMonthlyWindowTotals(month);
         List<WindowMonthlySalesVO.Item> items = new ArrayList<>();
-        for (SalesWindowTotalDO row : rows) items.add(new WindowMonthlySalesVO.Item(row.getWindowId(), row.getPaidQuantity()));
+        for (SalesWindowTotalDO row : rows)
+            items.add(new WindowMonthlySalesVO.Item(row.getWindowId(), row.getPaidQuantity()));
         return new WindowMonthlySalesVO(items);
     }
 
-    /** 点餐页读取单个窗口总月售与其菜品月售，当前自然月以支付时刻而非订单创建时间归属。 */
+    /**
+     * 点餐页读取单个窗口总月售与其菜品月售，当前自然月以支付时刻而非订单创建时间归属。
+     */
     public WindowProductMonthlySalesVO getWindowMonthlySales(Long windowId) {
         if (windowId == null || windowId <= 0) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "窗口编号无效");
         String month = currentMonthKey();
@@ -84,7 +93,8 @@ public class SalesStatisticsService {
         long windowSales = window == null ? 0 : window.getPaidQuantity();
         List<SalesProductTotalDO> rows = mapper.selectMonthlyProductTotals(month, windowId);
         List<WindowProductMonthlySalesVO.ProductItem> products = new ArrayList<>();
-        for (SalesProductTotalDO row : rows) products.add(new WindowProductMonthlySalesVO.ProductItem(row.getProductId(), row.getPaidQuantity()));
+        for (SalesProductTotalDO row : rows)
+            products.add(new WindowProductMonthlySalesVO.ProductItem(row.getProductId(), row.getPaidQuantity()));
         return new WindowProductMonthlySalesVO(windowId, windowSales, products);
     }
 
@@ -99,7 +109,9 @@ public class SalesStatisticsService {
         return response.getData();
     }
 
-    /** 当前月份由部署时区明确固定为 Asia/Shanghai，避免服务主机默认时区变化导致跨月错位。 */
+    /**
+     * 当前月份由部署时区明确固定为 Asia/Shanghai，避免服务主机默认时区变化导致跨月错位。
+     */
     private String currentMonthKey() {
         return YearMonth.now(BUSINESS_ZONE).toString();
     }

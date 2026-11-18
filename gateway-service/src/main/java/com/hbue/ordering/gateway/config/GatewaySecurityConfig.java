@@ -13,24 +13,18 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
-import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.interfaces.RSAPublicKey;
-import java.util.Objects;
 import java.util.List;
-
-import reactor.core.publisher.Mono;
+import java.util.Objects;
 
 /**
  * Gateway 安全配置。
@@ -65,7 +59,7 @@ public class GatewaySecurityConfig {
      * 创建 Gateway 安全配置。
      *
      * @param authenticationEntryPoint 未认证处理器
-     * @param accessDeniedHandler 无权限处理器
+     * @param accessDeniedHandler      无权限处理器
      */
     public GatewaySecurityConfig(
             GatewayAuthenticationEntryPoint authenticationEntryPoint,
@@ -78,7 +72,7 @@ public class GatewaySecurityConfig {
     /**
      * 配置 Gateway 响应式安全过滤链。
      *
-     * @param http 响应式 HTTP 安全配置
+     * @param http                    响应式 HTTP 安全配置
      * @param corsConfigurationSource 浏览器跨域访问配置
      * @return 响应式安全过滤链
      */
@@ -201,10 +195,10 @@ public class GatewaySecurityConfig {
      *
      * <p>公钥内容格式错误时，密钥转换器产生的运行时异常不会被本方法吞掉。</p>
      *
-     * @param publicKeyResource RSA 公钥资源
-     * @param issuer JWT 签发方
+     * @param publicKeyResource      RSA 公钥资源
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 响应式基础操作组件
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      * @throws IllegalStateException 当 RSA 公钥资源无法读取时抛出，阻止网关以不安全状态启动
      */
@@ -260,10 +254,10 @@ public class GatewaySecurityConfig {
     /**
      * 响应式解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 响应式基础操作组件
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 通过校验的 JWT，或表示校验失败的错误信号
      */
     private Mono<Jwt> decodeAndCheckBlacklist(

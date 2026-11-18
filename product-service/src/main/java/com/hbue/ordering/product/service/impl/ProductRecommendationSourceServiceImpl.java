@@ -11,14 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-/** 在商品域当前有效性规则下批量读取推荐候选及其可选规格说明。 */
+/**
+ * 在商品域当前有效性规则下批量读取推荐候选及其可选规格说明。
+ */
 @Service
 public class ProductRecommendationSourceServiceImpl implements ProductRecommendationSourceService {
     private static final int ACTIVE = 1;
@@ -26,20 +24,26 @@ public class ProductRecommendationSourceServiceImpl implements ProductRecommenda
     private final ProductSearchSourceService searchableWindows;
     private final ProductSpecificationService specifications;
 
-    /** 注入可检索窗口、商品、分类和规格读取能力，目录快照不复制交易规则。 */
+    /**
+     * 注入可检索窗口、商品、分类和规格读取能力，目录快照不复制交易规则。
+     */
     public ProductRecommendationSourceServiceImpl(ProductSearchSourceService searchableWindows,
-            ProductSpecificationService specifications) {
+                                                  ProductSpecificationService specifications) {
         this.searchableWindows = searchableWindows;
         this.specifications = specifications;
     }
 
-    /** 复用商品搜索域已核验的启用餐厅和窗口列表，保持目录筛选规则一致。 */
+    /**
+     * 复用商品搜索域已核验的启用餐厅和窗口列表，保持目录筛选规则一致。
+     */
     @Override
     public List<Long> windowIds() {
         return searchableWindows.searchableWindowIds();
     }
 
-    /** 窗口和商品必须仍有效；规格组通过一次批量查询附加，不随菜品数量增加 SQL 次数。 */
+    /**
+     * 窗口和商品必须仍有效；规格组通过一次批量查询附加，不随菜品数量增加 SQL 次数。
+     */
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ProductRecommendationDocument> documents(Long windowId) {
@@ -53,7 +57,9 @@ public class ProductRecommendationSourceServiceImpl implements ProductRecommenda
                 specByProduct.getOrDefault(document.productId(), List.of()))).toList();
     }
 
-    /** 单菜刷新仍复用同窗口的同一套状态、分类及规格校验，不暴露已失效商品。 */
+    /**
+     * 单菜刷新仍复用同窗口的同一套状态、分类及规格校验，不暴露已失效商品。
+     */
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ProductRecommendationDocument> document(Long windowId, Long productId) {
@@ -91,9 +97,11 @@ public class ProductRecommendationSourceServiceImpl implements ProductRecommenda
         return request.items().stream().map(item -> current.get(item.productId())).filter(java.util.Objects::nonNull).toList();
     }
 
-    /** 将商品域视图转换为只读推荐快照；库存和最终核价仍由交易链路单独确认。 */
+    /**
+     * 将商品域视图转换为只读推荐快照；库存和最终核价仍由交易链路单独确认。
+     */
     private ProductRecommendationDocument toDocument(ProductSearchDocument product,
-            List<ProductSpecificationGroupVO> groups) {
+                                                     List<ProductSpecificationGroupVO> groups) {
         List<ProductRecommendationDocument.SpecificationGroup> groupSnapshots = groups.stream()
                 .map(group -> new ProductRecommendationDocument.SpecificationGroup(group.getGroupId(), group.getName(),
                         group.getOptions().stream().map(option -> new ProductRecommendationDocument.SpecificationOption(

@@ -77,8 +77,8 @@ public class DistributedLockService {
      * <p>等待超时、线程被中断或 Redis 故障时均返回 null，
      * 不向调用方抛出异常。</p>
      *
-     * @param lockKey 锁 Key
-     * @param waitSeconds 等待锁的最长时间，单位为秒
+     * @param lockKey      锁 Key
+     * @param waitSeconds  等待锁的最长时间，单位为秒
      * @param leaseSeconds 持有锁的最长时间，单位为秒
      * @return 锁句柄；未获取到锁时返回 null
      * @throws IllegalArgumentException 当锁 Key 为空或仅包含空白时抛出

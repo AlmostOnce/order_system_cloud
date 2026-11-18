@@ -32,7 +32,7 @@ public interface RestaurantAdministrationService {
      * 新建餐厅；仅全平台范围（总经理）可操作。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param request 餐厅字段
+     * @param request    餐厅字段
      * @return 新建餐厅
      */
     RestaurantAdminVO createRestaurant(
@@ -43,9 +43,9 @@ public interface RestaurantAdministrationService {
     /**
      * 全量更新餐厅。
      *
-     * @param operatorId 当前登录操作者 ID
+     * @param operatorId   当前登录操作者 ID
      * @param restaurantId 餐厅 ID
-     * @param request 餐厅字段
+     * @param request      餐厅字段
      * @return 更新后的餐厅
      */
     RestaurantAdminVO updateRestaurant(
@@ -57,7 +57,7 @@ public interface RestaurantAdministrationService {
     /**
      * 停用餐厅；餐厅下仍有启用档口时返回 409。
      *
-     * @param operatorId 当前登录操作者 ID
+     * @param operatorId   当前登录操作者 ID
      * @param restaurantId 餐厅 ID
      */
     void disableRestaurant(Long operatorId, Long restaurantId);

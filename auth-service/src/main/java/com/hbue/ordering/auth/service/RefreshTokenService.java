@@ -17,7 +17,7 @@ public interface RefreshTokenService {
     /**
      * 创建并保存 Refresh Token。
      *
-     * @param userId 用户 ID
+     * @param userId   用户 ID
      * @param username 用户名
      * @param roleCode 角色编码
      * @return Refresh Token

@@ -8,6 +8,12 @@ import com.hbue.ordering.user.dto.request.VerifyEmailCaptchaRequest;
 import com.hbue.ordering.user.service.EmailChangeAuthorization;
 import com.hbue.ordering.user.service.EmailCodeSender;
 import com.hbue.ordering.user.service.EmailVerification;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.stereotype.Service;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -16,37 +22,34 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Service;
 
-/** 邮箱验证码：与用户、目标邮箱绑定，限制发送与校验次数。 */
+/**
+ * 邮箱验证码：与用户、目标邮箱绑定，限制发送与校验次数。
+ */
 @Service
 public class EmailVerificationService implements EmailVerification {
     private static final SecureRandom RANDOM = new SecureRandom();
     static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
-        local current = redis.call('GET', KEYS[1])
-        if not current then return 0 end
-        local digest, attempts = string.match(current, '^([a-f0-9]+):(%d+)$')
-        if not digest then redis.call('DEL', KEYS[1]); return 0 end
-        if digest == ARGV[1] then redis.call('DEL', KEYS[1]); return 1 end
-        attempts = tonumber(attempts) + 1
-        if attempts >= tonumber(ARGV[2]) then redis.call('DEL', KEYS[1])
-        else redis.call('SET', KEYS[1], digest .. ':' .. attempts, 'KEEPTTL') end
-        return 0
-        """, Long.class);
+            local current = redis.call('GET', KEYS[1])
+            if not current then return 0 end
+            local digest, attempts = string.match(current, '^([a-f0-9]+):(%d+)$')
+            if not digest then redis.call('DEL', KEYS[1]); return 0 end
+            if digest == ARGV[1] then redis.call('DEL', KEYS[1]); return 1 end
+            attempts = tonumber(attempts) + 1
+            if attempts >= tonumber(ARGV[2]) then redis.call('DEL', KEYS[1])
+            else redis.call('SET', KEYS[1], digest .. ':' .. attempts, 'KEEPTTL') end
+            return 0
+            """, Long.class);
     static final DefaultRedisScript<Long> REMOVE_IF_SAME = new DefaultRedisScript<>("""
-        local current = redis.call('GET', KEYS[1])
-        if current and string.sub(current, 1, 64) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
-        return 0
-        """, Long.class);
+            local current = redis.call('GET', KEYS[1])
+            if current and string.sub(current, 1, 64) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+            return 0
+            """, Long.class);
     static final DefaultRedisScript<Long> CONSUME_MATCHING_TICKET = new DefaultRedisScript<>("""
-        local current = redis.call('GET', KEYS[1])
-        if current and current == ARGV[1] then return redis.call('DEL', KEYS[1]) end
-        return 0
-        """, Long.class);
+            local current = redis.call('GET', KEYS[1])
+            if current and current == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+            return 0
+            """, Long.class);
     private final RedisOperationsService redis;
     private final EmailCodeSender sender;
     private final EmailChangeAuthorization authorization;
@@ -158,8 +161,13 @@ public class EmailVerificationService implements EmailVerification {
         return value;
     }
 
-    private String key(Long userId) { return "email:verification:user:" + userId; }
-    private String captchaTicketKey(Long userId) { return "email:captcha:verified:" + userId; }
+    private String key(Long userId) {
+        return "email:verification:user:" + userId;
+    }
+
+    private String captchaTicketKey(Long userId) {
+        return "email:captcha:verified:" + userId;
+    }
 
     private String digest(Long userId, String email, String code) {
         try {

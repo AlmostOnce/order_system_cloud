@@ -52,7 +52,9 @@ public class SalesRankingCacheService {
     private final SalesProjectionMapper projection;
     private final ObjectMapper json;
 
-    /** 注入统一 Redis 封装、分布式互斥和 MySQL 汇总读取能力。 */
+    /**
+     * 注入统一 Redis 封装、分布式互斥和 MySQL 汇总读取能力。
+     */
     public SalesRankingCacheService(RedisOperationsService redis, DistributedLockService locks,
                                     SalesProjectionMapper projection, ObjectMapper json) {
         this.redis = redis;
@@ -68,7 +70,8 @@ public class SalesRankingCacheService {
      * @return 按 ZSet 分数降序生成的榜单
      */
     public SalesRankingVO list(int limit) {
-        if (limit < 1 || limit > 100) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "榜单数量应在 1 到 100 之间");
+        if (limit < 1 || limit > 100)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "榜单数量应在 1 到 100 之间");
         long version = currentVersion();
         try {
             SalesRankingVO result = read(limit, version);
@@ -94,8 +97,8 @@ public class SalesRankingCacheService {
     /**
      * 在销量事实事务提交后增量维护 Redis；若缓存落后超过当前事件一个版本，则直接按 MySQL 全量修复。
      *
-     * @param event 已验证的稳定订单事件
-     * @param snapshot 事件对应的原始购买快照
+     * @param event                  已验证的稳定订单事件
+     * @param snapshot               事件对应的原始购买快照
      * @param eventProjectionVersion 持久化事件事务提交后的 MySQL 版本
      */
     public void apply(SalesPaidEvent event, OrderPaidSalesSnapshotVO snapshot, long eventProjectionVersion) {
@@ -132,7 +135,9 @@ public class SalesRankingCacheService {
         }
     }
 
-    /** 周期从权威 MySQL 汇总全量重建，修复 MQ 死信或 Redis 清理导致的投影遗漏。 */
+    /**
+     * 周期从权威 MySQL 汇总全量重建，修复 MQ 死信或 Redis 清理导致的投影遗漏。
+     */
     @Scheduled(initialDelayString = "${statistics.sales.reconcile-delay-ms:300000}",
             fixedDelayString = "${statistics.sales.reconcile-delay-ms:300000}")
     public void reconcile() {
@@ -143,7 +148,9 @@ public class SalesRankingCacheService {
         }
     }
 
-    /** 在已经持有分布式锁的条件下，以 MySQL 事实重建完整 ZSet、元数据、去重集合和缓存版本。 */
+    /**
+     * 在已经持有分布式锁的条件下，以 MySQL 事实重建完整 ZSet、元数据、去重集合和缓存版本。
+     */
     private void rebuildUnderLock(long version) throws JsonProcessingException {
         List<SalesProductTotalDO> rows = projection.selectAllTimeProductTotals();
         List<Long> orderIds = projection.selectAllEventOrderIds();
@@ -167,7 +174,9 @@ public class SalesRankingCacheService {
         if (!Long.valueOf(1).equals(rebuilt)) throw unavailable();
     }
 
-    /** 使用 Lua 一次读取榜单、元数据与分数；版本不匹配或元数据缺失时让调用方触发重建。 */
+    /**
+     * 使用 Lua 一次读取榜单、元数据与分数；版本不匹配或元数据缺失时让调用方触发重建。
+     */
     private SalesRankingVO read(int limit, long version) throws JsonProcessingException {
         List<?> values = redis.executeScript(READ, KEYS, Integer.toString(limit), Long.toString(version));
         if (values == null || values.isEmpty()) return null;
@@ -176,7 +185,8 @@ public class SalesRankingCacheService {
         for (int i = 1; i + 1 < values.size(); i += 2) {
             Object rawMetadata = values.get(i);
             Object rawScore = values.get(i + 1);
-            if (!(rawMetadata instanceof String metadata) || metadata.length() < 22 || !(rawScore instanceof String score)) return null;
+            if (!(rawMetadata instanceof String metadata) || metadata.length() < 22 || !(rawScore instanceof String score))
+                return null;
             SalesRankingVO.Item stored = json.readValue(metadata.substring(21), SalesRankingVO.Item.class);
             long sales = new BigDecimal(score).longValueExact();
             items.add(new SalesRankingVO.Item(items.size() + 1, stored.productId(), stored.windowId(), stored.productName(), sales));
@@ -184,7 +194,9 @@ public class SalesRankingCacheService {
         return new SalesRankingVO((String) values.getFirst(), items);
     }
 
-    /** 对同一订单中重复出现的菜品行分组，向 Redis 只发送一次菜品/窗口增量。 */
+    /**
+     * 对同一订单中重复出现的菜品行分组，向 Redis 只发送一次菜品/窗口增量。
+     */
     private List<Group> group(OrderPaidSalesSnapshotVO snapshot) {
         java.util.LinkedHashMap<Long, Group> groups = new java.util.LinkedHashMap<>();
         for (OrderPaidSalesSnapshotVO.Item item : snapshot.items()) {
@@ -196,45 +208,62 @@ public class SalesRankingCacheService {
         return new ArrayList<>(groups.values());
     }
 
-    /** 将同一菜品在不同窗口分开排名，避免把不可互换的窗口菜品合并。 */
+    /**
+     * 将同一菜品在不同窗口分开排名，避免把不可互换的窗口菜品合并。
+     */
     private String member(Long productId, Long windowId) {
         if (productId == null || productId <= 0 || windowId == null || windowId <= 0) throw unavailable();
         return String.format(Locale.ROOT, "%020d:%020d", productId, windowId);
     }
 
-    /** 元数据前缀记录最新订单明细 ID，乱序消费时 Lua 可避免旧菜名覆盖新快照。 */
+    /**
+     * 元数据前缀记录最新订单明细 ID，乱序消费时 Lua 可避免旧菜名覆盖新快照。
+     */
     private String metadata(Long productId, Long windowId, OrderPaidSalesSnapshotVO.Item item) throws JsonProcessingException {
         return metadata(productId, windowId, item.productName(), item.itemId());
     }
 
-    /** 将固定宽度版本前缀与响应 JSON 放在同一 Hash 值中，供 Lua 原子比较及读取。 */
+    /**
+     * 将固定宽度版本前缀与响应 JSON 放在同一 Hash 值中，供 Lua 原子比较及读取。
+     */
     private String metadata(Long productId, Long windowId, String productName, Long itemId) throws JsonProcessingException {
         SalesRankingVO.Item item = new SalesRankingVO.Item(0, productId, windowId, productName, 0);
         return String.format(Locale.ROOT, "%020d:", itemId) + json.writeValueAsString(item);
     }
 
-    /** 生成 fencing token，旧锁持有者即使租约过期也不能覆盖较新的 Redis 状态。 */
+    /**
+     * 生成 fencing token，旧锁持有者即使租约过期也不能覆盖较新的 Redis 状态。
+     */
     private String nextGeneration() {
         Long value = redis.increment(GENERATION);
         if (value == null) throw unavailable();
         return value.toString();
     }
 
-    /** 读取投影版本；缓存故障或元数据缺失统一作为服务不可用，不猜测版本。 */
+    /**
+     * 读取投影版本；缓存故障或元数据缺失统一作为服务不可用，不猜测版本。
+     */
     private long currentVersion() {
         Long version = projection.selectProjectionVersion();
         if (version == null || version < 0) throw unavailable();
         return version;
     }
 
-    /** ready Key 的缺失或损坏代表缓存尚未建立，应走完整重建。 */
+    /**
+     * ready Key 的缺失或损坏代表缓存尚未建立，应走完整重建。
+     */
     private long parseVersion(String value) {
         if (value == null) return -1;
-        try { return Long.parseLong(value); }
-        catch (NumberFormatException exception) { return -1; }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            return -1;
+        }
     }
 
-    /** 按类路径加载 Lua；执行统一经 RedisOperationsService，业务代码不直接持有 RedisTemplate。 */
+    /**
+     * 按类路径加载 Lua；执行统一经 RedisOperationsService，业务代码不直接持有 RedisTemplate。
+     */
     private static <T> DefaultRedisScript<T> script(String resource, Class<T> resultType) {
         DefaultRedisScript<T> script = new DefaultRedisScript<>();
         script.setLocation(new ClassPathResource("statistics/" + resource));
@@ -242,7 +271,9 @@ public class SalesRankingCacheService {
         return script;
     }
 
-    /** List.class 是 Redis Lua 多值响应的运行期类型，单独建脚本以避免原始泛型误推断。 */
+    /**
+     * List.class 是 Redis Lua 多值响应的运行期类型，单独建脚本以避免原始泛型误推断。
+     */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static DefaultRedisScript<List> listScript(String resource) {
         DefaultRedisScript<List> script = new DefaultRedisScript<>();
@@ -255,11 +286,16 @@ public class SalesRankingCacheService {
         return new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "销量榜暂时无法获取，请稍后下拉刷新");
     }
 
-    /** 单个菜品/窗口的订单增量聚合。 */
+    /**
+     * 单个菜品/窗口的订单增量聚合。
+     */
     private static final class Group {
         private final Long productId;
         private long quantity;
         private OrderPaidSalesSnapshotVO.Item latest;
-        private Group(Long productId) { this.productId = productId; }
+
+        private Group(Long productId) {
+            this.productId = productId;
+        }
     }
 }

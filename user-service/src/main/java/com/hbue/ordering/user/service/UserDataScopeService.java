@@ -49,7 +49,7 @@ public interface UserDataScopeService extends IService<UserDataScopeDO> {
      *
      * <p>写入后立即删除该用户的 Redis 范围缓存，使变更即时生效。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param scopeId 范围记录 ID
      */
     void revokeScope(Long userId, Long scopeId);

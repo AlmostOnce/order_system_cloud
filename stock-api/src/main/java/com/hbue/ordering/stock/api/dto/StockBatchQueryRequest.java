@@ -21,8 +21,9 @@ public record StockBatchQueryRequest(
     /**
      * 菜品级库存定位键；不同规格共用此键，不接收客户端计算的库存或规格组合库存。
      *
-     * @param windowId 商品所属档口编号
+     * @param windowId  商品所属档口编号
      * @param productId 当前菜品编号
      */
-    public record Item(@NotNull @Positive Long windowId, @NotNull @Positive Long productId) {}
+    public record Item(@NotNull @Positive Long windowId, @NotNull @Positive Long productId) {
+    }
 }

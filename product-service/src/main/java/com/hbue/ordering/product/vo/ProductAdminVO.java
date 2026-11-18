@@ -21,39 +21,63 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ProductAdminVO {
 
-    /** 菜品 ID。 */
+    /**
+     * 菜品 ID。
+     */
     private Long productId;
 
-    /** 所属窗口 ID。 */
+    /**
+     * 所属窗口 ID。
+     */
     private Long windowId;
 
-    /** 所属分类 ID；为空表示未分类。 */
+    /**
+     * 所属分类 ID；为空表示未分类。
+     */
     private Long categoryId;
 
-    /** 窗口内菜品编码。 */
+    /**
+     * 窗口内菜品编码。
+     */
     private String productCode;
 
-    /** 菜品名称。 */
+    /**
+     * 菜品名称。
+     */
     private String productName;
 
-    /** 菜品描述。 */
+    /**
+     * 菜品描述。
+     */
     private String description;
 
-    /** 菜品图片地址。 */
+    /**
+     * 菜品图片地址。
+     */
     private String imageUrl;
 
-    /** 菜品售价。 */
+    /**
+     * 菜品售价。
+     */
     private BigDecimal price;
 
-    /** 售卖状态：1 在售，0 下架。 */
+    /**
+     * 售卖状态：1 在售，0 下架。
+     */
     private Integer saleStatus;
 
-    /** 菜品排序值。 */
+    /**
+     * 菜品排序值。
+     */
     private Integer sortOrder;
 
-    /** 创建时间。 */
+    /**
+     * 创建时间。
+     */
     private LocalDateTime createdAt;
 
-    /** 修改时间。 */
+    /**
+     * 修改时间。
+     */
     private LocalDateTime updatedAt;
 }

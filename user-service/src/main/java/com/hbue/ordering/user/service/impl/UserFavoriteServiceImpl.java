@@ -2,16 +2,16 @@ package com.hbue.ordering.user.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
-import com.hbue.ordering.user.mapper.UserFavoriteMapper;
 import com.hbue.ordering.user.mapper.FavoriteEventOutboxMapper;
+import com.hbue.ordering.user.mapper.UserFavoriteMapper;
 import com.hbue.ordering.user.model.FavoriteTargetType;
 import com.hbue.ordering.user.model.UserFavoriteDO;
 import com.hbue.ordering.user.service.UserFavoriteService;
 import com.hbue.ordering.user.vo.FavoriteStatusVO;
 import com.hbue.ordering.user.vo.UserFavoriteItemVO;
 import com.hbue.ordering.user.vo.UserFavoritePageVO;
-import org.springframework.stereotype.Service;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -25,21 +25,29 @@ import java.util.List;
  */
 @Service
 public class UserFavoriteServiceImpl implements UserFavoriteService {
-    /** 批量状态查询的最大目标数，限制动态 IN 查询的 SQL 与参数规模。 */
+    /**
+     * 批量状态查询的最大目标数，限制动态 IN 查询的 SQL 与参数规模。
+     */
     private static final int MAX_STATUS_IDS = 100;
-    /** 单页收藏数量上限，防止客户端要求无界结果集。 */
+    /**
+     * 单页收藏数量上限，防止客户端要求无界结果集。
+     */
     private static final int MAX_PAGE_SIZE = 50;
 
-    /** 收藏关系唯一数据访问入口。 */
+    /**
+     * 收藏关系唯一数据访问入口。
+     */
     private final UserFavoriteMapper favoriteMapper;
-    /** 事务内登记可重试的收藏变更事件，不直接访问消息队列。 */
+    /**
+     * 事务内登记可重试的收藏变更事件，不直接访问消息队列。
+     */
     private final FavoriteEventOutboxMapper outboxMapper;
 
     /**
      * 注入收藏事实和本地发件箱访问接口，确保两者使用同一用户库事务。
      *
      * @param favoriteMapper 收藏关系数据访问接口
-     * @param outboxMapper 收藏变更发件箱接口
+     * @param outboxMapper   收藏变更发件箱接口
      */
     public UserFavoriteServiceImpl(UserFavoriteMapper favoriteMapper, FavoriteEventOutboxMapper outboxMapper) {
         this.favoriteMapper = favoriteMapper;
@@ -49,9 +57,9 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
     /**
      * 收藏一个窗口或菜品；唯一键冲突是重复操作而不是业务失败。
      *
-     * @param userId JWT 主体解析出的当前用户内部 ID
+     * @param userId     JWT 主体解析出的当前用户内部 ID
      * @param targetType 收藏类型
-     * @param targetId 商品服务的窗口或菜品 ID
+     * @param targetId   商品服务的窗口或菜品 ID
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,9 +83,9 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
     /**
      * 取消收藏；目标不存在时仍作为幂等成功，便于客户端安全重试。
      *
-     * @param userId JWT 主体解析出的当前用户内部 ID
+     * @param userId     JWT 主体解析出的当前用户内部 ID
      * @param targetType 收藏类型
-     * @param targetId 商品服务的窗口或菜品 ID
+     * @param targetId   商品服务的窗口或菜品 ID
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -94,9 +102,9 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
     /**
      * 查询当前页面一批目标的收藏状态。
      *
-     * @param userId JWT 主体解析出的当前用户内部 ID
+     * @param userId     JWT 主体解析出的当前用户内部 ID
      * @param targetType 收藏类型
-     * @param targetIds 当前页面的目标 ID 集合，最多 100 项
+     * @param targetIds  当前页面的目标 ID 集合，最多 100 项
      * @return 仅包含已收藏目标 ID 的结果
      */
     @Override
@@ -117,10 +125,10 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
     /**
      * 按 favorite_id 倒序分页，新增收藏不会改变已经发出的旧页游标。
      *
-     * @param userId JWT 主体解析出的当前用户内部 ID
+     * @param userId     JWT 主体解析出的当前用户内部 ID
      * @param targetType 收藏类型
-     * @param beforeId 上一页末条的收藏 ID；首屏时为空
-     * @param limit 页面希望读取的记录数，范围 1 至 50
+     * @param beforeId   上一页末条的收藏 ID；首屏时为空
+     * @param limit      页面希望读取的记录数，范围 1 至 50
      * @return 当前页与下一游标
      */
     @Override
@@ -150,7 +158,9 @@ public class UserFavoriteServiceImpl implements UserFavoriteService {
         return new UserFavoritePageVO(items, nextCursor, hasMore);
     }
 
-    /** 验证服务边界的身份和目标参数，避免内部调用绕过 Controller 校验。 */
+    /**
+     * 验证服务边界的身份和目标参数，避免内部调用绕过 Controller 校验。
+     */
     private void validateIdentityAndTarget(Long userId, FavoriteTargetType targetType, Long targetId) {
         if (userId == null || userId <= 0 || targetType == null || targetId == null || targetId <= 0) {
             throw badRequest("收藏目标参数不正确");

@@ -1,8 +1,8 @@
 package com.hbue.ordering.cart.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.cart.security.CartSecurityErrorHandler;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,11 +10,7 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -39,7 +35,7 @@ public class CartSecurityConfig {
     /**
      * 创建安全过滤链并统一处理过滤链内的 401 和 403。
      *
-     * @param http Spring Security 配置入口
+     * @param http         Spring Security 配置入口
      * @param errorHandler 统一安全错误响应处理器
      * @return 无状态安全过滤链
      * @throws Exception 安全过滤链无法构建时抛出
@@ -91,11 +87,11 @@ public class CartSecurityConfig {
     /**
      * 加载外置 RSA 公钥并创建包含黑名单检查的 JWT 解码器。
      *
-     * @param resourceLoader 公钥资源加载器
-     * @param publicKeyLocation X.509 PEM 公钥地址
-     * @param issuer 可信 JWT 签发方
+     * @param resourceLoader         公钥资源加载器
+     * @param publicKeyLocation      X.509 PEM 公钥地址
+     * @param issuer                 可信 JWT 签发方
      * @param redisOperationsService 共享 Redis 操作组件
-     * @param blacklistKeyPrefix 与注销服务一致的黑名单 Key 前缀
+     * @param blacklistKeyPrefix     与注销服务一致的黑名单 Key 前缀
      * @return JWT 解码器
      * @throws IllegalStateException 公钥缺失或无法读取时使启动失败
      */
@@ -124,10 +120,10 @@ public class CartSecurityConfig {
     /**
      * 先验证令牌真实性，再按 jti 校验注销状态。
      *
-     * @param decoder 已配置 RSA 与签发方校验的解码器
-     * @param token 客户端提交的 Bearer Token
+     * @param decoder                已配置 RSA 与签发方校验的解码器
+     * @param token                  客户端提交的 Bearer Token
      * @param redisOperationsService 共享 Redis 操作组件
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过全部校验的 JWT
      * @throws JwtException 令牌无效、已注销或 Redis 无法确认状态时拒绝认证
      */

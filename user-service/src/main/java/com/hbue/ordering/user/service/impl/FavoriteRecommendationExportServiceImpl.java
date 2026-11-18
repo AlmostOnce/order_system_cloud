@@ -10,18 +10,27 @@ import com.hbue.ordering.user.vo.FavoriteRecommendationExportPageVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.ArrayList;
 import java.util.List;
 
-/** 推荐服务回填编排；本服务只导出当前存在关系，不将跨页缺失解释为取消。 */
+/**
+ * 推荐服务回填编排；本服务只导出当前存在关系，不将跨页缺失解释为取消。
+ */
 @Service
 public class FavoriteRecommendationExportServiceImpl implements FavoriteRecommendationExportService {
-    /** 控制内部分页上限，避免一次性导出全部用户收藏。 */
+    /**
+     * 控制内部分页上限，避免一次性导出全部用户收藏。
+     */
     private static final int MAX_PAGE_SIZE = 100;
-    /** 只读 Mapper，所有查询使用用户库而不是跨服务读库。 */
+    /**
+     * 只读 Mapper，所有查询使用用户库而不是跨服务读库。
+     */
     private final FavoriteRecommendationExportMapper mapper;
 
-    /** 注入收藏回填查询，接口调用方不得通过服务层指定其他数据库。 */
+    /**
+     * 注入收藏回填查询，接口调用方不得通过服务层指定其他数据库。
+     */
     public FavoriteRecommendationExportServiceImpl(FavoriteRecommendationExportMapper mapper) {
         this.mapper = mapper;
     }
@@ -30,8 +39,8 @@ public class FavoriteRecommendationExportServiceImpl implements FavoriteRecommen
      * 读取一页当前收藏；首屏上界与明细处于同一可重复读事务，后续各页是独立快照。
      *
      * @param afterFavoriteId 收藏主键游标，首屏传零
-     * @param watermark 首屏省略、后续原样传回的收藏主键上界
-     * @param limit 希望返回条数，范围 1 至 100
+     * @param watermark       首屏省略、后续原样传回的收藏主键上界
+     * @param limit           希望返回条数，范围 1 至 100
      * @return 按收藏主键递增的页面；行版本来自该关系可见的最新事件
      * @throws BusinessException 参数非法时返回标准请求错误
      */

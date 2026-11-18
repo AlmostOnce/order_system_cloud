@@ -6,18 +6,24 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** 以有界单窗口批次修复商品刷新消息丢失，不在一次失败时清空本地目录。 */
+/**
+ * 以有界单窗口批次修复商品刷新消息丢失，不在一次失败时清空本地目录。
+ */
 @Component
 public class RecommendationProductCatalogRefreshTask {
     private static final Logger log = LoggerFactory.getLogger(RecommendationProductCatalogRefreshTask.class);
     private final RecommendationProductCatalogService catalog;
 
-    /** 注入目录刷新入口；每个窗口单独提交，失败只影响其自身而保留旧快照。 */
+    /**
+     * 注入目录刷新入口；每个窗口单独提交，失败只影响其自身而保留旧快照。
+     */
     public RecommendationProductCatalogRefreshTask(RecommendationProductCatalogService catalog) {
         this.catalog = catalog;
     }
 
-    /** 启动后等待10秒再回填，之后定期对账，避免应用启动同步等待所有商品服务响应。 */
+    /**
+     * 启动后等待10秒再回填，之后定期对账，避免应用启动同步等待所有商品服务响应。
+     */
     @Scheduled(initialDelayString = "${RECOMMENDATION_CATALOG_INITIAL_DELAY_MS:10000}",
             fixedDelayString = "${recommendation.catalog.refresh-delay-ms:300000}")
     public void refreshAllWindows() {

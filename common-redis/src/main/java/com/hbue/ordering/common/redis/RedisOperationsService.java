@@ -60,7 +60,7 @@ public class RedisOperationsService {
     /**
      * 保存字符串值。
      *
-     * @param key Redis Key
+     * @param key   Redis Key
      * @param value 字符串值
      */
     public void setValue(String key, String value) {
@@ -71,8 +71,8 @@ public class RedisOperationsService {
     /**
      * 保存带过期时间的字符串值。
      *
-     * @param key Redis Key
-     * @param value 字符串值
+     * @param key        Redis Key
+     * @param value      字符串值
      * @param timeToLive 有效时长
      */
     public void setValue(
@@ -117,7 +117,7 @@ public class RedisOperationsService {
     /**
      * 保存 Hash 中的多个字段和值。
      *
-     * @param key Redis Key
+     * @param key    Redis Key
      * @param values Hash 字段和值
      */
     public void putHashValues(
@@ -143,8 +143,8 @@ public class RedisOperationsService {
      * 执行调用方提供的 Redis 脚本，按原样传递 Key 和参数。
      *
      * @param script 已配置结果类型的脚本
-     * @param keys 脚本使用的 Redis Key
-     * @param args 脚本参数
+     * @param keys   脚本使用的 Redis Key
+     * @param args   脚本参数
      * @return Redis 返回的脚本结果，可能为 null
      */
     public <T> T executeScript(RedisScript<T> script, List<String> keys, Object... args) {
@@ -173,7 +173,7 @@ public class RedisOperationsService {
      * <p>适用于登录失败次数等固定时间窗口计数。后续自增不会刷新 TTL，避免持续失败
      * 不断延长计数窗口；自增和首次设置 TTL 由一段 Lua 脚本原子完成。</p>
      *
-     * @param key Redis 计数 Key
+     * @param key        Redis 计数 Key
      * @param timeToLive 首次计数后的有效时长，至少为 1 毫秒
      * @return 自增后的计数；Redis 未返回结果时为 null
      * @throws IllegalArgumentException Key 为空或有效时长不足 1 毫秒时抛出
@@ -203,7 +203,7 @@ public class RedisOperationsService {
     /**
      * 设置 Redis Key 的过期时间。
      *
-     * @param key Redis Key
+     * @param key        Redis Key
      * @param timeToLive 有效时长
      * @return Redis 是否确认设置成功；无法确认时可能返回 null
      */
@@ -233,11 +233,15 @@ public class RedisOperationsService {
         // 返回 Redis 对 Key 删除操作的结果。
         return stringRedisTemplate.delete(key);
     }
+
     /**
      * 发布可补查的在线变更提示，统一封装Redis Pub/Sub入口；不用于持久化消息正文。
+     *
      * @param channel 服务端固定主题，业务不能直接采用客户端指定的任意主题
      * @param payload 轻量资源引用或接收人标识，不包含访问令牌与聊天正文
      * @return Redis接收到的在线订阅者数量，不代表客户端已收到或已阅读；离线恢复依赖业务数据库
      */
-    public Long publish(String channel, String payload) { return stringRedisTemplate.convertAndSend(channel, payload); }
+    public Long publish(String channel, String payload) {
+        return stringRedisTemplate.convertAndSend(channel, payload);
+    }
 }

@@ -14,15 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 学生个人收藏 API。
@@ -37,7 +29,9 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('CUSTOMER')")
 public class UserFavoriteController {
 
-    /** 收藏业务编排入口。 */
+    /**
+     * 收藏业务编排入口。
+     */
     private final UserFavoriteService favoriteService;
 
     /**
@@ -52,9 +46,9 @@ public class UserFavoriteController {
     /**
      * 收藏窗口或菜品；重复调用保持成功，客户端可安全重试。
      *
-     * @param jwt 已认证的当前用户令牌
+     * @param jwt        已认证的当前用户令牌
      * @param targetType 目标类型，仅 WINDOW 或 PRODUCT
-     * @param targetId 商品服务中的窗口或菜品 ID
+     * @param targetId   商品服务中的窗口或菜品 ID
      * @return 无业务载荷的成功响应
      */
     @PutMapping("/{targetType}/{targetId}")
@@ -68,9 +62,9 @@ public class UserFavoriteController {
     /**
      * 取消收藏；记录不存在时仍成功，符合幂等删除语义。
      *
-     * @param jwt 已认证的当前用户令牌
+     * @param jwt        已认证的当前用户令牌
      * @param targetType 目标类型
-     * @param targetId 商品服务中的窗口或菜品 ID
+     * @param targetId   商品服务中的窗口或菜品 ID
      * @return 无业务载荷的成功响应
      */
     @DeleteMapping("/{targetType}/{targetId}")
@@ -84,7 +78,7 @@ public class UserFavoriteController {
     /**
      * 批量读取当前页面中目标的收藏状态，避免在每张窗口或菜品卡片上单独请求。
      *
-     * @param jwt 已认证的当前用户令牌
+     * @param jwt     已认证的当前用户令牌
      * @param request 目标类型和最多100个目标 ID
      * @return 已收藏的目标 ID 列表
      */
@@ -98,10 +92,10 @@ public class UserFavoriteController {
     /**
      * 按目标类型读取本人收藏，使用收藏 ID 游标按需加载较早记录。
      *
-     * @param jwt 已认证的当前用户令牌
+     * @param jwt        已认证的当前用户令牌
      * @param targetType WINDOW 或 PRODUCT
-     * @param beforeId 上一页末条收藏 ID，首屏省略
-     * @param limit 当前页数量，默认20、最大50
+     * @param beforeId   上一页末条收藏 ID，首屏省略
+     * @param limit      当前页数量，默认20、最大50
      * @return 当前页、下一游标与是否还有记录
      */
     @GetMapping

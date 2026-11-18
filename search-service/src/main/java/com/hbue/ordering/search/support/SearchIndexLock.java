@@ -1,10 +1,11 @@
 package com.hbue.ordering.search.support;
 
-import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * 协调增量写入与索引切换，使用 Redisson 看门狗避免长任务锁提前到期。
@@ -17,7 +18,9 @@ public class SearchIndexLock {
     private static final String LOCK_KEY = "search:menu:index-switch";
     private final RedissonClient redisson;
 
-    public SearchIndexLock(RedissonClient redisson) { this.redisson = redisson; }
+    public SearchIndexLock(RedissonClient redisson) {
+        this.redisson = redisson;
+    }
 
     public <T> T withReadLock(Supplier<T> action) {
         return withLock(redisson.getReadWriteLock(LOCK_KEY).readLock(), action);

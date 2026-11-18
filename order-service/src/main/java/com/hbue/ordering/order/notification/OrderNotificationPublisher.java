@@ -17,9 +17,13 @@ public class OrderNotificationPublisher {
     private final OrderNotificationOutboxMapper mapper;
     private final ObjectMapper json;
     private final StreamBridge stream;
+
     public OrderNotificationPublisher(OrderNotificationOutboxMapper mapper, ObjectMapper json, StreamBridge stream) {
-        this.mapper = mapper; this.json = json; this.stream = stream;
+        this.mapper = mapper;
+        this.json = json;
+        this.stream = stream;
     }
+
     @Scheduled(fixedDelayString = "${notification.order-events.publish-delay-ms:1000}")
     public void publish() {
         try {
@@ -36,6 +40,8 @@ public class OrderNotificationPublisher {
                     log.warn("订单通知事件发送失败，等待重试，eventId={}", row.getEventId());
                 }
             }
-        } catch (RuntimeException error) { log.warn("订单通知待发送记录扫描失败", error); }
+        } catch (RuntimeException error) {
+            log.warn("订单通知待发送记录扫描失败", error);
+        }
     }
 }

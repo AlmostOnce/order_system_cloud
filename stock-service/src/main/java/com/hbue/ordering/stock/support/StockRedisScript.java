@@ -73,21 +73,27 @@ public class StockRedisScript {
                     Long.class
             );
 
-    /** Spring Data Redis 字符串操作模板。 */
+    /**
+     * Spring Data Redis 字符串操作模板。
+     */
     private final StringRedisTemplate stringRedisTemplate;
 
-    /** 快照 Key 前缀。 */
+    /**
+     * 快照 Key 前缀。
+     */
     private final String keyPrefix;
 
-    /** 快照过期时间。 */
+    /**
+     * 快照过期时间。
+     */
     private final Duration snapshotTtl;
 
     /**
      * 创建库存快照 Redis 原子操作组件。
      *
      * @param stringRedisTemplate Redis 字符串操作模板
-     * @param keyPrefix 快照 Key 前缀
-     * @param ttlSeconds 快照过期秒数
+     * @param keyPrefix           快照 Key 前缀
+     * @param ttlSeconds          快照过期秒数
      */
     public StockRedisScript(
             StringRedisTemplate stringRedisTemplate,
@@ -105,8 +111,8 @@ public class StockRedisScript {
      *
      * <p>覆盖写入并重设过期时间，供首次访问与定时对账使用。</p>
      *
-     * @param windowId 档口 ID
-     * @param productId 菜品 ID
+     * @param windowId     档口 ID
+     * @param productId    菜品 ID
      * @param availableQty 数据库中的可售数量
      */
     public void resetSnapshot(Long windowId, Long productId, Integer availableQty) {
@@ -118,7 +124,9 @@ public class StockRedisScript {
         );
     }
 
-    /** 删除库存快照；后续读取将从库存数据库重建。 */
+    /**
+     * 删除库存快照；后续读取将从库存数据库重建。
+     */
     public void invalidateSnapshot(Long windowId, Long productId) {
         stringRedisTemplate.delete(buildKey(windowId, productId));
     }
@@ -130,7 +138,7 @@ public class StockRedisScript {
      * 因为此类脏数据只可能来自异常写入，且快照本身带有过期时间会自动清除，
      * 不值得让对账任务为此中断。</p>
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 快照中的可售数量；不存在或内容非法时返回 null
      */
@@ -150,11 +158,11 @@ public class StockRedisScript {
     /**
      * 原子预扣快照数量。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
-     * @param quantity 需要扣减的数量
+     * @param quantity  需要扣减的数量
      * @return 扣减后的剩余量；快照不存在返回 {@link #SNAPSHOT_MISSING}；
-     *         剩余不足返回 {@link #SNAPSHOT_INSUFFICIENT}
+     * 剩余不足返回 {@link #SNAPSHOT_INSUFFICIENT}
      */
     public int preDeduct(Long windowId, Long productId, Integer quantity) {
         Long result = stringRedisTemplate.execute(
@@ -172,9 +180,9 @@ public class StockRedisScript {
     /**
      * 补偿已经预扣的快照数量。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
-     * @param quantity 需要加回的数量
+     * @param quantity  需要加回的数量
      */
     public void compensate(Long windowId, Long productId, Integer quantity) {
         Long result = stringRedisTemplate.execute(
@@ -191,7 +199,7 @@ public class StockRedisScript {
     /**
      * 拼装库存快照 Key。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 形如 stock:available:{windowId}:{productId} 的 Key
      */

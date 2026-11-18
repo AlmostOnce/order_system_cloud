@@ -25,7 +25,9 @@ public interface ProductMenuService {
      */
     List<RestaurantSummaryVO> listActiveRestaurants();
 
-    /** 批量读取最多50道当前可售菜品的图片，缺失项由界面使用默认图。 */
+    /**
+     * 批量读取最多50道当前可售菜品的图片，缺失项由界面使用默认图。
+     */
     List<ProductImageVO> getProductImages(List<Long> productIds);
 
     /**

@@ -12,12 +12,16 @@ import java.util.List;
  */
 public record SalesPaidEvent(int version, String eventId, Long orderId, LocalDateTime paidAt,
                              Long windowId, List<Item> items) {
-    /** Jackson 读取旧版仅含前三个字段的 JSON 时保留兼容入口。 */
+    /**
+     * Jackson 读取旧版仅含前三个字段的 JSON 时保留兼容入口。
+     */
     public SalesPaidEvent(int version, String eventId, Long orderId) {
         this(version, eventId, orderId, null, null, List.of());
     }
 
-    /** 校验事件版本与稳定事件键；V1 的快照字段必须为空，V2 的每条明细必须完整。 */
+    /**
+     * 校验事件版本与稳定事件键；V1 的快照字段必须为空，V2 的每条明细必须完整。
+     */
     public boolean valid() {
         if (orderId == null || orderId <= 0 || !("order-paid-sales:" + orderId).equals(eventId)) return false;
         if (version == 1) return paidAt == null && windowId == null && (items == null || items.isEmpty());
@@ -29,7 +33,9 @@ public record SalesPaidEvent(int version, String eventId, Long orderId, LocalDat
                 && item.quantity() != null && item.quantity() > 0);
     }
 
-    /** 把当前契约的字段转换为订单服务可读取的最小快照模型。 */
+    /**
+     * 把当前契约的字段转换为订单服务可读取的最小快照模型。
+     */
     public OrderPaidSalesSnapshotVO snapshot() {
         return new OrderPaidSalesSnapshotVO(orderId, paidAt, windowId,
                 items == null ? List.of() : items.stream()
@@ -37,7 +43,9 @@ public record SalesPaidEvent(int version, String eventId, Long orderId, LocalDat
                         .toList());
     }
 
-    /** 与订单服务 outbox 一致的单行菜品快照。 */
+    /**
+     * 与订单服务 outbox 一致的单行菜品快照。
+     */
     public record Item(Long itemId, Long productId, String productName, Integer quantity) {
     }
 }

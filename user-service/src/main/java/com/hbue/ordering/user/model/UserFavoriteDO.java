@@ -18,23 +18,33 @@ import java.time.LocalDateTime;
 @TableName("user_favorites")
 public class UserFavoriteDO {
 
-    /** 收藏关系的内部游标，也用于稳定的倒序分页。 */
+    /**
+     * 收藏关系的内部游标，也用于稳定的倒序分页。
+     */
     @TableId(value = "favorite_id", type = IdType.AUTO)
     private Long favoriteId;
 
-    /** 收藏所属用户的内部主键，只从已验证 JWT 主体取得。 */
+    /**
+     * 收藏所属用户的内部主键，只从已验证 JWT 主体取得。
+     */
     @TableField("user_id")
     private Long userId;
 
-    /** 目标类型代码，仅允许 WINDOW 或 PRODUCT。 */
+    /**
+     * 目标类型代码，仅允许 WINDOW 或 PRODUCT。
+     */
     @TableField("target_type")
     private String targetType;
 
-    /** 商品服务中的窗口 ID 或菜品 ID；该跨库引用不建立数据库外键。 */
+    /**
+     * 商品服务中的窗口 ID 或菜品 ID；该跨库引用不建立数据库外键。
+     */
     @TableField("target_id")
     private Long targetId;
 
-    /** 收藏创建时间，由数据库生成，供列表展示与审计。 */
+    /**
+     * 收藏创建时间，由数据库生成，供列表展示与审计。
+     */
     @TableField("created_at")
     private LocalDateTime createdAt;
 }

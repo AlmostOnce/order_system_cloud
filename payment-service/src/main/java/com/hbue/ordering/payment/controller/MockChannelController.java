@@ -7,12 +7,7 @@ import com.hbue.ordering.payment.vo.CheckoutInfoVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.context.annotation.Profile;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -34,7 +29,9 @@ import java.util.Map;
 @Profile("dev")
 public class MockChannelController {
 
-    /** 支付业务服务。 */
+    /**
+     * 支付业务服务。
+     */
     private final PaymentService paymentService;
 
     /**
@@ -67,7 +64,7 @@ public class MockChannelController {
      * 确认后由异步线程向回调入口发起带签名通知（模拟渠道的异步性）。</p>
      *
      * @param paymentNo 业务支付单号
-     * @param request 确认支付请求（可为空 body）
+     * @param request   确认支付请求（可为空 body）
      * @return 渠道交易号
      */
     @PostMapping("/pay/{paymentNo}")

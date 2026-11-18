@@ -16,27 +16,46 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.math.BigDecimal;
 import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/** 规格完整替换的边界用例；只维护源码，本次按约定不执行测试。 */
+/**
+ * 规格完整替换的边界用例；只维护源码，本次按约定不执行测试。
+ */
 @ExtendWith(MockitoExtension.class)
 class ProductSpecificationServiceImplTest {
-    /** 商品锁读取与规格持久化均mock，不连接数据库。 */
-    @Mock private ProductMapper products;
-    @Mock private ProductSpecificationGroupMapper groups;
-    @Mock private ProductSpecificationOptionMapper options;
-    /** 权限、缓存和Outbox用mock确认调用边界。 */
-    @Mock private DataScopeService scopes;
-    @Mock private ProductMenuCacheService menus;
-    @Mock private ProductSearchOutboxWriter outbox;
-    /** 待测服务通过真实方法验证写入顺序和校验行为。 */
+    /**
+     * 商品锁读取与规格持久化均mock，不连接数据库。
+     */
+    @Mock
+    private ProductMapper products;
+    @Mock
+    private ProductSpecificationGroupMapper groups;
+    @Mock
+    private ProductSpecificationOptionMapper options;
+    /**
+     * 权限、缓存和Outbox用mock确认调用边界。
+     */
+    @Mock
+    private DataScopeService scopes;
+    @Mock
+    private ProductMenuCacheService menus;
+    @Mock
+    private ProductSearchOutboxWriter outbox;
+    /**
+     * 待测服务通过真实方法验证写入顺序和校验行为。
+     */
     private ProductSpecificationServiceImpl service;
 
-    /** 每例从同一目标菜品开始，行锁读取成功后仍必须做窗口数据范围校验。 */
+    /**
+     * 每例从同一目标菜品开始，行锁读取成功后仍必须做窗口数据范围校验。
+     */
     @BeforeEach
     void setUp() {
         ProductDO product = new ProductDO();
@@ -46,7 +65,9 @@ class ProductSpecificationServiceImplTest {
         service = new ProductSpecificationServiceImpl(products, groups, options, scopes, menus, outbox);
     }
 
-    /** 必选组没有零加价项时，必须在停用旧数据之前失败，避免不完整配置影响营业。 */
+    /**
+     * 必选组没有零加价项时，必须在停用旧数据之前失败，避免不完整配置影响营业。
+     */
     @Test
     void shouldRejectRequiredGroupWithoutZeroPriceBeforeWriting() {
         ProductSpecificationsSaveRequest.Option option = new ProductSpecificationsSaveRequest.Option();
@@ -65,7 +86,9 @@ class ProductSpecificationServiceImplTest {
         verifyNoInteractions(outbox, menus);
     }
 
-    /** 空组数组清除配置时只更新状态；缓存仅在提交回调后清除，Outbox在事务中登记。 */
+    /**
+     * 空组数组清除配置时只更新状态；缓存仅在提交回调后清除，Outbox在事务中登记。
+     */
     @Test
     void shouldSoftDisableAndEvictOnlyAfterCommit() {
         ProductSpecificationGroupDO existing = new ProductSpecificationGroupDO();

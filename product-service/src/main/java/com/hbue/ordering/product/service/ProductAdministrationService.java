@@ -21,11 +21,16 @@ import java.util.List;
  * @date 2026-09-28
  */
 public interface ProductAdministrationService {
-    /** 仅更新图片，不覆盖其他目录字段；沿用当前管理范围与缓存规则。 */
+    /**
+     * 仅更新图片，不覆盖其他目录字段；沿用当前管理范围与缓存规则。
+     */
     WindowAdminVO updateWindowImage(Long operatorId, Long windowId, String fileKey);
 
-    /** 完整替换最多5张店铺图片；按经营权限与文件归属校验，第一张为封面，空数组清空。 */
+    /**
+     * 完整替换最多5张店铺图片；按经营权限与文件归属校验，第一张为封面，空数组清空。
+     */
     WindowAdminVO updateWindowImages(Long operatorId, Long windowId, List<String> fileKeys);
+
     ProductAdminVO updateProductImage(Long operatorId, Long productId, String fileKey);
 
 
@@ -41,7 +46,7 @@ public interface ProductAdministrationService {
      * 在操作者范围内的餐厅创建窗口。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param request 窗口字段
+     * @param request    窗口字段
      * @return 新建窗口
      */
     WindowAdminVO createWindow(Long operatorId, WindowSaveRequest request);
@@ -50,8 +55,8 @@ public interface ProductAdministrationService {
      * 全量更新窗口。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
-     * @param request 窗口字段
+     * @param windowId   窗口 ID
+     * @param request    窗口字段
      * @return 更新后的窗口
      */
     WindowAdminVO updateWindow(
@@ -64,7 +69,7 @@ public interface ProductAdministrationService {
      * 停用窗口；不删除窗口及其历史目录数据。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
+     * @param windowId   窗口 ID
      */
     void disableWindow(Long operatorId, Long windowId);
 
@@ -72,7 +77,7 @@ public interface ProductAdministrationService {
      * 查询指定窗口的所有分类，包括已停用分类。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
+     * @param windowId   窗口 ID
      * @return 分类管理列表
      */
     List<ProductCategoryAdminVO> listCategories(Long operatorId, Long windowId);
@@ -81,8 +86,8 @@ public interface ProductAdministrationService {
      * 创建窗口分类。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
-     * @param request 分类字段
+     * @param windowId   窗口 ID
+     * @param request    分类字段
      * @return 新建分类
      */
     ProductCategoryAdminVO createCategory(
@@ -96,7 +101,7 @@ public interface ProductAdministrationService {
      *
      * @param operatorId 当前登录操作者 ID
      * @param categoryId 分类 ID
-     * @param request 分类字段
+     * @param request    分类字段
      * @return 更新后的分类
      */
     ProductCategoryAdminVO updateCategory(
@@ -117,7 +122,7 @@ public interface ProductAdministrationService {
      * 查询指定窗口的所有菜品，包括已下架菜品。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
+     * @param windowId   窗口 ID
      * @return 菜品管理列表
      */
     List<ProductAdminVO> listProducts(Long operatorId, Long windowId);
@@ -126,7 +131,7 @@ public interface ProductAdministrationService {
      * 查询单个菜品。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param productId 菜品 ID
+     * @param productId  菜品 ID
      * @return 菜品详情
      */
     ProductAdminVO getProduct(Long operatorId, Long productId);
@@ -135,8 +140,8 @@ public interface ProductAdministrationService {
      * 在指定窗口创建菜品。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param windowId 窗口 ID
-     * @param request 菜品字段
+     * @param windowId   窗口 ID
+     * @param request    菜品字段
      * @return 新建菜品
      */
     ProductAdminVO createProduct(
@@ -149,8 +154,8 @@ public interface ProductAdministrationService {
      * 全量更新菜品。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param productId 菜品 ID
-     * @param request 菜品字段
+     * @param productId  菜品 ID
+     * @param request    菜品字段
      * @return 更新后的菜品
      */
     ProductAdminVO updateProduct(
@@ -163,7 +168,7 @@ public interface ProductAdministrationService {
      * 下架菜品；不物理删除菜品记录。
      *
      * @param operatorId 当前登录操作者 ID
-     * @param productId 菜品 ID
+     * @param productId  菜品 ID
      */
     void disableProduct(Long operatorId, Long productId);
 }

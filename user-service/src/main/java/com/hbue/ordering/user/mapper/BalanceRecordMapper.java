@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hbue.ordering.user.model.BalanceRecordDO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Update;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
 
@@ -27,21 +27,23 @@ public interface BalanceRecordMapper extends BaseMapper<BalanceRecordDO> {
      * <p>流水先插入作为幂等占位（此时余额已知但尚未扣减），扣款成功后再回填，
      * 避免出现"流水已记账但余额未扣"的中间状态被外部读到。</p>
      *
-     * @param recordId 流水记录 ID
+     * @param recordId     流水记录 ID
      * @param balanceAfter 扣款后余额
      * @return 受影响行数
      */
     @Update("""
-        UPDATE balance_records
-        SET balance_after = #{balanceAfter}
-        WHERE record_id = #{recordId}
-        """)
+            UPDATE balance_records
+            SET balance_after = #{balanceAfter}
+            WHERE record_id = #{recordId}
+            """)
     int updateBalanceAfter(
             @Param("recordId") Long recordId,
             @Param("balanceAfter") BigDecimal balanceAfter
     );
 
-    /** 调用方必须先锁用户行，避免两个退款同时读取旧累计金额后一起超退。 */
+    /**
+     * 调用方必须先锁用户行，避免两个退款同时读取旧累计金额后一起超退。
+     */
     @Select("SELECT COALESCE(SUM(amount),0) FROM balance_records WHERE user_id=#{userId} AND original_biz_ref=#{paymentNo} AND change_type='REFUND'")
-    BigDecimal sumRefunded(@Param("userId") Long userId,@Param("paymentNo") String paymentNo);
+    BigDecimal sumRefunded(@Param("userId") Long userId, @Param("paymentNo") String paymentNo);
 }

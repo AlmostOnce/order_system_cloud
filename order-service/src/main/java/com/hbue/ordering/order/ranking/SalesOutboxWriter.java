@@ -2,11 +2,11 @@ package com.hbue.ordering.order.ranking;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hbue.ordering.order.mapper.SalesOutboxMapper;
-import com.hbue.ordering.order.mapper.OrderMapper;
-import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.order.mapper.OrderItemMapper;
+import com.hbue.ordering.order.mapper.OrderMapper;
+import com.hbue.ordering.order.mapper.SalesOutboxMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -26,18 +26,23 @@ public class SalesOutboxWriter {
     private final OrderMapper orders;
     private final OrderItemMapper items;
 
-    /** 注入本地订单与明细 Mapper，保证事件快照来自订单服务拥有的事实表。 */
+    /**
+     * 注入本地订单与明细 Mapper，保证事件快照来自订单服务拥有的事实表。
+     */
     public SalesOutboxWriter(SalesOutboxMapper mapper, ObjectMapper json, OrderMapper orders, OrderItemMapper items) {
-        this.mapper = mapper; this.json = json; this.orders = orders; this.items = items;
+        this.mapper = mapper;
+        this.json = json;
+        this.orders = orders;
+        this.items = items;
     }
 
     /**
      * 把本次首次支付固化为带菜品明细的 V2 事件。
      *
      * @param orderId 已支付订单内部主键
-     * @param paidAt 支付服务持久化的首次成功时间，必须与订单表 paid_at 完全一致
+     * @param paidAt  支付服务持久化的首次成功时间，必须与订单表 paid_at 完全一致
      * @throws IllegalStateException 序列化失败时抛出，触发外层订单事务回滚
-     * @throws BusinessException 订单支付事实、窗口或明细缺失时拒绝保存不完整事件
+     * @throws BusinessException     订单支付事实、窗口或明细缺失时拒绝保存不完整事件
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordPaid(Long orderId, java.time.LocalDateTime paidAt) {
@@ -48,7 +53,8 @@ public class SalesOutboxWriter {
             throw new BusinessException(CommonErrorCode.CONFLICT, "销量事件缺少一致的订单支付快照");
         }
         var details = items.selectByOrderId(orderId);
-        if (details == null || details.isEmpty()) throw new BusinessException(CommonErrorCode.CONFLICT, "已支付订单缺少菜品明细");
+        if (details == null || details.isEmpty())
+            throw new BusinessException(CommonErrorCode.CONFLICT, "已支付订单缺少菜品明细");
         var event = OrderPaidSalesEvent.of(order, details);
         if (!event.valid()) throw new BusinessException(CommonErrorCode.CONFLICT, "已支付订单销量快照格式不正确");
         try {

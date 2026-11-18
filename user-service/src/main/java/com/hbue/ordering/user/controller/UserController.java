@@ -1,19 +1,13 @@
 package com.hbue.ordering.user.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.service.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户服务控制器。
