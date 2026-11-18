@@ -3,14 +3,16 @@
 -- 明确客户端字符集，确保中文状态条件按订单库 utf8mb4 字符串进行比较。
 SET NAMES utf8mb4;
 
-SET @paid_at_column_exists = (
+SET
+@paid_at_column_exists = (
     SELECT COUNT(*)
     FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = 'order_db'
       AND TABLE_NAME = 'orders'
       AND COLUMN_NAME = 'paid_at'
 );
-SET @paid_at_ddl = IF(
+SET
+@paid_at_ddl = IF(
     @paid_at_column_exists = 0,
     'ALTER TABLE order_db.orders ADD COLUMN paid_at DATETIME NULL COMMENT ''支付首次成功时间，来源于支付服务 success_time，UTC+8'' AFTER created_at',
     'SELECT 1'
@@ -21,13 +23,18 @@ DEALLOCATE PREPARE paid_at_statement;
 
 -- 历史仅采用真实成功支付记录；若同一订单存在多笔成功流水，取最早成功时间作为首次付款时刻。
 UPDATE order_db.orders AS o
-JOIN (
-    SELECT order_id, MIN(success_time) AS paid_at
+    JOIN (
+    SELECT order_id, MIN (success_time) AS paid_at
     FROM payment_db.payments
     WHERE status = 'SUCCESS'
-      AND success_time IS NOT NULL
+    AND success_time IS NOT NULL
     GROUP BY order_id
-) AS p ON p.order_id = o.order_id
-SET o.paid_at = p.paid_at
+    ) AS p
+ON p.order_id = o.order_id
+    SET o.paid_at = p.paid_at
 WHERE o.paid_at IS NULL
-  AND o.status IN ('已支付', '制作中', '待取货', '已完成', '已退款');
+  AND o.status IN ('已支付'
+    , '制作中'
+    , '待取货'
+    , '已完成'
+    , '已退款');

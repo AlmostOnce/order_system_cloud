@@ -8,10 +8,11 @@ ALTER TABLE dining_windows
     );
 
 -- 旧封面原样保留为第一张；没有封面的窗口初始化为空数组，不生成虚假文件引用。
-UPDATE dining_windows SET image_file_keys = CASE
-    WHEN image_file_key IS NULL OR image_file_key = '' THEN JSON_ARRAY()
-    ELSE JSON_ARRAY(image_file_key)
-END;
+UPDATE dining_windows
+SET image_file_keys = CASE
+                          WHEN image_file_key IS NULL OR image_file_key = '' THEN JSON_ARRAY()
+                          ELSE JSON_ARRAY(image_file_key)
+    END;
 
 -- 发布顺序：迁移成功后更新商品服务，再更新学生端；旧服务继续写单列会造成列表不一致，避免混跑。
 -- 验收：SELECT window_id,image_file_key,image_file_keys FROM dining_windows;
