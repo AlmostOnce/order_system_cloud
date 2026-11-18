@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="SkyWalking - coupon-service" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="coupon-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.hbue.ordering.coupon.CouponServiceApplication" />
+    <option name="VM_PARAMETERS" value="-javaagent:$PROJECT_DIR$/.local/skywalking-agent/agent/skywalking-agent.jar" />
+    <envs>
+      <env name="SW_AGENT_NAME" value="coupon-service" />
+      <env name="SW_AGENT_COLLECTOR_BACKEND_SERVICES" value="127.0.0.1:11800" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

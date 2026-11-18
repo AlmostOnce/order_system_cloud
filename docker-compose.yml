@@ -220,6 +220,9 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD}
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JAVA_OPTS: "-javaagent:/opt/skywalking-agent/skywalking-agent.jar"
+      SW_AGENT_NAME: gateway-service
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
     depends_on:
       nacos:
         condition: service_started
@@ -227,6 +230,8 @@ services:
         condition: service_healthy
     ports:
       - "9090:9090"
+    volumes:
+      - ./.local/skywalking-agent/agent:/opt/skywalking-agent:ro
 
   skywalking-banyandb:
     profiles: [ skywalking ]

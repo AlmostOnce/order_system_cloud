@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="SkyWalking - order-service" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="order-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.hbue.ordering.order.OrderServiceApplication" />
+    <option name="VM_PARAMETERS" value="-javaagent:$PROJECT_DIR$/.local/skywalking-agent/agent/skywalking-agent.jar" />
+    <envs>
+      <env name="SW_AGENT_NAME" value="order-service" />
+      <env name="SW_AGENT_COLLECTOR_BACKEND_SERVICES" value="127.0.0.1:11800" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

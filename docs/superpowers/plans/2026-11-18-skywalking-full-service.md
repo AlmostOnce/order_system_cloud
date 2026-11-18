@@ -82,11 +82,11 @@
 - Produces: 每份 shared run configuration 的 VM 参数、`SW_AGENT_NAME` 和 `SW_AGENT_COLLECTOR_BACKEND_SERVICES`。
 - Preserves: `.idea/workspace.xml` 中用户现有私有运行配置与环境变量。
 
-- [ ] 为 15 个主类分别建立 IDEA shared run configuration；使用对应模块和主类，不复制 `.idea/workspace.xml` 中的私有环境变量。
-- [ ] 每份配置添加 `-javaagent:$PROJECT_DIR$/.local/skywalking-agent/agent/skywalking-agent.jar`、准确的 `SW_AGENT_NAME` 和 `SW_AGENT_COLLECTOR_BACKEND_SERVICES=127.0.0.1:11800`。
-- [ ] 为现有可选 Gateway Compose 服务只读挂载 Agent 目录，并设置容器内 Agent JAR 的 `JAVA_OPTS`、服务名 `gateway-service` 和 `skywalking-oap:11800` Collector 地址。
-- [ ] 静态解析 15 个 XML，确认配置数、模块、主类、唯一 Agent 服务名和宿主机 Collector 地址一一对应；确认 Gateway 容器变量使用 Compose DNS。
-- [ ] 提交：`feat: 为全部 Java 服务配置 SkyWalking Agent`
+- [x] 为 15 个主类分别建立 IDEA shared run configuration；使用对应模块和主类，不复制 `.idea/workspace.xml` 中的私有环境变量。
+- [x] 每份配置添加 `-javaagent:$PROJECT_DIR$/.local/skywalking-agent/agent/skywalking-agent.jar`、准确的 `SW_AGENT_NAME` 和 `SW_AGENT_COLLECTOR_BACKEND_SERVICES=127.0.0.1:11800`。
+- [x] 为现有可选 Gateway Compose 服务只读挂载 Agent 目录，并设置容器内 Agent JAR 的 `JAVA_OPTS`、服务名 `gateway-service` 和 `skywalking-oap:11800` Collector 地址。
+- [x] 静态解析 15 个 XML，确认配置数、模块、主类、唯一 Agent 服务名和宿主机 Collector 地址一一对应；确认 Gateway 容器变量使用 Compose DNS。
+- [x] 提交：`feat: 为全部 Java 服务配置 SkyWalking Agent`
 
 ### Task 4：写本地使用说明并校正服务清单
 
