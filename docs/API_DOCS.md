@@ -13,7 +13,7 @@
 | 商品服务     | `http://localhost:9093/swagger-ui/index.html` | 直连查看                                                         |
 | 支付服务     | `http://localhost:9101/swagger-ui/index.html` | 直连查看                                                         |
 | 购物车服务   | `http://localhost:9103/swagger-ui/index.html` | 七个业务接口：增删改查、核价与下单后快照清理，示例见 CART_API.md |
-| 优惠券服务   | `http://localhost:9112/swagger-ui/index.html` | 学生领券、我的券、平台券管理；代码端口配置完成后可直连           |
+| 优惠券服务   | `http://localhost:9113/swagger-ui/index.html` | 学生领券、我的券、平台券管理；代码端口配置完成后可直连           |
 
 2026-10-17 新增购物车 Swagger 分组。本优惠券实现新增 `/api/coupons/v3/api-docs` 文档路由和聚合项；仓库 Nacos
 配置尚需按当前环境发布，旧静态 Postman 导出不包含优惠券服务，联调时请从运行中的网关实时导出。

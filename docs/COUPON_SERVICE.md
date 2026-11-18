@@ -149,7 +149,7 @@ stateDiagram-v2
 
 ## 运行配置与接入
 
-- 服务发现名 `coupon-service`，本地端口 `9112`；数据库 URL、用户名和密码使用 `COUPON_DB_URL`、`COUPON_DB_USERNAME`、
+- 服务发现名 `coupon-service`，本地端口 `9113`；数据库 URL、用户名和密码使用 `COUPON_DB_URL`、`COUPON_DB_USERNAME`、
   `COUPON_DB_PASSWORD`，默认指向共享 MySQL 的 `coupon_db`。
 - JWT 校验复用项目公钥、issuer 和 Redis token 黑名单。学生接口只放行 `CUSTOMER`；管理接口同时要求 `GENERAL_MANAGER`
   与平台范围；订单内部接口校验 `X-Internal-Token`。

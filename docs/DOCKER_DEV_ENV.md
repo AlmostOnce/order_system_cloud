@@ -9,6 +9,21 @@
 | Nacos API    | `127.0.0.1:8850`        | IDEA 中运行的服务连接地址              |
 | Nacos 控制台 | `http://127.0.0.1:8082` | 网页登录和配置管理                     |
 | Gateway 容器 | `http://127.0.0.1:8083` | 仅启用 Compose 的 `app` profile 时使用 |
+| SkyWalking Agent gRPC | `127.0.0.1:11800` | IDEA 中运行的 Java Agent 上报入口 |
+| SkyWalking OAP 查询 / 管理 | `127.0.0.1:12800` / `127.0.0.1:17128` | Horizon 与本机调试使用 |
+| Horizon UI | `http://127.0.0.1:18080` | 仅绑定本机回环地址，登录后查看 Trace |
+
+## SkyWalking 本地链路追踪
+
+SkyWalking 使用独立的 `skywalking` profile，不会随默认基础设施自动启动。Agent 文件保存在仓库忽略的 `.local/skywalking-agent/`；完整下载校验、插件选择、Horizon 本机登录和 15 个 IDEA 配置见[全服务链路追踪指南](SKYWALKING_TRACING.md)。
+
+先准备 Agent 与根目录 `.env` 中的本机 Horizon 用户，再启动观测后端：
+
+```powershell
+docker compose --profile skywalking up -d skywalking-banyandb skywalking-oap skywalking-ui
+```
+
+现有 Compose Gateway 已加载本机 Agent，因此运行其 `app` profile 前必须先按指南准备 Agent；Gateway 使用 `skywalking-oap:11800`，本机 IDEA 服务使用 `127.0.0.1:11800`。
 
 本机 IDEA 启动的服务端口为 Gateway `8080`、order `8081`、user `8083`、auth `8084`、product `8086`、payment `9101`
 。payment-service 是后来新增的服务，因此保留 `9101`。订单服务使用 Sentinel Dashboard `8858`，应用通信端口为 `8719`
@@ -45,6 +60,8 @@ NACOS_PASSWORD=这里填写刚设置的网页密码
 ```
 
 ## 启动 Gateway 容器
+
+Gateway 容器现在通过本机 Agent 目录启动；执行前先完成上方 SkyWalking 准备步骤。OAP 未启动时 Gateway 仍可能运行，但 Agent 无法上报 Trace。
 
 确认 `.env` 已保存新密码后执行：
 

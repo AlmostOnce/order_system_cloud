@@ -32,6 +32,7 @@
 | 网关与服务发现 | Spring Cloud Gateway、Nacos                            | 请求路由、服务注册与发现，部分配置集中管理                                              |
 | 对外接入       | Nginx 1.27                                             | 本地托管用户端 Web 产物并提供 API 与 WebSocket 转发；HTTPS 和网关多实例负载均衡仍为规划 |
 | 服务调用与保护 | OpenFeign、Sentinel                                    | 服务间接口调用、超时和降级等保护                                                        |
+| 链路追踪       | SkyWalking OAP、BanyanDB、Java Agent                  | 查看跨服务调用 Trace、服务拓扑、错误与耗时；完整接入方式见本地链路追踪文档             |
 | 认证授权       | Spring Security、JWT、Redis                            | 登录令牌、角色权限、注销黑名单                                                          |
 | 关系数据访问   | MySQL 8、MyBatis-Plus、Druid                           | 持久化业务数据、Mapper 数据访问、连接池                                                 |
 | 缓存与数据结构 | Redis 7.4、Redisson、Lua                               | 购物车、令牌状态、分布式锁、排行榜与原子操作                                            |
@@ -134,7 +135,8 @@ flowchart LR
 | `search-service`       | 9106 | 菜品搜索、索引更新与重建                              |
 | `notification-service` | 9107 | 订单通知、未读管理及 WebSocket 推送；完整链路仍需联调 |
 | `statistics-service`   | 9111 | 已支付销量事实、累计菜品榜、窗口与菜品月售读模型      |
-| `coupon-service`       | 9112 | 平台预算满减券、学生领券、订单锁券与支付核销          |
+| `recommendation-service` | 9112 | 基于购买、搜索、收藏和商品目录生成首页推荐            |
+| `coupon-service`       | 9113 | 平台预算满减券、学生领券、订单锁券与支付核销          |
 
 统计服务仅向 CUSTOMER 提供学生端销量查询；商家与顾客的聊天和管理端经营报表仍属后续工作。`9108` 继续由 Seata 控制台占用，统计服务使用
 `9111`。
@@ -730,9 +732,14 @@ Compose 中的 `mq` profile 提供 NameServer、Broker、权限初始化和主�
 | Nacos API / 控制台           | `127.0.0.1:9097` / `127.0.0.1:9098`  |
 | Nacos gRPC                   | `127.0.0.1:10097`，另映射 `10098`    |
 | Seata                        | `127.0.0.1:9109`，控制台映射 `9108`  |
+| SkyWalking OAP（Agent gRPC） | `127.0.0.1:11800`                    |
+| SkyWalking OAP（查询 / 管理）| `127.0.0.1:12800` / `127.0.0.1:17128`|
+| Horizon UI                   | `http://127.0.0.1:18080`              |
 | RocketMQ NameServer / Broker | `127.0.0.1:9876` / `127.0.0.1:10911` |
 | MongoDB                      | `127.0.0.1:27017`                    |
 | Elasticsearch                | `127.0.0.1:9200`                     |
+
+SkyWalking 使用独立的 `skywalking` Compose profile，启动顺序、IDEA 配置和本机账号说明见[全服务链路追踪指南](docs/SKYWALKING_TRACING.md)。
 
 ### 环境准备
 

@@ -103,13 +103,13 @@
 - Consumes: Tasks 1–3 的服务名、端口、镜像版本、Agent 路径和本机账号变量。
 - Produces: Windows/IDEA、Compose Gateway、Horizon 登录、可选插件、故障排查和静态/运行验收说明。
 
-- [ ] 编写 `docs/SKYWALKING_TRACING.md`，说明先准备 Agent 与本机账号、再启动 `skywalking` profile、再用 shared run configurations 启动 Java 服务的顺序。
-- [ ] 文档列出 OAP/UI 地址、15 个服务映射、Agent 版本与 SHA-512 下载核验、可选插件、密码只在 `.env` 的约束，以及 IDEA 自有环境变量场景的处理方式。
-- [ ] 在 `README.md` 技术选型表加入 SkyWalking，服务表增加推荐服务 `9112` 并将优惠券服务改为 `9113`。
-- [ ] 在 `docs/DOCKER_DEV_ENV.md` 加入 SkyWalking 回环端口和 `skywalking` profile 使用说明，不改写现有基础设施账号。
-- [ ] 将 `docs/API_DOCS.md`、`docs/ARCHITECTURE.md`、`docs/COUPON_SERVICE.md` 中优惠券端口改为 `9113`；架构文档同时补推荐服务 `9112`。
-- [ ] 在 `docs/PROJECT_PROGRESS.md` 记录配置已加入但容器启动、全服务注册、HTTP/MQ 端到端 Trace 尚未运行验收。
-- [ ] 提交：`docs: 补充 SkyWalking 接入与端口说明`
+- [x] 编写 `docs/SKYWALKING_TRACING.md`，说明先准备 Agent 与本机账号、再启动 `skywalking` profile、再用 shared run configurations 启动 Java 服务的顺序。
+- [x] 文档列出 OAP/UI 地址、15 个服务映射、Agent 版本与 SHA-512 下载核验、可选插件、密码只在 `.env` 的约束，以及 IDEA 自有环境变量场景的处理方式。
+- [x] 在 `README.md` 技术选型表加入 SkyWalking，服务表增加推荐服务 `9112` 并将优惠券服务改为 `9113`。
+- [x] 在 `docs/DOCKER_DEV_ENV.md` 加入 SkyWalking 回环端口和 `skywalking` profile 使用说明，不改写现有基础设施账号。
+- [x] 将 `docs/API_DOCS.md`、`docs/ARCHITECTURE.md`、`docs/COUPON_SERVICE.md` 中优惠券端口改为 `9113`；架构文档同时补推荐服务 `9112`。
+- [x] 在 `docs/PROJECT_PROGRESS.md` 记录配置已加入但容器启动、全服务注册、HTTP/MQ 端到端 Trace 尚未运行验收。
+- [x] 提交：`docs: 补充 SkyWalking 接入与端口说明`
 
 ### Task 5：静态验收并记录限制
 
