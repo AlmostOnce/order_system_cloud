@@ -228,6 +228,57 @@ services:
     ports:
       - "9090:9090"
 
+  skywalking-banyandb:
+    profiles: [ skywalking ]
+    image: apache/skywalking-banyandb:0.11.2
+    restart: unless-stopped
+    command: [ "standalone" ]
+    volumes:
+      - order-system-cloud-skywalking-banyandb-data:/tmp
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/17912" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  skywalking-oap:
+    profiles: [ skywalking ]
+    image: apache/skywalking-oap-server:11.1.0-java21
+    restart: unless-stopped
+    environment:
+      SW_STORAGE: banyandb
+      SW_STORAGE_BANYANDB_TARGETS: skywalking-banyandb:17912
+    depends_on:
+      skywalking-banyandb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:11800:11800"
+      - "127.0.0.1:12800:12800"
+      - "127.0.0.1:17128:17128"
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/12800 && cat < /dev/null > /dev/tcp/127.0.0.1/17128" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  skywalking-ui:
+    profiles: [ skywalking ]
+    image: apache/skywalking-ui:horizon-1.1.0
+    restart: unless-stopped
+    environment:
+      HORIZON_OAP_QUERY_URL: http://skywalking-oap:12800
+      HORIZON_OAP_ADMIN_URL: http://skywalking-oap:17128
+      HORIZON_AUTH_LOCAL_USERS: "${SKYWALKING_HORIZON_LOCAL_USERS:-[]}"
+    depends_on:
+      skywalking-oap:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:8081"
+    volumes:
+      - order-system-cloud-skywalking-ui-data:/data
+
 volumes:
   order-system-cloud-mysql-data:
   order-system-cloud-mongo-data:
@@ -240,3 +291,5 @@ volumes:
   order-system-cloud-rocketmq-store:
   order-system-cloud-rocketmq-broker-logs:
   order-system-cloud-elasticsearch-data:
+  order-system-cloud-skywalking-banyandb-data:
+  order-system-cloud-skywalking-ui-data:

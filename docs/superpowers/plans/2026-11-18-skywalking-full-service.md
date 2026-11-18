@@ -44,13 +44,13 @@
 - Produces: Horizon 环境变量 `HORIZON_AUTH_LOCAL_USERS`，其值来自 `SKYWALKING_HORIZON_LOCAL_USERS`。
 - Produces: UI 登录入口 `http://127.0.0.1:18080`；OAP gRPC、查询和管理端口分别为 `11800`、`12800`、`17128`。
 
-- [ ] 为 BanyanDB 添加固定 `0.11.2` 镜像、`standalone` 命令和独立命名卷；数据根目录 `/tmp` 挂载到该卷，不发布存储端口。
-- [ ] 为 OAP 添加 `11.1.0-java21` 镜像、BanyanDB 存储目标、回环端口映射、等待 BanyanDB 启动的依赖，以及使用 Bash TCP 探测的健康检查。
-- [ ] 为 Horizon UI 添加 `horizon-1.1.0` 镜像，设置 OAP 查询/管理地址、`127.0.0.1:18080:8081` 映射、OAP 健康依赖和本机状态卷。
-- [ ] 在 `.env.example` 增加空数组格式的 `SKYWALKING_HORIZON_LOCAL_USERS=[]` 及生成本机账号的说明，不写入真实密码或哈希。
-- [ ] 检查根 `.env` 是否已有 `SKYWALKING_HORIZON_ADMIN_PASSWORD` 或 `SKYWALKING_HORIZON_LOCAL_USERS` 键名；若不存在，生成随机本机密码及其 Argon2id 哈希并追加，禁止输出或改写现有行。
-- [ ] 静态核对 Compose 中仅对 `skywalking` profile 启用观测组件、UI 与 OAP 端口均绑定回环地址、Horizon 的账号值来自 `.env`。
-- [ ] 提交：`feat: 添加 SkyWalking 本地观测后端`
+- [x] 为 BanyanDB 添加固定 `0.11.2` 镜像、`standalone` 命令和独立命名卷；数据根目录 `/tmp` 挂载到该卷，不发布存储端口。
+- [x] 为 OAP 添加 `11.1.0-java21` 镜像、BanyanDB 存储目标、回环端口映射、等待 BanyanDB 健康的依赖，以及使用 Bash TCP 探测的健康检查。
+- [x] 为 Horizon UI 添加 `horizon-1.1.0` 镜像，设置 OAP 查询/管理地址、`127.0.0.1:18080:8081` 映射、OAP 健康依赖和本机状态卷。
+- [x] 在 `.env.example` 增加空数组格式的 `SKYWALKING_HORIZON_LOCAL_USERS=[]` 及生成本机账号的说明，不写入真实密码或哈希。
+- [x] 检查根 `.env` 是否已有相关 SkyWalking 键名；未发现后，生成随机本机密码及其 Argon2id 哈希并追加，未读取或改写其他密钥。
+- [x] 静态核对 Compose 中仅对 `skywalking` profile 启用观测组件、UI 与 OAP 端口均绑定回环地址、Horizon 的账号值来自 `.env`。
+- [x] 提交：`feat: 添加 SkyWalking 本地观测后端`
 
 ### Task 2：准备并校验 Java Agent 与可选插件
 
