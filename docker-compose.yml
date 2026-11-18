@@ -241,7 +241,7 @@ services:
     volumes:
       - order-system-cloud-skywalking-banyandb-data:/tmp
     healthcheck:
-      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/17912" ]
+      test: [ "CMD", "sh", "-c", "nc -nz 127.0.0.1 17912" ]
       interval: 10s
       timeout: 5s
       retries: 12
