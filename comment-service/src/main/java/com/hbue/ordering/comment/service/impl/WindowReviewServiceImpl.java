@@ -6,8 +6,8 @@ import com.hbue.ordering.comment.client.CommentOrderClient;
 import com.hbue.ordering.comment.dto.CreateWindowReviewRequest;
 import com.hbue.ordering.comment.mapper.WindowReviewMapper;
 import com.hbue.ordering.comment.mapper.WindowReviewMapper.Row;
-import com.hbue.ordering.comment.service.WindowReviewService;
 import com.hbue.ordering.comment.service.AuthorAvatarService;
+import com.hbue.ordering.comment.service.WindowReviewService;
 import com.hbue.ordering.comment.vo.WindowReviewPageVO;
 import com.hbue.ordering.comment.vo.WindowReviewVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -15,14 +15,15 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
 import feign.FeignException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
+
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.stereotype.Service;
 
 @Service
 public class WindowReviewServiceImpl implements WindowReviewService {
@@ -31,9 +32,15 @@ public class WindowReviewServiceImpl implements WindowReviewService {
     private final ManagedImageClient images;
     private final ObjectMapper json;
     private final AuthorAvatarService authors;
+
     public WindowReviewServiceImpl(WindowReviewMapper reviews, CommentOrderClient orders, ManagedImageClient images, ObjectMapper json, AuthorAvatarService authors) {
-        this.reviews = reviews; this.orders = orders; this.images = images; this.json = json; this.authors = authors;
+        this.reviews = reviews;
+        this.orders = orders;
+        this.images = images;
+        this.json = json;
+        this.authors = authors;
     }
+
     public WindowReviewVO create(Long userId, String author, String bearer, String key, CreateWindowReviewRequest input) {
         CommentServiceImpl.requireUuid(key);
         var body = new CreateWindowReviewRequest(input.orderId(), input.score(), input.content() == null ? "" : input.content().trim(),
@@ -41,8 +48,11 @@ public class WindowReviewServiceImpl implements WindowReviewService {
                 (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList());
         if (body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
         String hash;
-        try { hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(body))); }
-        catch (Exception e) { throw new IllegalStateException("评价内容编码失败", e); }
+        try {
+            hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(body)));
+        } catch (Exception e) {
+            throw new IllegalStateException("评价内容编码失败", e);
+        }
         Row existing = reviews.byRequest(userId, key);
         if (existing != null) return replay(existing, hash);
         var order = fetchOrder(body.orderId(), bearer);
@@ -51,15 +61,19 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         try {
             var row = new Row(UUID.randomUUID().toString(), userId, name, body.orderId(), order.windowId(), body.score(),
                     body.content(), json.writeValueAsString(keys), json.writeValueAsString(body.tags()), key, hash, LocalDateTime.now());
-            try { reviews.insert(row); }
-            catch (DuplicateKeyException e) {
+            try {
+                reviews.insert(row);
+            } catch (DuplicateKeyException e) {
                 existing = reviews.byRequest(userId, key);
                 if (existing != null) return replay(existing, hash);
                 throw new BusinessException(CommonErrorCode.CONFLICT, "该订单已经评价过店铺");
             }
             return view(row);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalStateException("评价内容编码失败", e); }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("评价内容编码失败", e);
+        }
     }
+
     private com.hbue.ordering.order.api.vo.OrderReviewSnapshotVO fetchOrder(Long id, String bearer) {
         try {
             var response = orders.getOrder(id, bearer);
@@ -68,50 +82,71 @@ public class WindowReviewServiceImpl implements WindowReviewService {
             var order = response.getData();
             if (!id.equals(order.orderId()) || order.windowId() == null || order.windowId() <= 0)
                 throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "订单信息不完整");
-            if (!"已完成".equals(order.status())) throw new BusinessException(CommonErrorCode.CONFLICT, "订单完成后才能评价");
+            if (!"已完成".equals(order.status()))
+                throw new BusinessException(CommonErrorCode.CONFLICT, "订单完成后才能评价");
             return order;
         } catch (FeignException e) {
             var code = e.status() == 401 ? CommonErrorCode.UNAUTHORIZED : (e.status() == 403 || e.status() == 404 ? CommonErrorCode.NOT_FOUND : CommonErrorCode.SERVICE_UNAVAILABLE);
             throw new BusinessException(code, "无法确认本人订单");
         }
     }
+
     public WindowReviewVO forOrder(Long userId, Long orderId) {
         var row = reviews.byOrder(userId, orderId);
         return row == null ? null : view(row);
     }
+
     public WindowReviewPageVO page(Long userId, Long windowId, String cursor, int limit, Integer score, Boolean hasImages) {
         // 筛选只接受产品定义的一星/五星；其余评分仍可发布，并在“全部”中查看。
         if (score != null && score != 1 && score != 5) throw bad("筛选分数仅支持1星或5星");
         if (limit < 1 || limit > 50 || (windowId != null && windowId <= 0)) throw bad("分页参数不正确");
         if (cursor != null) CommentServiceImpl.requireUuid(cursor);
-        var rows = reviews.page(userId, windowId, cursor, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null);
+        // 本人入口与档口入口分发到各自的固定范围查询，游标和筛选逻辑保持一致。
+        var rows = userId != null
+                ? reviews.pageByUser(userId, cursor, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null)
+                : reviews.pageByWindow(windowId, cursor, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null);
         boolean more = rows.size() > limit;
         var visible = rows.stream().limit(limit).toList();
         var avatars = authors.resolve(visible.stream().map(Row::userId).toList());
         var items = visible.stream().map(row -> view(row, avatars.getOrDefault(row.userId(), ""))).toList();
         return new WindowReviewPageVO(items, more ? items.getLast().reviewId() : null, more);
     }
+
     public com.hbue.ordering.comment.vo.WindowRatingVO rating(Long windowId) {
         var rating = reviews.rating(windowId);
         return new com.hbue.ordering.comment.vo.WindowRatingVO(rating.reviewCount(), rating.averageScore());
     }
+
     private WindowReviewVO replay(Row row, String hash) {
-        if (!hash.equals(row.requestHash())) throw new BusinessException(CommonErrorCode.CONFLICT, "请求标识已用于其他评价内容");
+        if (!hash.equals(row.requestHash()))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "请求标识已用于其他评价内容");
         return view(row);
     }
+
     private WindowReviewVO view(Row row) {
         return view(row, authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), ""));
     }
+
     private WindowReviewVO view(Row row, String avatarUrl) {
         try {
-            List<String> keys = json.readValue(row.images(), new TypeReference<List<String>>() {});
-            List<String> tags = json.readValue(row.tags(), new TypeReference<List<String>>() {});
+            List<String> keys = json.readValue(row.images(), new TypeReference<List<String>>() {
+            });
+            List<String> tags = json.readValue(row.tags(), new TypeReference<List<String>>() {
+            });
             return new WindowReviewVO(row.id(), row.windowId(), row.author(), avatarUrl, row.score(), row.content(),
                     keys.stream().map(FileReferences::url).toList(), tags, row.createdAt());
-        } catch (Exception e) { throw new IllegalStateException("评价内容读取失败", e); }
+        } catch (Exception e) {
+            throw new IllegalStateException("评价内容读取失败", e);
+        }
     }
-    private static BusinessException bad(String message) { return new BusinessException(CommonErrorCode.BAD_REQUEST, message); }
-    /** 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。 */
+
+    private static BusinessException bad(String message) {
+        return new BusinessException(CommonErrorCode.BAD_REQUEST, message);
+    }
+
+    /**
+     * 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。
+     */
     public com.hbue.ordering.comment.vo.ReviewSummaryVO summary(Long windowId) {
         if (windowId == null || windowId <= 0) throw bad("评价对象编号不正确");
         return reviews.reviewSummary(windowId);

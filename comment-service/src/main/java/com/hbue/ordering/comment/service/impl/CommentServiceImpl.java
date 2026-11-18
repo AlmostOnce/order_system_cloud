@@ -1,28 +1,31 @@
 package com.hbue.ordering.comment.service.impl;
 
-import com.hbue.ordering.comment.service.CommentService;
-import com.hbue.ordering.comment.service.AuthorAvatarService;
-import com.hbue.ordering.comment.service.CommentMetadataWriter;
-import com.hbue.ordering.comment.service.PurchaseVerifier;
-import com.hbue.ordering.comment.repository.CommentContentRepository;
-
-import com.hbue.ordering.common.web.media.FileReferences;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.dto.CreateCommentRequest;
-import com.hbue.ordering.comment.model.*;
 import com.hbue.ordering.comment.mapper.CommentMapper;
-import com.hbue.ordering.comment.vo.*;
+import com.hbue.ordering.comment.model.CommentContentDO;
+import com.hbue.ordering.comment.model.CommentRowDO;
+import com.hbue.ordering.comment.repository.CommentContentRepository;
+import com.hbue.ordering.comment.service.AuthorAvatarService;
+import com.hbue.ordering.comment.service.CommentMetadataWriter;
+import com.hbue.ordering.comment.service.CommentService;
+import com.hbue.ordering.comment.service.PurchaseVerifier;
+import com.hbue.ordering.comment.vo.CommentPageVO;
+import com.hbue.ordering.comment.vo.CommentVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
-import java.security.MessageDigest;
-import java.time.*;
-import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
 public class CommentServiceImpl implements CommentService {
@@ -34,10 +37,18 @@ public class CommentServiceImpl implements CommentService {
     private final CommentContentRepository contents;
     private final ObjectMapper json;
     private final AuthorAvatarService authors;
+
     public CommentServiceImpl(CommentMapper rows, CommentMetadataWriter writer, PurchaseVerifier purchases,
-            ManagedImageClient images, CommentContentRepository contents, ObjectMapper json, AuthorAvatarService authors) {
-        this.rows=rows; this.writer=writer; this.purchases=purchases; this.images=images; this.contents=contents; this.json=json; this.authors=authors;
+                              ManagedImageClient images, CommentContentRepository contents, ObjectMapper json, AuthorAvatarService authors) {
+        this.rows = rows;
+        this.writer = writer;
+        this.purchases = purchases;
+        this.images = images;
+        this.contents = contents;
+        this.json = json;
+        this.authors = authors;
     }
+
     public CommentVO create(Long userId, String authorName, String bearer, String key, CreateCommentRequest input) {
         requireUuid(key);
         // 统一归一化后计算幂等摘要；更改内容不能复用原请求键。
@@ -49,26 +60,30 @@ public class CommentServiceImpl implements CommentService {
         CommentRowDO existing = rows.byRequest(userId, key);
         if (existing != null) return replay(existing, hash);
         Long window = purchases.requireCompletedPurchase(body.orderId(), body.productId(), bearer);
-        if (rows.byPurchase(body.orderId(),body.productId()) != null)
-            throw new BusinessException(CommonErrorCode.CONFLICT,"该订单的这道菜已经评价");
+        if (rows.byPurchase(body.orderId(), body.productId()) != null)
+            throw new BusinessException(CommonErrorCode.CONFLICT, "该订单的这道菜已经评价");
         List<String> fileKeys = body.imageFileKeys().stream()
-                .map(file -> images.requireImageKey(file,userId,"COMMENT_IMAGE",null)).toList();
-        String id=UUID.randomUUID().toString();
-        String author=authorName==null||authorName.isBlank()?"校园用户":authorName.substring(0,Math.min(64,authorName.length()));
-        var row=new CommentRowDO(id,userId,author,body.orderId(),body.productId(),window,body.score(),key,hash,LocalDateTime.now(),!fileKeys.isEmpty());
-        contents.insert(new CommentContentDO(id,body.content(),fileKeys,body.tags(),Instant.now(),false));
+                .map(file -> images.requireImageKey(file, userId, "COMMENT_IMAGE", null)).toList();
+        String id = UUID.randomUUID().toString();
+        String author = authorName == null || authorName.isBlank() ? "校园用户" : authorName.substring(0, Math.min(64, authorName.length()));
+        var row = new CommentRowDO(id, userId, author, body.orderId(), body.productId(), window, body.score(), key, hash, LocalDateTime.now(), !fileKeys.isEmpty());
+        contents.insert(new CommentContentDO(id, body.content(), fileKeys, body.tags(), Instant.now(), false));
         try {
             writer.commit(row);
         } catch (DuplicateKeyException exception) {
             // 不删除Mongo：提交结果不确定时由延迟对账核实，避免误删已经提交的正文。
-            existing=rows.byRequest(userId,key);
-            if (existing!=null) return replay(existing,hash);
-            throw new BusinessException(CommonErrorCode.CONFLICT,"该订单的这道菜已经评价");
+            existing = rows.byRequest(userId, key);
+            if (existing != null) return replay(existing, hash);
+            throw new BusinessException(CommonErrorCode.CONFLICT, "该订单的这道菜已经评价");
         }
-        try { contents.markCommitted(id); }
-        catch (RuntimeException exception) { log.warn("评论提交后内容标记待对账，commentId={}",id); }
+        try {
+            contents.markCommitted(id);
+        } catch (RuntimeException exception) {
+            log.warn("评论提交后内容标记待对账，commentId={}", id);
+        }
         return view(row);
     }
+
     public List<CommentVO> forOrder(Long userId, Long orderId) {
         var found = rows.byOrder(userId, orderId);
         if (found.isEmpty()) return List.of();
@@ -76,54 +91,79 @@ public class CommentServiceImpl implements CommentService {
         var avatars = authors.resolve(List.of(userId));
         return found.stream().map(row -> view(row, bodies.get(row.commentId()), avatars.getOrDefault(userId, ""))).toList();
     }
-    public CommentVO detail(String id) { requireUuid(id); return view(requireRow(id)); }
+
+    public CommentVO detail(String id) {
+        requireUuid(id);
+        return view(requireRow(id));
+    }
+
     public CommentPageVO page(Long userId, Long productId, String before, int limit, Integer score, Boolean hasImages) {
         // 筛选只接受产品定义的一星/五星；其余评分仍可发布，并在“全部”中查看。
         if (score != null && score != 1 && score != 5) throw bad("筛选分数仅支持1星或5星");
-        if (limit<1||limit>50||(productId!=null&&productId<=0)) throw bad("分页参数不正确");
-        if (before!=null) requireUuid(before);
+        if (limit < 1 || limit > 50 || (productId != null && productId <= 0)) throw bad("分页参数不正确");
+        if (before != null) requireUuid(before);
         // 未回填记录不能被默认为无图，避免旧代码运行期间漏掉带图历史评价。
         if (Boolean.TRUE.equals(hasImages) && rows.hasUnknownImages(userId, productId))
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"评价图片信息待同步，请稍后重试");
-        var found=rows.page(userId,productId,before,limit+1,score,Boolean.TRUE.equals(hasImages) ? true : null);
-        boolean more=found.size()>limit;
-        var visible=found.stream().limit(limit).toList();
-        Map<String,CommentContentDO> contents=new HashMap<>();
-        if(!visible.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价图片信息待同步，请稍后重试");
+        // 路由已确定查询范围；本人和商品分别执行显式条件的 SQL，避免在一个查询里切换范围。
+        var found = userId != null
+                ? rows.pageByUser(userId, before, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null)
+                : rows.pageByProduct(productId, before, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null);
+        boolean more = found.size() > limit;
+        var visible = found.stream().limit(limit).toList();
+        Map<String, CommentContentDO> contents = new HashMap<>();
+        if (!visible.isEmpty()) {
             contents.putAll(this.contents.byIds(visible.stream().map(CommentRowDO::commentId).toList()));
         }
-        var avatars=authors.resolve(visible.stream().map(CommentRowDO::userId).toList());
-        List<CommentVO> items=visible.stream().map(row->view(row,contents.get(row.commentId()),avatars.getOrDefault(row.userId(),""))).toList();
-        return new CommentPageVO(items,more?items.getLast().commentId():null,more);
+        var avatars = authors.resolve(visible.stream().map(CommentRowDO::userId).toList());
+        List<CommentVO> items = visible.stream().map(row -> view(row, contents.get(row.commentId()), avatars.getOrDefault(row.userId(), ""))).toList();
+        return new CommentPageVO(items, more ? items.getLast().commentId() : null, more);
     }
+
     private CommentRowDO requireRow(String id) {
-        CommentRowDO row=rows.byId(id);
-        if(row==null)throw new BusinessException(CommonErrorCode.NOT_FOUND,"评价不存在");
+        CommentRowDO row = rows.byId(id);
+        if (row == null) throw new BusinessException(CommonErrorCode.NOT_FOUND, "评价不存在");
         return row;
     }
-    private CommentVO replay(CommentRowDO row,String hash) {
-        if(!hash.equals(row.requestHash()))throw new BusinessException(CommonErrorCode.CONFLICT,"请求标识已用于其他评价内容");
+
+    private CommentVO replay(CommentRowDO row, String hash) {
+        if (!hash.equals(row.requestHash()))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "请求标识已用于其他评价内容");
         return view(row);
     }
+
     private CommentVO view(CommentRowDO row) {
-        CommentContentDO content=contents.byId(row.commentId());
-        return view(row,content,authors.resolve(List.of(row.userId())).getOrDefault(row.userId(),""));
+        CommentContentDO content = contents.byId(row.commentId());
+        return view(row, content, authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), ""));
     }
-    private CommentVO view(CommentRowDO row,CommentContentDO content,String avatarUrl) {
-        if(content==null)throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,"评价内容暂不可用");
-        return new CommentVO(row.commentId(),row.productId(),row.windowId(),row.authorName(),avatarUrl,row.score(),
-                content.body(),content.imageFileKeys().stream().map(FileReferences::url).toList(),content.tags(),row.createdAt());
+
+    private CommentVO view(CommentRowDO row, CommentContentDO content, String avatarUrl) {
+        if (content == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价内容暂不可用");
+        return new CommentVO(row.commentId(), row.productId(), row.windowId(), row.authorName(), avatarUrl, row.score(),
+                content.body(), content.imageFileKeys().stream().map(FileReferences::url).toList(), content.tags(), row.createdAt());
     }
+
     private String hash(CreateCommentRequest body) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                .digest(json.writeValueAsBytes(body))); }
-        catch (java.security.NoSuchAlgorithmException|JsonProcessingException exception) { throw new IllegalStateException(exception); }
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(json.writeValueAsBytes(body)));
+        } catch (java.security.NoSuchAlgorithmException | JsonProcessingException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
+
     public static void requireUuid(String id) {
-        if(id==null||!id.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))throw bad("请求标识格式不正确");
+        if (id == null || !id.matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"))
+            throw bad("请求标识格式不正确");
     }
-    private static BusinessException bad(String message) {return new BusinessException(CommonErrorCode.BAD_REQUEST,message);}
-    /** 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。 */
+
+    private static BusinessException bad(String message) {
+        return new BusinessException(CommonErrorCode.BAD_REQUEST, message);
+    }
+
+    /**
+     * 对固定菜品/店铺做同一SQL聚合；查询失败向上抛出，不用0条掩盖故障。
+     */
     public com.hbue.ordering.comment.vo.ReviewSummaryVO summary(Long productId) {
         if (productId == null || productId <= 0) throw bad("评价对象编号不正确");
         return rows.reviewSummary(productId);
