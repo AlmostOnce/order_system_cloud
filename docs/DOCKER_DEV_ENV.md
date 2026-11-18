@@ -32,7 +32,7 @@ docker compose --profile skywalking up -d skywalking-banyandb skywalking-oap sky
 在项目根目录执行：
 
 ```bash
-cd /home/user/GitProject/order_system_cloud
+cd /mnt/e/order_system_cloud
 docker compose config
 docker compose up -d mysql nacos
 docker compose ps
@@ -61,7 +61,7 @@ Gateway 容器现在通过本机 Agent 目录启动；执行前先完成上方 S
 确认 `.env` 已保存新密码后执行：
 
 ```bash
-cd /home/user/GitProject/order_system_cloud
+cd /mnt/e/order_system_cloud
 docker compose --profile app up -d --build gateway
 docker compose ps
 docker compose logs -f gateway

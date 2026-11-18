@@ -44,7 +44,7 @@
 - Produces: Horizon 环境变量 `HORIZON_AUTH_LOCAL_USERS`，其值来自 `SKYWALKING_HORIZON_LOCAL_USERS`。
 - Produces: UI 登录入口 `http://127.0.0.1:18080`；OAP gRPC、查询和管理端口分别为 `11800`、`12800`、`17128`。
 
-- [x] 为 BanyanDB 添加固定 `0.11.2` 镜像、`standalone` 命令和独立命名卷；数据根目录 `/tmp` 挂载到该卷，不发布存储端口。
+- [x] 为 BanyanDB 添加固定 `0.11.2` 镜像、`standalone` 命令、独立命名卷与基于 `sh`/`nc` 的 gRPC 健康检查；数据根目录 `/tmp` 挂载到该卷，不发布存储端口。
 - [x] 为 OAP 添加 `11.1.0-java21` 镜像、BanyanDB 存储目标、回环端口映射、等待 BanyanDB 健康的依赖，以及使用 Bash TCP 探测的健康检查。
 - [x] 为 Horizon UI 添加 `horizon-1.1.0` 镜像，设置 OAP 查询/管理地址、`127.0.0.1:18080:8081` 映射、OAP 健康依赖和本机状态卷。
 - [x] 在 `.env.example` 增加空数组格式的 `SKYWALKING_HORIZON_LOCAL_USERS=[]` 及生成本机账号的说明，不写入真实密码或哈希。
@@ -117,9 +117,9 @@
 - Verify: `docker-compose.yml`、`.run/`、`.gitignore`、`.env.example` 和本计划涉及的 Markdown。
 - Modify: `docs/superpowers/plans/2026-11-18-skywalking-full-service.md`（勾选完成项）
 
-- [ ] 运行 `docker compose config --quiet`：本机没有 Docker CLI（`docker` 命令不可用），Compose 解析未能验收；没有启动或重启容器。
+- [x] 在 WSL Docker 中运行 `docker compose config --quiet`，Compose 解析通过；随后启动 BanyanDB、OAP 和 Horizon，BanyanDB/OAP 为 healthy，Horizon UI 返回 HTTP 200。
 - [x] 静态解析 15 份 IDEA XML，确认配置结构有效、服务名唯一、模块和主类对应，Agent 参数及 Collector 地址准确。
 - [x] 使用 `git diff --check`；确认 `.env` 与 Agent 发行包均被忽略且未进入 Git 改动清单。
 - [x] 搜索 README 与相关服务文档，确认推荐服务端口为 `9112`、优惠券服务端口为 `9113`。
-- [x] 未运行 Maven、测试或 Java 服务；进度文档已保留容器、HTTP/MQ Trace 未验收和 RocketMQ 上下文传播风险。
+- [x] 未运行 Maven、测试或业务 Java 服务；进度文档已保留 Horizon 登录、HTTP/Feign Trace、MQ Trace 未验收和 RocketMQ 上下文传播风险。
 - [x] 提交：`docs: 记录 SkyWalking 静态验收范围`

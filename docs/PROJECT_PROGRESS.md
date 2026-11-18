@@ -9,7 +9,8 @@
 - 已在 `docker-compose.yml` 增加独立 `skywalking` profile：BanyanDB 0.11.2、OAP 11.1.0 和 Horizon 1.1.0；观测端口只绑定 `127.0.0.1`，数据使用独立命名卷。
 - 已从 Apache 官方下载 Java Agent 9.8.0 并核对 SHA-512；本机 Agent 与 Spring MVC 6、Gateway 4.x 插件存放于被忽略的 `.local/skywalking-agent/`。Horizon 随机管理员密码与 Argon2id 哈希仅在被忽略的 `.env`。
 - 已为 15 个 Java 服务添加共享 IDEA 配置，并为可选 Gateway 容器增加 Agent 挂载；README 与服务文档已更正推荐服务 `9112`、优惠券服务 `9113`。
-- 配置和静态 XML 自检已完成；本机未安装 Docker CLI，因此没有完成 Compose 配置解析、容器启动或 Horizon 登录验收。没有运行 Maven、测试或 Java 服务。
+- WSL 中执行 `docker compose config --quiet` 已通过；BanyanDB 与 OAP 容器状态为 healthy，Horizon 容器已运行，`http://127.0.0.1:18080` 返回 HTTP 200。Horizon 登录本身尚未验证。
+- 实际启动发现 BanyanDB 镜像不包含 `bash`；已按官方 Compose 的 `sh`/`nc` 探测方式修正健康检查并提交。没有运行 Maven、测试或业务 Java 服务。
 - HTTP/Feign 跨服务 Trace 及 RocketMQ Spring Cloud Stream Binder 的生产/消费上下文传播均未完成运行验收；尤其 MQ 是否自动关联需后续实测。
 
 ### 2026-11-16 学生端店铺与菜品收藏

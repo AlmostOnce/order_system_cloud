@@ -44,7 +44,7 @@ Copy-Item (Join-Path $optional "apm-spring-cloud-gateway-4.x-plugin-9.8.0.jar") 
 
 ## 2. 启动观测后端
 
-在项目根目录运行：
+在项目根目录运行。WSL 中项目位于 Windows `E:` 盘时，先执行 `cd /mnt/e/order_system_cloud`；如果当前目录不在项目根目录，可通过 `-f /mnt/e/order_system_cloud/docker-compose.yml --env-file /mnt/e/order_system_cloud/.env` 指定 Compose 文件和环境文件：
 
 ```powershell
 docker compose --profile skywalking up -d skywalking-banyandb skywalking-oap skywalking-ui
