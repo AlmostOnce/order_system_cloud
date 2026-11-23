@@ -22,11 +22,17 @@ public interface UserMapper extends BaseMapper<UserDO> {
     @Select("SELECT user_id,email,credential_version FROM users WHERE email=#{email} AND status=1 AND deleted_at IS NULL")
     UserDO selectRecoveryByEmail(@Param("email") String email);
 
+    /**
+     * 锁定并读取密码更新所需的凭据行。
+     *
+     * <p>找回密码与登录态主动改密共用：两者都需要在同一事务内锁定当前密码哈希与
+     * 凭据版本，确认没有并发改密后再按版本条件更新，避免后写覆盖前写。</p>
+     */
     @Select("""
             SELECT user_id,email,password_hash,credential_version FROM users
             WHERE user_id=#{id} AND status=1 AND deleted_at IS NULL FOR UPDATE
             """)
-    UserDO selectPasswordRecoveryForUpdate(@Param("id") Long id);
+    UserDO selectPasswordCredentialForUpdate(@Param("id") Long id);
 
     @Select("SELECT credential_version FROM users WHERE user_uuid=#{uuid} AND status=1 AND deleted_at IS NULL")
     Long selectCredentialVersion(@Param("uuid") String uuid);

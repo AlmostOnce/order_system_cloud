@@ -97,7 +97,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         } catch (NumberFormatException error) {
             throw bad("验证已失效，请重新验证邮箱");
         }
-        var current = users.selectPasswordRecoveryForUpdate(id);
+        var current = users.selectPasswordCredentialForUpdate(id);
         if (current == null || !fields[2].equals(current.getEmail())
                 || !Long.valueOf(version).equals(current.getCredentialVersion()))
             throw bad("账号状态或邮箱已变化，请重新验证");
