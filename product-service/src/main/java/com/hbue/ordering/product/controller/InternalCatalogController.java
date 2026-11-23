@@ -94,6 +94,7 @@ public class InternalCatalogController {
         }
         return ApiResponse.success(WindowInfoVO.builder()
                 .windowId(window.getWindowId())
+                .windowName(window.getWindowName())
                 .restaurantId(window.getRestaurantId())
                 .status(window.getStatus())
                 .build());
