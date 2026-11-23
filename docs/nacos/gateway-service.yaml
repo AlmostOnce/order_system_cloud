@@ -151,6 +151,20 @@ spring:
               filters:
                 - RewritePath=/api/coupons/v3/api-docs, /v3/api-docs
 
+            - id: support-service-docs
+              uri: lb://support-service
+              predicates:
+                - Path=/api/support/v3/api-docs
+              filters:
+                - RewritePath=/api/support/v3/api-docs, /v3/api-docs
+
+            - id: support-service
+              uri: lb://support-service
+              predicates:
+                - Path=/api/support,/api/support/**
+              filters:
+                - StripPrefix=1
+
             - id: coupon-service
               uri: lb://coupon-service
               predicates:
