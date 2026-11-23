@@ -67,6 +67,7 @@ CLOSED（已关闭）
 - 学生提交后为 `PENDING`。
 - 管理端首次受理置为 `PROCESSING`，同时写一条 `SYSTEM` 时间线消息。
 - 商家回复时状态保持 `PROCESSING`，并置 `customer_unread = 1`。
+- 管理端受理与关闭同样置 `customer_unread = 1`；学生本人关闭置 0，不给自己制造未读（见 §12.2）。
 - 学生查看详情后 `customer_unread = 0`。
 - 只有 `PENDING` / `PROCESSING` 可关闭；重复关闭按幂等成功返回，不报错。
 - 所有状态变更使用条件更新，禁止先查后改造成并发覆盖。
@@ -407,18 +408,24 @@ support-service/
 在 `notification-service` 增加：
 
 - `NotificationInternalController`
-  - `POST /internal/notifications/support-reply`
+  - `POST /internal/notifications/support-reply`：商家公开回复后提醒学生有新回复。
+  - `POST /internal/notifications/support-status`：受理或关闭提交后提醒学生状态已变化。
   - 请求头 `X-Internal-Token`，使用现有 `InternalScopeTokenVerifier` 校验。
-  - 请求体：`recipientId`、`eventId`（如 `support-reply:{messageId}`）、`title`、`content`。
-- `NotificationMapper` 增加插入方法：`notification_type = 'SUPPORT_REPLY'`，`order_id = NULL`。
+  - 请求体：`recipientId`、`eventId`（回复为 `support-reply:{messageId}`，状态为
+    `support-status:{messageId}`）、`title`、`content`。
+- `NotificationMapper` 增加插入方法：回复记录 `notification_type = 'SUPPORT_REPLY'`，
+  状态变更记录 `notification_type = 'SUPPORT_STATUS'`，两者 `order_id = NULL`。
 - 通知落库事务提交后调用 `NotificationSocketBus.publish(recipientId)`；推送失败只记录日志。
-- 复用现有未读计数与消息中心；无需改 `notifications` 表结构。
+- 复用现有未读计数与消息中心；`notifications` 表增加可空列 `biz_type`、`biz_id`
+  （迁移 `V4__add_notification_business_reference.sql`）。工单通知写入 `SUPPORT` 与公开工单标识，
+  消息中心据此从通知气泡跳转 `/pages/support/detail?ticketId=...`；订单通知继续使用 `order_id`。
 - `NotificationSecurityConfig` 放行 `/internal/**`，由控制器内共享密钥校验；网关不配置该路径。
 
 学生端通知文案示例：
 
-- 标题：`反馈处理进展`
-- 内容：`您提交的反馈（编号 A1B2C3D4）已有新回复，请在“帮助与反馈”中查看。`
+- 回复标题：`反馈处理进展`；内容：`您提交的反馈（编号 A1B2C3D4）已有新回复，请在“帮助与反馈”中查看。`
+- 受理标题：`反馈处理进展`；内容：`您提交的反馈（编号 A1B2C3D4）已由工作人员受理，正在处理中。`
+- 关闭标题：`反馈处理进展`；内容含关闭原因（如有），与系统时间线消息一致。
 
 ### 6.9 幂等、并发与异常
 
@@ -503,7 +510,7 @@ e:\order_system_cloud_user\
   - 第一行：类型标签 + 分类文案 + 状态标签
   - 第二行：窗口名或订单号
   - 第三行：描述摘要，最多两行
-  - 底部：提交时间 + `有新回复` 红点
+  - 底部：提交时间 + `有更新` 红点（覆盖回复、受理、关闭）
 - 空态：`还没有提交过反馈`
 - 下拉刷新、触底加载、失败重试
 - 从详情页返回时刷新列表
@@ -661,7 +668,7 @@ e:\order_system_cloud_user\
 
 ## 10. 风险与待确认
 
-1. **通知中心语义**：反馈回复会进入现有消息中心，但该页当前叫「订单中心」。建议同步把入口与页标题改为「系统通知」，否则语义不符；若不改，首期按现状展示。
+1. **通知中心语义（已确认，见 §12.1）**：反馈回复会进入现有消息中心，但该页当前叫「订单中心」。已确认拆分为独立的「工单通知」入口，工单消息不再混入订单通知。
 2. **软件工单处理角色**：默认 `GENERAL_MANAGER` + `SYSTEM_ADMIN`；若只允许总经理，可去掉 `SYSTEM_ADMIN`。
 3. **管理端详情是否需要提交人昵称**：首期只返回 `customerId`，不额外调用 user-service；后续接管理端时再补昵称。
 4. **订单选择范围**：提交页默认展示最近一页订单；若订单很多，后续可增加按订单号搜索。
@@ -676,3 +683,71 @@ e:\order_system_cloud_user\
 - 通知改造：`notification-service` 内部通知接口与 Mapper
 - 学生端：`api/support.uts`、`pages/support/*.uvue`、`styles/support.css`、`pages.json`、`mine.uvue`
 - 验证记录：迁移执行结果、前端测试结果、未验证项说明
+
+## 12. 学生端体验补充（2026-11-23 确认，待实施）
+
+背景：工单通知已接入现有消息中心，但渠道归属与未读语义不完整。以下三项经用户确认纳入实施范围，均不改表结构、不涉及管理端仓库。
+
+### 12.1 工单通知独立入口
+
+目标：工单消息不再进入「订单中心」会话，单独提供「工单通知」入口，只展示工单相关消息。
+
+后端 `notification-service`：
+
+- `GET /notifications` 增加 `channel` 参数：
+  - `ORDER`（默认，兼容旧客户端）：`biz_type IS NULL`，只返回订单状态通知；
+  - `SUPPORT`：`biz_type = 'SUPPORT'`，只返回工单回复与状态通知。
+- `GET /notifications/unread-count` 增加同名 `channel` 参数，分别统计两个渠道；`POST /notifications/read-all` 同样按渠道执行，避免在工单页把订单通知一并标记已读。
+- `NotificationMapper` 的分页、未读统计、全部已读 SQL 增加渠道条件；游标子查询继续绑定接收人，禁止跨用户游标。
+- 分页与未读查询的 `channel` 只接受白名单值，非法值返回 400；不新增数据库列，沿用 `biz_type` 区分渠道。
+
+前端：
+
+- `api/notifications.uts`：`fetchNotifications(cursor, channel)`、`fetchUnreadNotificationCount(channel)`、`markAllNotificationsRead(channel)`。
+- 新增 `pages/notifications/support.uvue`：标题「工单通知」，发送者「帮助与反馈」，固定 `channel=SUPPORT`；点击气泡先标记已读，再跳转 `/pages/support/detail?ticketId=...`；空态、下拉刷新、分页与失败重试沿用 `orders.uvue` 的实现。
+- `pages/notifications/orders.uvue` 固定 `channel=ORDER`，不再出现工单消息；发送者保持「订单中心」。
+- `pages/notifications/list.uvue` 在「订单通知」入口旁新增「工单通知」入口，两个入口分别展示各自未读数。
+- `store/notifications.uts`：新增 `supportUnreadCount`，同时刷新订单与工单两个渠道；底部 Tab 角标 = 订单未读 + 工单未读 + 聊天未读。
+- `pages.json` 注册 `pages/notifications/support` 路由。
+
+验收：
+
+- 学生收到回复、受理、关闭通知后，只在「工单通知」出现，订单通知页不再混入。
+- 两个入口未读数独立，点击后各自消减，底部角标合计正确。
+- 空态、分页、失败重试、账号切换隔离与现有订单通知页一致。
+
+### 12.2 受理与关闭也点亮列表未读
+
+目标：学生不打开消息中心也能在「我的反馈」看到状态变化。
+
+- 管理端受理：`markAccepted` 同时置 `customer_unread = 1`。
+- 管理端关闭：条件关闭同时置 `customer_unread = 1`（原实现置 0）；学生本人关闭仍置 0，不给自己制造未读。
+- 学生补充说明不改变未读数；学生打开详情即清零，沿用现有逻辑。
+- 「我的反馈」列表红点文案由「有新回复」改为「有更新」，覆盖回复、受理、关闭三类。
+- 工单列表未读与通知渠道未读相互独立：前者表示工单有新动态，后者表示消息中心有未读记录，互不替代。
+
+验收：
+
+- 管理端受理后，学生列表卡片出现「有更新」，打开详情后消失。
+- 管理端关闭后同样出现「有更新」，打开详情后消失。
+- 学生自己关闭不产生未读；回复仍正常产生未读。
+
+### 12.3 提交页拦截系统返回
+
+目标：提交请求进行中，系统返回键不能把页面带走，避免成功后的自动跳转落空。
+
+- `pages/support/submit.uvue` 增加 `onBackPress`：`submitting || imageBusy` 时返回 `true` 拦截，否则返回 `false` 放行。
+- 页面可见返回按钮的现有守卫保留；拦截只影响系统返回，不改变 Android 之外的其余导航。
+- 请求本身的防重复仍由幂等键保证，不依赖页面是否存活。
+
+验收：
+
+- 提交中按系统返回键页面不退出，提交按钮保持禁用。
+- 提交失败或完成后返回键恢复正常。
+
+### 12.4 验证与边界
+
+- 后端仅做源码静态检查，不运行 Maven、不构建、不重启；`channel` 参数的 SQL 条件需人工核对。
+- 前端运行 `node scripts/test-vapor.cjs`，并检查新增路由与两个通知入口的未读数展示。
+- 不改 `notifications` 表结构；不改管理端仓库；不改动既有订单通知的文案与跳转。
+- 运行验证项：两个渠道筛选、未读独立计数、Tab 角标合计、工单通知点击跳转、状态未读清零。
