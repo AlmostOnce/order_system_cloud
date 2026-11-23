@@ -58,6 +58,27 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
                          @Param("orderId") long orderId, @Param("content") String content);
 
     /**
+     * 插入一条通用业务通知，接收用户与来源事件唯一键共同防止调用方重试产生重复通知。
+     *
+     * <p>支持反馈回复等非订单场景，order_id 固定为空；调用方必须传入稳定的来源事件标识。</p>
+     *
+     * @param id      公开通知标识
+     * @param userId  接收用户内部编号
+     * @param eventId 来源业务事件标识
+     * @param type    通知类型
+     * @param title   通知标题
+     * @param content 通知内容
+     * @return 受影响行数
+     */
+    @Insert("""
+            INSERT INTO notifications(notification_id,recipient_id,event_id,notification_type,title,content,order_id)
+            VALUES(#{id},#{userId},#{eventId},#{type},#{title},#{content},NULL)
+            """)
+    int insertEvent(@Param("id") String id, @Param("userId") long userId, @Param("eventId") String eventId,
+                    @Param("type") String type, @Param("title") String title,
+                    @Param("content") String content);
+
+    /**
      * 检查重复键是否确实来自同一接收人的同一来源事件，其他数据库冲突仍向上抛出。
      */
     @Select("SELECT EXISTS(SELECT 1 FROM notifications WHERE recipient_id=#{userId} AND event_id=#{eventId})")

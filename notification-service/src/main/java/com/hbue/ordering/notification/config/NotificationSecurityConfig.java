@@ -32,6 +32,8 @@ public class NotificationSecurityConfig {
                 .formLogin(form -> form.disable()).httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(a -> a.requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/notifications/ws").permitAll()
+                        // 内部接口不走用户 JWT，由各 Controller 校验 X-Internal-Token；网关不暴露该前缀。
+                        .requestMatchers("/internal/**").permitAll()
                         .requestMatchers("/notifications", "/notifications/**", "/chat", "/chat/**").authenticated().anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> {
                 }));
