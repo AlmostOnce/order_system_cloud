@@ -5,6 +5,7 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.support.client.SupportNotificationClient;
 import com.hbue.ordering.support.client.vo.SupportReplyNotificationRequest;
+import com.hbue.ordering.support.client.vo.SupportStatusNotificationRequest;
 import com.hbue.ordering.support.dto.SupportCloseRequest;
 import com.hbue.ordering.support.dto.SupportInternalNoteRequest;
 import com.hbue.ordering.support.dto.SupportReplyRequest;
@@ -208,7 +209,8 @@ public class SupportManagementServiceImpl implements SupportManagementService {
      * 受理工单。
      *
      * <p>待受理 → 处理中。重复受理直接返回当前详情；已关闭工单返回 409。
-     * 并发受理时只有一条 UPDATE 成功，其余请求回读后按当前状态返回。</p>
+     * 并发受理时只有一条 UPDATE 成功，其余请求回读后按当前状态返回。
+     * 受理成功后追加系统时间线消息，并在事务提交后向学生发送状态变更站内信。</p>
      *
      * @param actor    管理端操作者
      * @param ticketId 公开工单标识
@@ -233,7 +235,10 @@ public class SupportManagementServiceImpl implements SupportManagementService {
             }
             throw new BusinessException(CommonErrorCode.CONFLICT, "反馈状态已变化，请刷新后重试");
         }
-        appendSystemMessage(ticket.getId(), "工作人员已受理");
+        SupportTicketMessageDO systemMessage = appendSystemMessage(ticket.getId(), "工作人员已受理");
+        registerAfterCommitStatusNotification(ticket, systemMessage,
+                "您提交的反馈（编号 " + viewAssembler.displayNo(ticket.getTicketId())
+                        + "）已由工作人员受理，正在处理中。");
         log.info("管理端受理反馈，ticketId={}, operatorId={}", ticketId, actor.userId());
         return loadManagementDetail(ticket.getId());
     }
@@ -319,8 +324,8 @@ public class SupportManagementServiceImpl implements SupportManagementService {
     /**
      * 管理端关闭工单。
      *
-     * <p>重复关闭按幂等返回当前详情；从待受理或处理中关闭时追加系统消息。
-     * 关闭不改变订单状态，也不触发退款。</p>
+     * <p>重复关闭按幂等返回当前详情；从待受理或处理中关闭时追加系统消息，
+     * 并在事务提交后发送状态变更站内信。关闭不改变订单状态，也不触发退款。</p>
      *
      * @param actor    管理端操作者
      * @param ticketId 公开工单标识
@@ -344,8 +349,14 @@ public class SupportManagementServiceImpl implements SupportManagementService {
             throw new BusinessException(CommonErrorCode.CONFLICT, "反馈状态已变化，请刷新后重试");
         }
         String reason = request == null ? null : trimToNull(request.getReason());
-        appendSystemMessage(ticket.getId(),
+        SupportTicketMessageDO systemMessage = appendSystemMessage(ticket.getId(),
                 reason == null ? "工作人员已关闭反馈" : "工作人员已关闭反馈：" + reason);
+        String notice = "您提交的反馈（编号 " + viewAssembler.displayNo(ticket.getTicketId()) + "）已关闭。";
+        if (reason != null) {
+            // 关闭原因已写入学生可见的系统时间线，通知中同步展示，避免学生必须进入详情才能了解原因。
+            notice = notice + "关闭说明：" + reason;
+        }
+        registerAfterCommitStatusNotification(ticket, systemMessage, notice);
         log.info("管理端关闭反馈，ticketId={}, operatorId={}", ticketId, actor.userId());
         return loadManagementDetail(ticket.getId());
     }
@@ -397,10 +408,14 @@ public class SupportManagementServiceImpl implements SupportManagementService {
     /**
      * 追加系统状态消息。
      *
+     * <p>系统消息没有发送人编号，学生可见；返回消息对象是为了把公开消息标识
+     * 交给通知事件编号，保证通知与时间线消息一一对应、重试幂等。</p>
+     *
      * @param ticketId 工单内部主键
      * @param content  状态说明
+     * @return 已写入的系统消息
      */
-    private void appendSystemMessage(Long ticketId, String content) {
+    private SupportTicketMessageDO appendSystemMessage(Long ticketId, String content) {
         SupportTicketMessageDO message = new SupportTicketMessageDO();
         message.setMessageId(UUID.randomUUID().toString());
         message.setTicketId(ticketId);
@@ -409,27 +424,53 @@ public class SupportManagementServiceImpl implements SupportManagementService {
         message.setImageFileKeys("[]");
         message.setInternalNote(0);
         messageMapper.insert(message);
+        return message;
     }
 
     /**
-     * 在当前事务提交后发送站内信通知。
-     *
-     * <p>没有活动事务时直接发送，保证方法被非事务入口复用时不会静默丢通知；
-     * 正常入口都带 {@code @Transactional}，提交前不会通知学生。</p>
+     * 在当前事务提交后发送回复站内信通知。
      *
      * @param ticket  工单
      * @param message 公开回复消息
      */
     private void registerAfterCommitNotification(SupportTicketDO ticket, SupportTicketMessageDO message) {
+        runAfterCommit(() -> notifyCustomer(ticket, message));
+    }
+
+    /**
+     * 在当前事务提交后发送工单状态变更站内信。
+     *
+     * <p>受理与关闭都是已提交的业务事实，通知只是提醒；事务回滚时不发送，
+     * 通知失败只记录日志，学生仍可在反馈列表中看到最新状态。</p>
+     *
+     * @param ticket  工单
+     * @param message 系统时间线消息，其公开标识用于通知幂等
+     * @param content 通知正文
+     */
+    private void registerAfterCommitStatusNotification(SupportTicketDO ticket,
+                                                       SupportTicketMessageDO message,
+                                                       String content) {
+        runAfterCommit(() -> notifyCustomerStatus(ticket, message, content));
+    }
+
+    /**
+     * 在事务提交后执行通知动作。
+     *
+     * <p>没有活动事务时直接执行，保证方法被非事务入口复用时不会静默丢通知；
+     * 正常入口都带 {@code @Transactional}，提交前不会通知学生。</p>
+     *
+     * @param action 通知动作
+     */
+    private void runAfterCommit(Runnable action) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    notifyCustomer(ticket, message);
+                    action.run();
                 }
             });
         } else {
-            notifyCustomer(ticket, message);
+            action.run();
         }
     }
 
@@ -452,7 +493,7 @@ public class SupportManagementServiceImpl implements SupportManagementService {
             String eventId = "support-reply:" + message.getMessageId();
             ApiResponse<Void> response = notificationClient.sendSupportReply(internalToken,
                     new SupportReplyNotificationRequest(ticket.getCustomerId(),
-                            eventId, title, content));
+                            eventId, title, content, ticket.getTicketId()));
             if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
                 log.warn("反馈回复通知发送失败，ticketId={}, messageId={}",
                         ticket.getTicketId(), message.getMessageId());
@@ -460,6 +501,35 @@ public class SupportManagementServiceImpl implements SupportManagementService {
         } catch (RuntimeException exception) {
             // 通知属于最终一致环节，失败不抛出，避免把已成功的回复误报为失败。
             log.warn("反馈回复通知调用异常，ticketId={}, messageId={}",
+                    ticket.getTicketId(), message.getMessageId(), exception);
+        }
+    }
+
+    /**
+     * 调用通知服务写入工单状态变更站内信。
+     *
+     * <p>通知类型由通知服务按接口固定为 {@code SUPPORT_STATUS}；事件编号采用
+     * {@code support-status:{messageId}}，与本次追加的系统时间线消息一一对应。
+     * 通知失败只记录告警，不影响已经提交的受理或关闭结果。</p>
+     *
+     * @param ticket  工单
+     * @param message 系统时间线消息
+     * @param content 通知正文
+     */
+    private void notifyCustomerStatus(SupportTicketDO ticket, SupportTicketMessageDO message, String content) {
+        String title = "反馈处理进展";
+        try {
+            String eventId = "support-status:" + message.getMessageId();
+            ApiResponse<Void> response = notificationClient.sendSupportStatus(internalToken,
+                    new SupportStatusNotificationRequest(ticket.getCustomerId(),
+                            eventId, title, content, ticket.getTicketId()));
+            if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
+                log.warn("反馈状态通知发送失败，ticketId={}, messageId={}",
+                        ticket.getTicketId(), message.getMessageId());
+            }
+        } catch (RuntimeException exception) {
+            // 通知失败不回滚已提交的受理或关闭，学生进入反馈列表仍能看到最新状态。
+            log.warn("反馈状态通知调用异常，ticketId={}, messageId={}",
                     ticket.getTicketId(), message.getMessageId(), exception);
         }
     }

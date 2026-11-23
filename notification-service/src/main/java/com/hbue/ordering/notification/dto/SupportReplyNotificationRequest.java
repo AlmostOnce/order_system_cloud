@@ -10,6 +10,7 @@ package com.hbue.ordering.notification.dto;
  * @param eventId     来源事件标识，取回复消息标识
  * @param title       通知标题
  * @param content     通知正文
+ * @param ticketId    公开工单标识，写入 biz_id 供消息中心跳转反馈详情
  * @author order-system
  * @date 2026-11-23
  */
@@ -17,6 +18,7 @@ public record SupportReplyNotificationRequest(
         Long recipientId,
         String eventId,
         String title,
-        String content
+        String content,
+        String ticketId
 ) {
 }

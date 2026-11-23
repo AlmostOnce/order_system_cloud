@@ -10,6 +10,7 @@ package com.hbue.ordering.support.client.vo;
  * @param eventId     幂等事件标识，取回复消息标识
  * @param title       站内信标题
  * @param content     站内信正文
+ * @param ticketId    公开工单标识，通知服务写入业务引用供消息中心跳转
  * @author order-system
  * @date 2026-11-23
  */
@@ -17,6 +18,7 @@ public record SupportReplyNotificationRequest(
         Long recipientId,
         String eventId,
         String title,
-        String content
+        String content,
+        String ticketId
 ) {
 }

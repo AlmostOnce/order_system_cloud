@@ -3,6 +3,7 @@ package com.hbue.ordering.notification.controller;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
 import com.hbue.ordering.notification.dto.SupportReplyNotificationRequest;
+import com.hbue.ordering.notification.dto.SupportStatusNotificationRequest;
 import com.hbue.ordering.notification.service.impl.SupportNotificationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -59,6 +60,25 @@ public class NotificationInternalController {
             @RequestBody SupportReplyNotificationRequest request) {
         internalScopeTokenVerifier.verify(internalToken);
         supportNotificationService.sendSupportReply(request);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 写入并推送工单状态变更站内信。
+     *
+     * <p>工单受理或关闭事务提交后由反馈服务调用，与回复通知共用内部鉴权和幂等落库，
+     * 区别只在通知类型与业务文案，学生端消息中心无需区分接口来源。</p>
+     *
+     * @param internalToken 服务间共享密钥
+     * @param request       幂等事件与正文
+     * @return 处理成功响应
+     */
+    @PostMapping("/support-status")
+    public ApiResponse<Void> supportStatus(
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+            @RequestBody SupportStatusNotificationRequest request) {
+        internalScopeTokenVerifier.verify(internalToken);
+        supportNotificationService.sendSupportStatus(request);
         return ApiResponse.success(null);
     }
 }
