@@ -1,0 +1,92 @@
+server:
+  port: ${SUPPORT_SERVER_PORT:9114}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+spring:
+  application:
+    name: support-service
+  # 默认值用于本机开发；已设置的环境变量仍可覆盖。
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
+      # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
+      initial-size: 1
+      min-idle: 1
+      max-active: 5
+      max-wait: 3000
+      validation-query: SELECT 1
+      validation-query-timeout: 2
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      stat-view-servlet:
+        enabled: false
+      web-stat-filter:
+        enabled: false
+    url: ${SUPPORT_DB_URL:jdbc:mysql://127.0.0.1:9095/support_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${SUPPORT_DB_USERNAME:support_service}
+    password: ${SUPPORT_DB_PASSWORD:support_password_dev_2026}
+  jdbc:
+    template:
+      query-timeout: 5s
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+    openfeign:
+      client:
+        config:
+          # 订单、用户范围、窗口与通知调用统一限制连接 3 秒、读取 5 秒；
+          # 超时按依赖失败处理，不在业务代码中无限重试。
+          default:
+            connectTimeout: 3000
+            readTimeout: 5000
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+# 服务间共享密钥；未配置时内部调用与本服务发起的内部请求都会被拒绝。
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+
+# 图片归属校验需要直连文件服务；其余依赖按 Nacos 服务名调用。
+file:
+  service-base-url: ${FILE_SERVICE_BASE_URL:http://localhost:9102}
+
+# JwtUserIdentity 在验签后回查用户服务确认公开身份版本与内部用户编号。
+identity:
+  user-service-base-url: ${USER_SERVICE_BASE_URL:http://localhost:9092}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  service-title: 帮助与反馈服务接口文档
+  service-description: 学生反馈工单提交、查询、补充与关闭，以及管理端受理与回复。
+  gateway-base-url: ${SWAGGER_GATEWAY_BASE_URL:http://localhost:9090}
+  gateway-path: /api
