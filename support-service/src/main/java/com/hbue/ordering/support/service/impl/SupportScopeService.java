@@ -114,8 +114,9 @@ public class SupportScopeService {
     /**
      * 校验操作者是否可访问指定工单。
      *
-     * <p>先校验类型角色，再校验餐厅范围。类型允许但餐厅不在授权范围内时返回
-     * 404，避免通过枚举工单标识探测其他餐厅的工单是否存在。</p>
+     * <p>先校验类型角色，再按角色校验数据范围：总经理持有全平台范围可处理两类工单；
+     * 系统管理员可处理任意软件工单；其他情况只允许授权餐厅的用餐工单。
+     * 类型允许但范围不允许时返回 404，避免通过枚举工单标识探测其他餐厅的工单是否存在。</p>
      *
      * @param actor         管理端操作者
      * @param scope         操作者数据范围
@@ -125,6 +126,12 @@ public class SupportScopeService {
     public void requireAccessible(SupportActor actor, SupportScope scope, SupportTicketDO ticket) {
         requireTypeAllowed(actor, ticket);
         if (actor.hasRole("GENERAL_MANAGER") && scope.platform()) {
+            return;
+        }
+        // 系统管理员在类型校验阶段已被限定为软件工单；软件工单没有餐厅归属，
+        // 不能落入下面的餐厅范围分支，否则队列可见但详情与处理全部被误判为不存在。
+        if (actor.hasRole("SYSTEM_ADMIN")
+                && SupportType.SOFTWARE.getCode().equals(ticket.getType())) {
             return;
         }
         // 非全平台范围只允许访问授权餐厅的用餐工单；软件工单无餐厅归属，天然不可见。
