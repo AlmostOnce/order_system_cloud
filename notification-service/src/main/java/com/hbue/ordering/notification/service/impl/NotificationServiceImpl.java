@@ -35,7 +35,7 @@ public class NotificationServiceImpl implements NotificationService {
             throw new BusinessException(CommonErrorCode.NOT_FOUND, "通知不存在");
         var rows = repository.page(userId, cursor, limit + 1);
         boolean hasMore = rows.size() > limit;
-        var items = rows.stream().limit(limit).map(row -> new NotificationVO(row.getNotificationId(), row.getNotificationType(), row.getTitle(), row.getContent(), row.getOrderId(), row.getCreatedAt(), row.getReadAt())).toList();
+        var items = rows.stream().limit(limit).map(row -> new NotificationVO(row.getNotificationId(), row.getNotificationType(), row.getTitle(), row.getContent(), row.getOrderId(), row.getBizType(), row.getBizId(), row.getCreatedAt(), row.getReadAt())).toList();
         return new NotificationPageVO(items, hasMore ? items.getLast().notificationId() : null, hasMore);
     }
 

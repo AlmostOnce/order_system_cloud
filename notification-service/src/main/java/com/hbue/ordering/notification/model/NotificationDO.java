@@ -43,6 +43,14 @@ public class NotificationDO {
      */
     private Long orderId;
     /**
+     * 关联业务类型，当前取值 SUPPORT 表示反馈工单；订单通知沿用 orderId，此列为空。
+     */
+    private String bizType;
+    /**
+     * 关联业务公开标识，与 bizType 一起供消息中心跳转，禁止存放内部主键。
+     */
+    private String bizId;
+    /**
      * 服务端UTC+8创建时间，不采用客户端时间排序。
      */
     private LocalDateTime createdAt;
@@ -113,6 +121,22 @@ public class NotificationDO {
 
     public void setOrderId(Long v) {
         orderId = v;
+    }
+
+    public String getBizType() {
+        return bizType;
+    }
+
+    public void setBizType(String v) {
+        bizType = v;
+    }
+
+    public String getBizId() {
+        return bizId;
+    }
+
+    public void setBizId(String v) {
+        bizId = v;
     }
 
     public LocalDateTime getCreatedAt() {

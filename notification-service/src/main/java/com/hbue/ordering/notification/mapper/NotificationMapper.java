@@ -15,7 +15,7 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
      * 按接收人和内部主键倒序分页；子查询再次绑定接收人范围。Service预先验证游标可见性，传入size+1判断后续页。
      */
     @Select("""
-            SELECT id,notification_id,notification_type,title,content,order_id,created_at,read_at
+            SELECT id,notification_id,notification_type,title,content,order_id,biz_type,biz_id,created_at,read_at
             FROM notifications WHERE recipient_id=#{userId}
               AND (#{cursor} IS NULL OR id < (SELECT id FROM notifications
                   WHERE notification_id=#{cursor} AND recipient_id=#{userId}))
@@ -60,7 +60,9 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
     /**
      * 插入一条通用业务通知，接收用户与来源事件唯一键共同防止调用方重试产生重复通知。
      *
-     * <p>支持反馈回复等非订单场景，order_id 固定为空；调用方必须传入稳定的来源事件标识。</p>
+     * <p>支持反馈回复、状态变更等非订单场景，order_id 固定为空；业务引用写入
+     * biz_type 与 biz_id，供消息中心按类型跳转到对应详情。调用方必须传入稳定的
+     * 来源事件标识与公开业务标识，禁止写入内部主键。</p>
      *
      * @param id      公开通知标识
      * @param userId  接收用户内部编号
@@ -68,15 +70,18 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
      * @param type    通知类型
      * @param title   通知标题
      * @param content 通知内容
+     * @param bizType 业务类型，如 SUPPORT
+     * @param bizId   业务公开标识，可空
      * @return 受影响行数
      */
     @Insert("""
-            INSERT INTO notifications(notification_id,recipient_id,event_id,notification_type,title,content,order_id)
-            VALUES(#{id},#{userId},#{eventId},#{type},#{title},#{content},NULL)
+            INSERT INTO notifications(notification_id,recipient_id,event_id,notification_type,title,content,order_id,biz_type,biz_id)
+            VALUES(#{id},#{userId},#{eventId},#{type},#{title},#{content},NULL,#{bizType},#{bizId})
             """)
     int insertEvent(@Param("id") String id, @Param("userId") long userId, @Param("eventId") String eventId,
                     @Param("type") String type, @Param("title") String title,
-                    @Param("content") String content);
+                    @Param("content") String content, @Param("bizType") String bizType,
+                    @Param("bizId") String bizId);
 
     /**
      * 检查重复键是否确实来自同一接收人的同一来源事件，其他数据库冲突仍向上抛出。
