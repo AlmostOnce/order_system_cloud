@@ -44,4 +44,32 @@ public interface OrderRefundMapper extends BaseMapper<OrderRefundDO> {
 
     @Update("UPDATE order_refunds SET status='PROCESSING',attempts=attempts+1,next_attempt_at=DATE_ADD(CURRENT_TIMESTAMP,INTERVAL 60 SECOND),updated_at=CURRENT_TIMESTAMP WHERE refund_id=#{id} AND status IN ('APPROVED','PROCESSING') AND next_attempt_at<=CURRENT_TIMESTAMP")
     int claim(@Param("id") Long id);
+
+    /**
+     * 统计账号注销前仍未结案的退款数量。
+     *
+     * <p>待处理、申诉中、已同意待执行、退款处理中都属于未结案，必须阻断注销；
+     * 已拒绝和已关闭不再阻断，但被拒退款会在资格页提示用户注销后无法再申诉。</p>
+     *
+     * @param userId 用户 ID
+     * @return 未结案退款数
+     */
+    @Select("""
+            SELECT COUNT(*) FROM order_refunds
+            WHERE user_id = #{userId}
+              AND status IN ('PENDING','APPEALED','APPROVED','PROCESSING')
+            """)
+    long countUnsettledForAccountDeletion(@Param("userId") Long userId);
+
+    /**
+     * 统计被拒绝的退款数量，仅用于注销资格页提示，不阻断注销。
+     *
+     * @param userId 用户 ID
+     * @return 被拒退款数
+     */
+    @Select("""
+            SELECT COUNT(*) FROM order_refunds
+            WHERE user_id = #{userId} AND status = 'REJECTED'
+            """)
+    long countRejectedForAccountDeletion(@Param("userId") Long userId);
 }

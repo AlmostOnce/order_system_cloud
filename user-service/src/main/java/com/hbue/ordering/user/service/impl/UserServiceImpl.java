@@ -690,6 +690,9 @@ public class UserServiceImpl
                 .userNo(userDO.getUserNo())
                 .username(userDO.getUsername())
                 .roleCode(userDO.getRoleCode())
+                // 注销待生效状态交给认证服务判断：为 true 时不签发正常令牌。
+                .deletionPending(userDO.getDeletionEffectiveAt() != null)
+                .deletionEffectiveAt(userDO.getDeletionEffectiveAt())
                 .build();
     }
 

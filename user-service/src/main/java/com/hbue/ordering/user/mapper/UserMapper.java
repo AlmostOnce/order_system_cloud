@@ -140,7 +140,8 @@ public interface UserMapper extends BaseMapper<UserDO> {
                 version,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                deletion_effective_at
             FROM users
             WHERE user_id = #{userId}
               AND status = #{status}
@@ -268,7 +269,8 @@ public interface UserMapper extends BaseMapper<UserDO> {
                 role_code,
                 password_hash,
                 status,
-                deleted_at
+                deleted_at,
+                deletion_effective_at
             FROM users
             WHERE (user_no = CAST(#{account} AS BINARY) OR email = #{account})
             LIMIT 1
@@ -388,4 +390,207 @@ public interface UserMapper extends BaseMapper<UserDO> {
             WHERE user_id=#{id} AND email_verified_at IS NULL AND status=1 AND deleted_at IS NULL
             """)
     int completeEmailEnrollment(@Param("id") Long id, @Param("email") String email);
+
+    /**
+     * 读取账号注销资格判断所需字段（不加锁）。
+     *
+     * <p>用于资格查询、发送验证码和签发撤回令牌等只读场景。包含邮箱、余额与注销三字段，
+     * 但绝不返回给客户端；真正提交注销和到期处理必须改用
+     * {@link #selectAccountDeletionStateForUpdate(Long)} 串行化并发。</p>
+     *
+     * @param userId 用户 ID
+     * @return 未软删除用户；不存在时返回 null
+     */
+    @Select("""
+            SELECT
+                user_id, user_uuid, user_no, email, email_verified_at,
+                balance, role_code, status, version, credential_version,
+                deleted_at, deletion_requested_at, deletion_effective_at, deletion_reminded_at
+            FROM users
+            WHERE user_id = #{userId} AND deleted_at IS NULL
+            """)
+    UserDO selectAccountDeletionState(@Param("userId") Long userId);
+
+    /**
+     * 锁定并读取账号注销状态。
+     *
+     * <p>提交、撤回和到期匿名化都在同一行锁内完成：先确认没有并发的注销/撤回操作，
+     * 再按条件更新，避免两个请求互相覆盖冷静期或把已匿名化账号再次处理。</p>
+     *
+     * @param userId 用户 ID
+     * @return 未软删除用户；不存在时返回 null
+     */
+    @Select("""
+            SELECT
+                user_id, user_uuid, user_no, email, email_verified_at,
+                balance, role_code, status, version, credential_version,
+                deleted_at, deletion_requested_at, deletion_effective_at, deletion_reminded_at
+            FROM users
+            WHERE user_id = #{userId} AND deleted_at IS NULL
+            FOR UPDATE
+            """)
+    UserDO selectAccountDeletionStateForUpdate(@Param("userId") Long userId);
+
+    /**
+     * 写入注销申请并递增凭据版本。
+     *
+     * <p>仅当账号仍启用且没有待生效申请时更新；credential_version 递增使刷新令牌
+     * 无法继续续期，提交请求携带的访问令牌由服务层同步写入黑名单。并发提交只有第一个
+     * 请求能写入，其余请求由调用方回读已存在的生效时间并返回相同结果。</p>
+     *
+     * @param userId      用户 ID
+     * @param requestedAt 申请时间
+     * @param effectiveAt 生效时间
+     * @return 受影响行数，1 表示本次写入成功
+     */
+    @Update("""
+            UPDATE users
+            SET deletion_requested_at = #{requestedAt},
+                deletion_effective_at = #{effectiveAt},
+                deletion_reminded_at = NULL,
+                credential_version = credential_version + 1,
+                version = version + 1,
+                updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND status = 1
+              AND deleted_at IS NULL
+              AND deletion_effective_at IS NULL
+            """)
+    int applyAccountDeletion(
+            @Param("userId") Long userId,
+            @Param("requestedAt") java.time.LocalDateTime requestedAt,
+            @Param("effectiveAt") java.time.LocalDateTime effectiveAt
+    );
+
+    /**
+     * 撤回待生效的注销申请。
+     *
+     * <p>只在申请仍存在且未软删除时清空注销字段；已到期的账号由调用方先拒绝撤回，
+     * 避免与到期匿名化竞争时把将要删除的账号恢复为正常状态。</p>
+     *
+     * @param userId 用户 ID
+     * @return 受影响行数，1 表示撤回成功
+     */
+    @Update("""
+            UPDATE users
+            SET deletion_requested_at = NULL,
+                deletion_effective_at = NULL,
+                deletion_reminded_at = NULL,
+                version = version + 1,
+                updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+              AND deletion_effective_at IS NOT NULL
+            """)
+    int clearAccountDeletion(@Param("userId") Long userId);
+
+    /**
+     * 查询已到生效时间、尚未匿名化的注销账号。
+     *
+     * <p>使用 deletion_effective_at 单列索引并按时间升序，单批最多返回 limit 条，
+     * 让到期任务的处理量有界；已软删除账号不再重复返回。</p>
+     *
+     * @param now   当前时间
+     * @param limit 单批最大数量
+     * @return 用户 ID 列表
+     */
+    @Select("""
+            SELECT user_id FROM users
+            WHERE deletion_effective_at IS NOT NULL
+              AND deletion_effective_at <= #{now}
+              AND deleted_at IS NULL
+            ORDER BY deletion_effective_at
+            LIMIT #{limit}
+            """)
+    java.util.List<Long> selectDueDeletionIds(
+            @Param("now") java.time.LocalDateTime now,
+            @Param("limit") int limit
+    );
+
+    /**
+     * 查询即将在提醒窗口内生效、尚未提醒过的注销账号。
+     *
+     * <p>提醒窗口由调用方按“生效时间减提前量”计算；deletion_reminded_at 为空避免重复提醒。</p>
+     *
+     * @param now          当前时间
+     * @param remindBefore 提醒窗口上界
+     * @param limit        单批最大数量
+     * @return 用户 ID 列表
+     */
+    @Select("""
+            SELECT user_id FROM users
+            WHERE deletion_effective_at IS NOT NULL
+              AND deletion_effective_at > #{now}
+              AND deletion_effective_at <= #{remindBefore}
+              AND deletion_reminded_at IS NULL
+              AND deleted_at IS NULL
+            ORDER BY deletion_effective_at
+            LIMIT #{limit}
+            """)
+    java.util.List<Long> selectDeletionReminderIds(
+            @Param("now") java.time.LocalDateTime now,
+            @Param("remindBefore") java.time.LocalDateTime remindBefore,
+            @Param("limit") int limit
+    );
+
+    /**
+     * 抢占注销提醒权。
+     *
+     * <p>条件更新 deletion_reminded_at 为空的行；多实例同时扫描时只有更新成功的实例
+     * 发送邮件，失败实例直接跳过，不做重试抢占。</p>
+     *
+     * @param userId     用户 ID
+     * @param remindedAt 提醒发送时间
+     * @return 受影响行数，1 表示当前实例获得提醒权
+     */
+    @Update("""
+            UPDATE users
+            SET deletion_reminded_at = #{remindedAt}, version = version + 1, updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND deletion_reminded_at IS NULL
+              AND deletion_effective_at IS NOT NULL
+              AND deleted_at IS NULL
+            """)
+    int markDeletionReminded(
+            @Param("userId") Long userId,
+            @Param("remindedAt") java.time.LocalDateTime remindedAt
+    );
+
+    /**
+     * 注销生效：账号匿名化并停止使用。
+     *
+     * <p>邮箱与邮箱验证时间释放为 NULL，以便本人日后用同一邮箱重新注册；用户名替换为
+     * 不可识别的占位值；密码替换为随机哈希，防止旧密码再次匹配。user_no 与 user_uuid
+     * 保留不复用，订单、退款、余额流水和工单仍按原主键关联。status=0 与 deleted_at
+     * 同时写入，使登录、令牌刷新和用户查询统一拒绝该账号。</p>
+     *
+     * @param userId       用户 ID
+     * @param username     匿名化后的用户名
+     * @param passwordHash 随机生成的密码哈希
+     * @param deletedAt    注销完成时间
+     * @return 受影响行数，1 表示匿名化成功
+     */
+    @Update("""
+            UPDATE users
+            SET username = #{username},
+                email = NULL,
+                email_verified_at = NULL,
+                avatar_file_key = NULL,
+                password_hash = #{passwordHash},
+                balance = 0,
+                status = 0,
+                deleted_at = #{deletedAt},
+                credential_version = credential_version + 1,
+                version = version + 1,
+                updated_at = NOW()
+            WHERE user_id = #{userId}
+              AND status = 1
+              AND deleted_at IS NULL
+            """)
+    int anonymizeAccount(
+            @Param("userId") Long userId,
+            @Param("username") String username,
+            @Param("passwordHash") String passwordHash,
+            @Param("deletedAt") java.time.LocalDateTime deletedAt
+    );
 }

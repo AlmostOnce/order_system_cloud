@@ -78,6 +78,18 @@ email:
   verification:
     secret: ${EMAIL_VERIFICATION_SECRET:}
 
+# 账号注销：冷静期、可放弃余额上限、到期扫描与提醒参数。
+# 冷静期与提醒提前量以小时为单位；扫描默认每 5 分钟执行一次，单批最多 20 人。
+account-deletion:
+  cooling-off-hours: ${ACCOUNT_DELETION_COOLING_OFF_HOURS:72}
+  max-forfeitable-balance: ${ACCOUNT_DELETION_MAX_FORFEITABLE_BALANCE:20.00}
+  reminder-lead-hours: ${ACCOUNT_DELETION_REMINDER_LEAD_HOURS:24}
+  scan-enabled: ${ACCOUNT_DELETION_SCAN_ENABLED:true}
+  scan-interval-ms: ${ACCOUNT_DELETION_SCAN_INTERVAL_MS:300000}
+  scan-initial-delay-ms: ${ACCOUNT_DELETION_SCAN_INITIAL_DELAY_MS:60000}
+  scan-batch-size: ${ACCOUNT_DELETION_SCAN_BATCH_SIZE:20}
+  lease-seconds: ${ACCOUNT_DELETION_LEASE_SECONDS:300}
+
 management:
   endpoints:
     web:

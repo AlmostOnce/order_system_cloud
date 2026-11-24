@@ -17,7 +17,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
 @EnableScheduling
-@EnableFeignClients(basePackages = "com.hbue.ordering.product.api.client")
+@EnableFeignClients(basePackages = {
+        "com.hbue.ordering.product.api.client",
+        "com.hbue.ordering.user.client"
+})
 public class UserServiceApplication {
 
     /**

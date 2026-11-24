@@ -68,6 +68,9 @@ public class SupportSecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // 存活探测不访问业务数据，允许匿名用于本地和容器健康检查。
                         .requestMatchers("/support/ping").permitAll()
+                        // 账号注销阻断查询属于服务间调用，由共享内部令牌校验，
+                        // 不依赖用户 JWT（用户此时可能已进入注销冷静期）。
+                        .requestMatchers("/internal/**").permitAll()
                         // 学生与管理接口都在 /support 前缀下，认证后仍按方法级角色校验。
                         .requestMatchers("/support", "/support/**").authenticated()
                         .anyRequest().denyAll())

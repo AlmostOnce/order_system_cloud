@@ -45,6 +45,35 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
         sendMessage(email, code, "验证邮箱所有权");
     }
 
+    @Override
+    public void sendAccountDeletion(String email, String code) {
+        sendMessage(email, code, "注销账号");
+    }
+
+    /**
+     * 发送注销状态通知。
+     *
+     * <p>通知是单向告知，不承载验证码或令牌；SMTP 失败时抛出业务异常，
+     * 由调用方在事务提交后捕获并记录，不回滚业务状态。</p>
+     */
+    @Override
+    public void sendNotice(String email, String subject, String text) {
+        if (username.isBlank() || password.isBlank()) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");
+        }
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(username);
+        message.setTo(email);
+        message.setSubject("校园食堂" + subject);
+        message.setText(text);
+        try {
+            mail.send(message);
+        } catch (MailException exception) {
+            // 不记录 SMTP 异常内容，避免泄露邮箱地址或凭据。
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "通知邮件发送失败");
+        }
+    }
+
     private void sendMessage(String email, String code, String purpose) {
         if (username.isBlank() || password.isBlank()) {
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");

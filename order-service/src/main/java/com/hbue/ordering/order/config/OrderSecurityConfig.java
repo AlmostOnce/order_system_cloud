@@ -123,6 +123,11 @@ public class OrderSecurityConfig {
                         .requestMatchers("/internal/orders/**")
                         .permitAll()
 
+                        // 账号注销阻断查询同属服务间调用，由共享内部令牌校验，
+                        // 不依赖用户 JWT（用户此时可能已进入注销冷静期）。
+                        .requestMatchers("/internal/users/**")
+                        .permitAll()
+
                         // 其他接口必须携带有效 JWT。
                         .anyRequest()
                         .authenticated()

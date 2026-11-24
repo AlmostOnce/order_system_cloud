@@ -12,6 +12,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
+import com.hbue.ordering.user.api.vo.AccountDeletionCancelTokenVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -191,6 +192,12 @@ public class AuthServiceImpl implements AuthService {
                     .roleCode(challenge.roleCode()).build();
         }
 
+        // 注销冷静期内不签发任何正常令牌，只返回生效时间和一次性撤回令牌。
+        // 撤回令牌由用户服务签发，签发失败时直接报错，不能退化为正常登录。
+        if (userBasicVO.isDeletionPending()) {
+            return buildDeletionPendingLogin(userBasicVO);
+        }
+
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(
                 userBasicVO.getUserUuid(),
@@ -218,6 +225,38 @@ public class AuthServiceImpl implements AuthService {
                 .refreshExpiresIn(
                         refreshTokenService.getRefreshTokenTtlSeconds()
                 )
+                .build();
+    }
+
+    /**
+     * 构造注销冷静期的登录响应。
+     *
+     * <p>只返回待注销状态、生效时间和一次性撤回令牌，绝不签发访问令牌或刷新令牌。
+     * 无法获取撤回入口时抛出服务不可用，避免客户端误以为可以正常使用账号；
+     * 冷静期已过但尚未完成注销时允许撤回令牌为空。</p>
+     *
+     * @param userBasicVO 已完成密码校验的用户身份
+     * @return 待注销登录响应
+     */
+    private LoginVO buildDeletionPendingLogin(UserBasicVO userBasicVO) {
+        ApiResponse<AccountDeletionCancelTokenVO> cancelResponse =
+                userServiceClient.issueDeletionCancelToken(userBasicVO.getUserId());
+        if (cancelResponse == null || !CommonErrorCode.SUCCESS.code().equals(cancelResponse.getCode())
+                || cancelResponse.getData() == null) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法获取注销撤回入口，请稍后重试");
+        }
+        AccountDeletionCancelTokenVO cancelToken = cancelResponse.getData();
+        // 冷静期已过但到期任务尚未处理时，用户服务返回空令牌；此时仍然返回待注销状态，
+        // 客户端只展示进度而不提供撤回按钮，不能因为无法撤回就拒绝登录。
+        boolean cancelable = cancelToken.getCancelToken() != null
+                && !cancelToken.getCancelToken().isBlank();
+        return LoginVO.builder()
+                .deletionPending(true)
+                .deletionEffectiveAt(userBasicVO.getDeletionEffectiveAt() == null
+                        ? null : userBasicVO.getDeletionEffectiveAt().toString())
+                .deletionCancelToken(cancelable ? cancelToken.getCancelToken() : null)
+                .deletionCancelExpiresIn(cancelable ? cancelToken.getExpiresIn() : 0L)
+                .roleCode(userBasicVO.getRoleCode())
                 .build();
     }
 
@@ -277,6 +316,11 @@ public class AuthServiceImpl implements AuthService {
         if (!currentIdentity.isEmailVerified()) {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "邮箱尚未验证，请重新登录完成邮箱验证");
+        }
+        if (currentIdentity.isDeletionPending()) {
+            // 注销冷静期内旧刷新令牌一律失效，用户只能重新登录获取撤回入口。
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "账号已申请注销，请重新登录处理");
         }
         if (refreshTokenInfo.getCredentialVersion() != currentIdentity.getCredentialVersion()) {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);

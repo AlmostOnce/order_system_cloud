@@ -5,6 +5,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
+import com.hbue.ordering.user.api.vo.AccountDeletionCancelTokenVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import feign.FeignException;
 import org.slf4j.Logger;
@@ -108,7 +109,37 @@ public class UserServiceClientFallbackFactory
 
                 return serviceUnavailable();
             }
+
+            /**
+             * 撤回令牌签发降级处理。
+             *
+             * <p>撤回令牌属于安全凭据，下游不可用时不能返回空令牌或伪造成功，
+             * 统一返回服务不可用，由认证服务向客户端提示稍后重试。</p>
+             *
+             * @param userId 用户 ID
+             * @return 服务不可用响应
+             */
+            @Override
+            public ApiResponse<AccountDeletionCancelTokenVO> issueDeletionCancelToken(
+                    Long userId
+            ) {
+                // 返回统一的服务不可用响应。
+                return cancelTokenServiceUnavailable();
+            }
         };
+    }
+
+    /**
+     * 创建撤回令牌签发不可用响应。
+     *
+     * @return 服务不可用响应
+     */
+    private ApiResponse<AccountDeletionCancelTokenVO> cancelTokenServiceUnavailable() {
+        // 与基础用户查询保持同一错误码，不泄露远程服务内部异常。
+        return ApiResponse.failure(
+                CommonErrorCode.SERVICE_UNAVAILABLE,
+                "用户服务暂时不可用"
+        );
     }
 
     /**

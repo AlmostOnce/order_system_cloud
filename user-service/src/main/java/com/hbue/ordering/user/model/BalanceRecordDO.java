@@ -38,7 +38,7 @@ public class BalanceRecordDO {
     private Long userId;
 
     /**
-     * 变动类型：RECHARGE 入账 / PAY 消费 / REFUND 退回。
+     * 变动类型：RECHARGE 入账 / PAY 消费 / REFUND 退回 / WRITE_OFF 注销放弃余额。
      */
     @TableField("change_type")
     private String changeType;

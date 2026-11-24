@@ -127,4 +127,30 @@ public class UserDO {
      */
     @TableField("deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * 账号注销申请提交时间。
+     *
+     * <p>为空表示当前没有待生效的注销申请。提交注销后到生效前，账号仍保留数据，
+     * 但认证服务不再签发正常令牌；撤回或到期匿名化后由对应流程清理或保留用于审计。</p>
+     */
+    @TableField("deletion_requested_at")
+    private LocalDateTime deletionRequestedAt;
+
+    /**
+     * 账号注销生效时间。
+     *
+     * <p>提交时按配置的冷静期计算（默认 72 小时）。到期任务依据该列选出待处理账号，
+     * 并在同一事务内重新核对阻断项后才执行匿名化。</p>
+     */
+    @TableField("deletion_effective_at")
+    private LocalDateTime deletionEffectiveAt;
+
+    /**
+     * 注销生效前提醒邮件的发送时间。
+     *
+     * <p>通过条件更新该列抢占提醒权，避免多实例重复发送；撤回后重置为 null。</p>
+     */
+    @TableField("deletion_reminded_at")
+    private LocalDateTime deletionRemindedAt;
 }

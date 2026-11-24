@@ -124,6 +124,11 @@ public class GatewaySecurityConfig {
                         .pathMatchers("/api/auth/login")
                         .permitAll()
 
+                        // 注销撤回只凭一次性撤回令牌：冷静期内账号没有正常访问令牌，
+                        // 因此必须在网关放行，安全性由用户服务校验 10 分钟一次性令牌保证。
+                        .pathMatchers(HttpMethod.POST, "/api/users/me/deletion/cancel")
+                        .permitAll()
+
                         // 注册接口允许匿名访问。
                         .pathMatchers("/api/auth/register", "/api/auth/registration/code", "/api/auth/registration/verify", "/api/auth/email-enrollment/code", "/api/auth/email-enrollment/confirm")
                         .permitAll()

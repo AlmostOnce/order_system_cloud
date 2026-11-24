@@ -227,4 +227,19 @@ public interface SupportTicketMapper extends BaseMapper<SupportTicketDO> {
      */
     @Update("UPDATE support_ticket SET updated_at = NOW(3) WHERE id = #{id}")
     int touchUpdatedAt(@Param("id") Long id);
+
+    /**
+     * 统计学生账号注销前仍未关闭的工单数量。
+     *
+     * <p>待受理和处理中都属于未关闭，必须阻断注销；已关闭工单保留历史记录，
+     * 不阻断注销。查询绑定学生内部用户编号，不返回工单内容。</p>
+     *
+     * @param customerId 学生内部用户编号
+     * @return 未关闭工单数
+     */
+    @Select("""
+            SELECT COUNT(*) FROM support_ticket
+            WHERE customer_id = #{customerId} AND status IN ('PENDING','PROCESSING')
+            """)
+    long countOpenForAccountDeletion(@Param("customerId") Long customerId);
 }

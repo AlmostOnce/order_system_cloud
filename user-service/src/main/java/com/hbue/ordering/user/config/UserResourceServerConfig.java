@@ -105,6 +105,10 @@ public class UserResourceServerConfig {
                         .requestMatchers(HttpMethod.POST, "/users").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users/authenticate")
                         .permitAll()
+                        // 注销冷静期内账号没有正常访问令牌，撤回只能凭一次性随机令牌，
+                        // 因此该路径匿名放行，控制器不接受用户 ID。
+                        .requestMatchers(HttpMethod.POST, "/users/me/deletion/cancel")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(jwtAuthenticationConverter())));

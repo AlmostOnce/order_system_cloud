@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.client.fallback.UserServiceClientFallbackFactory;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
+import com.hbue.ordering.user.api.vo.AccountDeletionCancelTokenVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,5 +61,20 @@ public interface UserServiceClient {
     @PostMapping("/users/authenticate")
     ApiResponse<UserBasicVO> authenticate(
             @RequestBody UserPasswordVerifyCommand command
+    );
+
+    /**
+     * 为待注销账号签发一次性撤回令牌。
+     *
+     * <p>认证服务在登录身份校验通过、但账号处于注销冷静期时调用。用户服务校验账号确实
+     * 存在待生效申请且尚未到期后才签发令牌；调用方不能自行指定用户 ID 以外的撤回范围。
+     * 下游故障必须返回失败，认证服务不得退化为签发正常令牌。</p>
+     *
+     * @param userId 已通过登录密码校验的用户 ID
+     * @return 统一响应中的一次性撤回令牌及有效秒数
+     */
+    @PostMapping("/internal/users/{userId}/deletion/cancel-token")
+    ApiResponse<AccountDeletionCancelTokenVO> issueDeletionCancelToken(
+            @PathVariable("userId") Long userId
     );
 }

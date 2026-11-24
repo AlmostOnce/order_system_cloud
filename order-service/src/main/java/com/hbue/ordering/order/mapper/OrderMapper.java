@@ -205,4 +205,19 @@ public interface OrderMapper extends BaseMapper<OrderDO> {
               AND NOT EXISTS(SELECT 1 FROM order_items i WHERE i.order_id=orders.order_id AND i.quantity>i.refunded_quantity)
             """)
     int finishRefundedOrder(@Param("id") Long id);
+
+    /**
+     * 统计账号注销前仍未结束的订单数量。
+     *
+     * <p>待支付、已支付、制作中、待取货都视为未完成，必须阻断注销；已退款、已完成和
+     * 已取消属于终态，不阻断。只返回计数，不读取订单明细。</p>
+     *
+     * @param userId 用户 ID
+     * @return 未完成订单数
+     */
+    @Select("""
+            SELECT COUNT(*) FROM orders
+            WHERE user_id = #{userId} AND status IN ('待支付','已支付','制作中','待取货')
+            """)
+    long countUnfinishedForAccountDeletion(@Param("userId") Long userId);
 }

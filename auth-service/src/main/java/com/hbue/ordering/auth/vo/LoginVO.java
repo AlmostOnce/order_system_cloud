@@ -23,6 +23,27 @@ public class LoginVO {
     private Long emailVerificationExpiresIn;
     private String roleCode;
 
+    /**
+     * 为 true 时表示账号处于注销冷静期，响应不包含 Access/Refresh Token。
+     *
+     * <p>客户端应进入待注销页面，展示生效时间和撤回入口；不能再调用普通业务接口。</p>
+     */
+    private boolean deletionPending;
+
+    /**
+     * 注销生效时间（ISO-8601 本地时间），仅 deletionPending 为 true 时有值。
+     */
+    private String deletionEffectiveAt;
+
+    /**
+     * 一次性撤回令牌，仅 deletionPending 为 true 时有值；只保存在内存，不落盘。
+     */
+    private String deletionCancelToken;
+
+    /**
+     * 撤回令牌有效秒数。
+     */
+    private Long deletionCancelExpiresIn;
 
     /**
      * 访问 Token。
