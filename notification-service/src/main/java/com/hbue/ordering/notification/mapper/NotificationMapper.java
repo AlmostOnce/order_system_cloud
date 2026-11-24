@@ -30,9 +30,24 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
     boolean existsForUser(@Param("userId") long userId, @Param("id") String id);
 
     /**
-     * 查询当前用户尚未阅读的系统通知数，与商家聊天未读独立存储，前端合并展示红点。
+     * 查询当前用户尚未阅读且未被通知偏好关闭的系统通知数。
+     *
+     * <p>关闭某个分类后，该分类的历史未读仍保留在消息中心，但不再计入红点；
+     * 重新开启后未读会重新计入，因为阅读状态没有被修改。这里用 NOT EXISTS 按
+     * 通知类型映射到偏好分类，未知类型不参与映射，保持默认提醒。</p>
      */
-    @Select("SELECT COUNT(*) FROM notifications WHERE recipient_id=#{userId} AND read_at IS NULL")
+    @Select("""
+            SELECT COUNT(*) FROM notifications n
+            WHERE n.recipient_id=#{userId} AND n.read_at IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM notification_preferences p
+                WHERE p.user_id=#{userId} AND p.enabled=0
+                  AND p.category=CASE n.notification_type
+                        WHEN 'ORDER_STATUS' THEN 'ORDER'
+                        WHEN 'SUPPORT_REPLY' THEN 'SUPPORT'
+                        WHEN 'SUPPORT_STATUS' THEN 'SUPPORT'
+                        ELSE '' END)
+            """)
     long unreadCount(@Param("userId") long userId);
 
     /**

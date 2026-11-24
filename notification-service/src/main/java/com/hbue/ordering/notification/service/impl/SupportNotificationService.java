@@ -5,6 +5,8 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.notification.dto.SupportReplyNotificationRequest;
 import com.hbue.ordering.notification.dto.SupportStatusNotificationRequest;
 import com.hbue.ordering.notification.mapper.NotificationMapper;
+import com.hbue.ordering.notification.model.NotificationCategory;
+import com.hbue.ordering.notification.service.NotificationPreferenceService;
 import com.hbue.ordering.notification.websocket.NotificationSocketBus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,14 +90,22 @@ public class SupportNotificationService {
     private final NotificationSocketBus socketBus;
 
     /**
+     * 通知偏好业务，用于判断是否推送实时提示。
+     */
+    private final NotificationPreferenceService preferences;
+
+    /**
      * 创建支持回复通知服务。
      *
-     * @param repository 通知数据访问
-     * @param socketBus  多实例在线提示总线
+     * @param repository  通知数据访问
+     * @param socketBus   多实例在线提示总线
+     * @param preferences 通知偏好业务
      */
-    public SupportNotificationService(NotificationMapper repository, NotificationSocketBus socketBus) {
+    public SupportNotificationService(NotificationMapper repository, NotificationSocketBus socketBus,
+                                      NotificationPreferenceService preferences) {
         this.repository = repository;
         this.socketBus = socketBus;
+        this.preferences = preferences;
     }
 
     /**
@@ -167,18 +177,21 @@ public class SupportNotificationService {
         try {
             repository.insertEvent(UUID.randomUUID().toString(), recipientId, eventId,
                     type, safeTitle, safeContent, SUPPORT_BIZ_TYPE, bizId);
-            // 只有通知记录真正提交后才提示在线客户端刷新，回滚时不发送虚假变化。
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        socketBus.publish(recipientId);
-                    } catch (RuntimeException exception) {
-                        // 在线提示失败不影响通知事实，客户端下次拉取列表即可补齐。
-                        log.warn("反馈通知实时提示发送失败，recipientId={}", recipientId);
+            // 通知记录始终落库；关闭反馈提醒时只跳过实时提示，消息中心仍可查看。
+            if (preferences.isEnabled(recipientId, NotificationCategory.SUPPORT)) {
+                // 只有通知记录真正提交后才提示在线客户端刷新，回滚时不发送虚假变化。
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            socketBus.publish(recipientId);
+                        } catch (RuntimeException exception) {
+                            // 在线提示失败不影响通知事实，客户端下次拉取列表即可补齐。
+                            log.warn("反馈通知实时提示发送失败，recipientId={}", recipientId);
+                        }
                     }
-                }
-            });
+                });
+            }
         } catch (DuplicateKeyException exception) {
             // 只有确认是同一接收人的同一来源事件才视为幂等成功，其他唯一键冲突继续抛出。
             if (!repository.existsEvent(recipientId, eventId)) {

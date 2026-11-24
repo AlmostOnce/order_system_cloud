@@ -2,6 +2,8 @@ package com.hbue.ordering.notification.service.impl;
 
 import com.hbue.ordering.notification.mapper.NotificationMapper;
 import com.hbue.ordering.notification.messaging.OrderNotificationEvent;
+import com.hbue.ordering.notification.model.NotificationCategory;
+import com.hbue.ordering.notification.service.NotificationPreferenceService;
 import com.hbue.ordering.notification.service.OrderNotificationService;
 import com.hbue.ordering.notification.websocket.NotificationSocketBus;
 import org.slf4j.Logger;
@@ -22,14 +24,17 @@ import java.util.UUID;
 public class OrderNotificationServiceImpl implements OrderNotificationService {
     private final NotificationMapper repository;
     private final NotificationSocketBus socketBus;
+    private final NotificationPreferenceService preferences;
     private static final Logger log = LoggerFactory.getLogger(OrderNotificationServiceImpl.class);
 
     /**
-     * 注入通知Mapper和在线提示总线；入库与提交后提示的顺序由accept方法事务保证。
+     * 注入通知Mapper、在线提示总线和通知偏好；入库与提交后提示的顺序由accept方法事务保证。
      */
-    public OrderNotificationServiceImpl(NotificationMapper repository, NotificationSocketBus socketBus) {
+    public OrderNotificationServiceImpl(NotificationMapper repository, NotificationSocketBus socketBus,
+                                        NotificationPreferenceService preferences) {
         this.repository = repository;
         this.socketBus = socketBus;
+        this.preferences = preferences;
     }
 
     /**
@@ -42,17 +47,20 @@ public class OrderNotificationServiceImpl implements OrderNotificationService {
             repository.insertOrderEvent(UUID.randomUUID().toString(), event.recipientId(), event.eventId(),
                     event.orderId(), "退款成功".equals(event.status()) ? "订单菜品退款已到账，请查看退款进度" :
                             "退款申请被拒绝".equals(event.status()) ? "退款申请未通过，请查看处理原因或申请介入" : "订单状态已更新为" + event.status());
-            // 必须等待通知记录提交；事务回滚时不会向客户端发送虚假的通知变化。
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        socketBus.publish(event.recipientId());
-                    } catch (RuntimeException error) {
-                        log.warn("实时通知发送失败，用户可通过列表补齐");
+            // 通知记录无论偏好如何都要落库；关闭订单提醒时只跳过实时提示，用户仍可在消息中心查看。
+            if (preferences.isEnabled(event.recipientId(), NotificationCategory.ORDER)) {
+                // 必须等待通知记录提交；事务回滚时不会向客户端发送虚假的通知变化。
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            socketBus.publish(event.recipientId());
+                        } catch (RuntimeException error) {
+                            log.warn("实时通知发送失败，用户可通过列表补齐");
+                        }
                     }
-                }
-            });
+                });
+            }
         } catch (DuplicateKeyException error) {
             // 只吞掉已确认的来源事件重投，其他唯一约束错误仍交给MQ重试。
             if (!repository.existsEvent(event.recipientId(), event.eventId())) throw error;

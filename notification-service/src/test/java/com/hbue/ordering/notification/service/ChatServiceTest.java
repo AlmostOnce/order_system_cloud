@@ -29,7 +29,8 @@ class ChatServiceTest {
     final ChatOutboxMapper o = mock(ChatOutboxMapper.class);
     final ChatAccessService a = mock(ChatAccessService.class);
     final RedisOperationsService r = mock(RedisOperationsService.class);
-    final ChatService service = new ChatServiceImpl(c, m, o, a, r);
+    final NotificationPreferenceService p = mock(NotificationPreferenceService.class);
+    final ChatService service = new ChatServiceImpl(c, m, o, a, r, p);
 
     ChatConversationDO conversation() {
         var row = new ChatConversationDO();

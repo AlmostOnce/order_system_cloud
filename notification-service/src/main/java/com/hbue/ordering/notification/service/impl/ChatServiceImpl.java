@@ -10,8 +10,10 @@ import com.hbue.ordering.notification.mapper.ChatOutboxMapper;
 import com.hbue.ordering.notification.model.ChatConversationDO;
 import com.hbue.ordering.notification.model.ChatMessageDO;
 import com.hbue.ordering.notification.model.ChatOutboxDO;
+import com.hbue.ordering.notification.model.NotificationCategory;
 import com.hbue.ordering.notification.service.ChatAccessService;
 import com.hbue.ordering.notification.service.ChatService;
+import com.hbue.ordering.notification.service.NotificationPreferenceService;
 import com.hbue.ordering.notification.vo.ChatConversationVO;
 import com.hbue.ordering.notification.vo.ChatMessageVO;
 import com.hbue.ordering.notification.vo.ChatPageVO;
@@ -33,16 +35,20 @@ public class ChatServiceImpl implements ChatService {
     private final ChatOutboxMapper outbox;
     private final ChatAccessService access;
     private final RedisOperationsService redis;
+    private final NotificationPreferenceService preferences;
 
     /**
-     * 注入会话、消息和事件Mapper、授权服务及公共Redis组件；由Spring事务代理统一保护发送与创建操作。
+     * 注入会话、消息和事件Mapper、授权服务、公共Redis组件及通知偏好；
+     * 由Spring事务代理统一保护发送与创建操作。
      */
-    public ChatServiceImpl(ChatConversationMapper c, ChatMessageMapper m, ChatOutboxMapper o, ChatAccessService a, RedisOperationsService r) {
+    public ChatServiceImpl(ChatConversationMapper c, ChatMessageMapper m, ChatOutboxMapper o, ChatAccessService a,
+                           RedisOperationsService r, NotificationPreferenceService preferences) {
         conversations = c;
         messages = m;
         outbox = o;
         access = a;
         redis = r;
+        this.preferences = preferences;
     }
 
     /**
@@ -73,10 +79,22 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 将内部会话映射成公开摘要，并查询当前用户阅读水位之后的对方消息数；不把自己的发送计入未读。
+     *
+     * <p>关闭「商家聊天提醒」时未读数按 0 返回：会话和消息仍然保留、仍可正常收发，
+     * 只是不显示红点；阅读水位继续独立维护，重新开启后未读会按真实水位恢复。</p>
+     *
+     * @param uid                当前认证用户内部编号
+     * @param c                  会话记录
+     * @param canSend            当前订单是否仍允许发送
+     * @param receipt            是否查询对方阅读水位
+     * @param chatReminderEnabled 当前用户是否开启聊天提醒，由调用方按请求查询一次后传入
+     * @return 对外会话摘要
      */
-    private ChatConversationVO view(long uid, ChatConversationDO c, boolean canSend, boolean receipt) {
+    private ChatConversationVO view(long uid, ChatConversationDO c, boolean canSend, boolean receipt,
+                                    boolean chatReminderEnabled) {
         return new ChatConversationVO(c.getConversationUuid(), c.getOrderId(), c.getOrderNo(), c.getWindowName(), c.getLastContent(),
-                c.getLastMessageAt() == null ? c.getCreatedAt() : c.getLastMessageAt(), c.getLastSeq(), messages.unread(c.getId(), uid), canSend,
+                c.getLastMessageAt() == null ? c.getCreatedAt() : c.getLastMessageAt(), c.getLastSeq(),
+                chatReminderEnabled ? messages.unread(c.getId(), uid) : 0, canSend,
                 // 列表不额外查对方阅读水位；详情随已有chat.changed补查更新，无需逐消息查数据库。
                 receipt ? messages.peerReadSeq(c.getId(), c.getCustomerId(), uid == c.getCustomerId()) : null);
     }
@@ -101,9 +119,11 @@ public class ChatServiceImpl implements ChatService {
         var actor = access.actor(uid);
         var order = access.order(orderId);
         access.check(actor, order);
+        // 偏好只影响未读展示，不影响会话创建与消息收发；每个请求最多查询一次。
+        boolean chatReminderEnabled = preferences.isEnabled(uid, NotificationCategory.CHAT);
         // 支付后仍不预建；只有此显式入口执行，重复点击优先返回原会话。
         var old = conversations.byOrder(orderId);
-        if (old != null) return view(uid, old, access.canSend(order), false);
+        if (old != null) return view(uid, old, access.canSend(order), false, chatReminderEnabled);
         if (!actor.customer()) throw new BusinessException(CommonErrorCode.FORBIDDEN, "请等待顾客发起会话");
         if (!access.canSend(order)) throw new BusinessException(CommonErrorCode.CONFLICT, "该订单暂不支持发起沟通");
         var c = new ChatConversationDO();
@@ -117,7 +137,7 @@ public class ChatServiceImpl implements ChatService {
         conversations.create(c);
         var saved = conversations.byOrderCurrent(orderId);
         event(saved.getConversationUuid());
-        return view(uid, saved, true, false);
+        return view(uid, saved, true, false, chatReminderEnabled);
     }
 
     /**
@@ -125,7 +145,8 @@ public class ChatServiceImpl implements ChatService {
      */
     public ChatConversationVO detail(long uid, String uuid) {
         var c = require(uid, uuid);
-        return view(uid, c, access.canSend(access.order(c.getOrderId())), true);
+        return view(uid, c, access.canSend(access.order(c.getOrderId())), true,
+                preferences.isEnabled(uid, NotificationCategory.CHAT));
     }
 
     /**
@@ -138,7 +159,9 @@ public class ChatServiceImpl implements ChatService {
         if (!actor.customer() && actor.windows().isEmpty()) return new ChatPageVO<>(List.of(), null, false);
         var rows = conversations.page(uid, actor.customer(), actor.windows(), cursor, size + 1);
         boolean more = rows.size() > size;
-        var items = rows.stream().limit(size).map(c -> view(uid, c, false, false)).toList();
+        // 分页映射前只查询一次偏好，避免每个会话重复访问偏好表。
+        boolean chatReminderEnabled = preferences.isEnabled(uid, NotificationCategory.CHAT);
+        var items = rows.stream().limit(size).map(c -> view(uid, c, false, false, chatReminderEnabled)).toList();
         return new ChatPageVO<>(items, more ? items.getLast().conversationUuid() : null, more);
     }
 
@@ -223,8 +246,12 @@ public class ChatServiceImpl implements ChatService {
 
     /**
      * 查询本人当前可见会话的未读总量。店主无直接窗口授权时返回零，不把平台或餐厅范围展开成私人会话。
+     *
+     * <p>关闭「商家聊天提醒」后返回零：聊天仍可实时收发，只是不参与角标汇总；
+     * 未读水位不会被修改，重新开启后按真实未读恢复。</p>
      */
     public long unread(long uid) {
+        if (!preferences.isEnabled(uid, NotificationCategory.CHAT)) return 0;
         var a = access.actor(uid);
         return !a.customer() && a.windows().isEmpty() ? 0 : conversations.unreadTotal(uid, a.customer(), a.windows());
     }

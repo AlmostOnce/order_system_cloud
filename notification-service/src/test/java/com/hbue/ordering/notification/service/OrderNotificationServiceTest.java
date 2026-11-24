@@ -19,7 +19,8 @@ class OrderNotificationServiceTest {
     @Test
     void acceptsValidEventsAndRejectsInvalidOnes() {
         var repository = mock(NotificationMapper.class);
-        var service = new OrderNotificationServiceImpl(repository, mock(NotificationSocketBus.class));
+        var service = new OrderNotificationServiceImpl(repository, mock(NotificationSocketBus.class),
+                mock(NotificationPreferenceService.class));
         TransactionSynchronizationManager.initSynchronization();
         try {
             service.accept(EVENT);
@@ -35,7 +36,8 @@ class OrderNotificationServiceTest {
         var repository = mock(NotificationMapper.class);
         doThrow(new DuplicateKeyException("duplicate")).when(repository).insertOrderEvent(anyString(), anyLong(), anyString(), anyLong(), anyString());
         when(repository.existsEvent(9L, "order-status:7:2")).thenReturn(true, false);
-        var service = new OrderNotificationServiceImpl(repository, mock(NotificationSocketBus.class));
+        var service = new OrderNotificationServiceImpl(repository, mock(NotificationSocketBus.class),
+                mock(NotificationPreferenceService.class));
         assertDoesNotThrow(() -> service.accept(EVENT));
         assertThrows(DuplicateKeyException.class, () -> service.accept(EVENT));
     }
