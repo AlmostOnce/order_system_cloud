@@ -3,6 +3,7 @@ package com.hbue.ordering.comment.service.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.dto.CreateCommentRequest;
+import com.hbue.ordering.comment.dto.UpdateCommentRequest;
 import com.hbue.ordering.comment.mapper.CommentMapper;
 import com.hbue.ordering.comment.model.CommentContentDO;
 import com.hbue.ordering.comment.model.CommentRowDO;
@@ -11,6 +12,9 @@ import com.hbue.ordering.comment.service.AuthorAvatarService;
 import com.hbue.ordering.comment.service.CommentMetadataWriter;
 import com.hbue.ordering.comment.service.CommentService;
 import com.hbue.ordering.comment.service.PurchaseVerifier;
+import com.hbue.ordering.comment.service.ReviewAuthorityService;
+import com.hbue.ordering.comment.service.ReviewDiscussionService;
+import com.hbue.ordering.comment.model.ReviewType;
 import com.hbue.ordering.comment.vo.CommentPageVO;
 import com.hbue.ordering.comment.vo.CommentVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
@@ -27,19 +31,97 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 
+/**
+ * 菜品评价的创建与分页查询实现。
+ *
+ * <p>创建流程：校验幂等键与内容 → 归一化后计算请求摘要 → 校验图片归属 → 向订单服务确认
+ * "已完成且确实购买该菜品" → 落库。任一步失败都不写入任何数据，避免出现无消费依据的评价。</p>
+ *
+ * <p>幂等由请求键 + 内容摘要共同保证：同键同内容返回原记录，同键不同内容返回冲突，
+ * 不会被后一次提交静默覆盖。并发首提由数据库唯一键兜底，捕获冲突后回读赢家。</p>
+ *
+ * <p>列表查询只做只读拼装：正文从内容库取、头像批量向用户服务解析，任何附属数据缺失都不影响
+ * 评价主体展示。</p>
+ *
+ * @author order-system
+ * @date 2026-10-28
+ */
 @Service
 public class CommentServiceImpl implements CommentService {
-    private static final Logger log = LoggerFactory.getLogger(CommentService.class);
+
+    /**
+     * 当前类日志对象。
+     */
+    private static final Logger log = LoggerFactory.getLogger(CommentServiceImpl.class);
+
+    /**
+     * 评价主表读写。
+     */
     private final CommentMapper rows;
+
+    /**
+     * 评价元数据（评分汇总等）写入器。
+     */
     private final CommentMetadataWriter writer;
+
+    /**
+     * 消费资格校验。
+     */
     private final PurchaseVerifier purchases;
+
+    /**
+     * 图片归属校验客户端。
+     */
     private final ManagedImageClient images;
+
+    /**
+     * 评价正文的内容库访问。
+     */
     private final CommentContentRepository contents;
+
+    /**
+     * JSON 编解码器。
+     */
     private final ObjectMapper json;
+
+    /**
+     * 作者头像批量解析。
+     */
     private final AuthorAvatarService authors;
 
+    /**
+     * 修改与删除的操作者鉴权。
+     */
+    private final ReviewAuthorityService authority;
+
+    /**
+     * 自由评论区服务，用于拼装评价的评论数与预览。
+     */
+    private final ReviewDiscussionService discussions;
+
+    /**
+     * 无评论时的空汇总，避免每次新建对象。
+     */
+    private static final ReviewDiscussionService.DiscussionSummary EMPTY_DISCUSSION =
+            new ReviewDiscussionService.DiscussionSummary(0, List.of());
+
+    /**
+     * 创建评价服务。
+     *
+     * @param rows        评价主表读写
+     * @param writer      评价元数据写入
+     * @param purchases   消费资格校验
+     * @param images      图片归属校验
+     * @param contents    正文内容库访问
+     * @param json        JSON 编解码器
+     * @param authors     作者头像批量解析
+     * @param authority   修改与删除的操作者鉴权
+     * @param discussions 自由评论区服务
+     */
     public CommentServiceImpl(CommentMapper rows, CommentMetadataWriter writer, PurchaseVerifier purchases,
-                              ManagedImageClient images, CommentContentRepository contents, ObjectMapper json, AuthorAvatarService authors) {
+                              ManagedImageClient images, CommentContentRepository contents, ObjectMapper json,
+                              AuthorAvatarService authors, ReviewAuthorityService authority,
+                              ReviewDiscussionService discussions) {
         this.rows = rows;
         this.writer = writer;
         this.purchases = purchases;
@@ -47,6 +129,8 @@ public class CommentServiceImpl implements CommentService {
         this.contents = contents;
         this.json = json;
         this.authors = authors;
+        this.authority = authority;
+        this.discussions = discussions;
     }
 
     public CommentVO create(Long userId, String authorName, String bearer, String key, CreateCommentRequest input) {
@@ -85,11 +169,21 @@ public class CommentServiceImpl implements CommentService {
     }
 
     public List<CommentVO> forOrder(Long userId, Long orderId) {
-        var found = rows.byOrder(userId, orderId);
+        List<CommentRowDO> found = rows.byOrder(userId, orderId);
         if (found.isEmpty()) return List.of();
-        var bodies = contents.byIds(found.stream().map(CommentRowDO::commentId).toList());
-        var avatars = authors.resolve(List.of(userId));
-        return found.stream().map(row -> view(row, bodies.get(row.commentId()), avatars.getOrDefault(userId, ""))).toList();
+        List<String> commentIds = commentIds(found);
+        Map<String, CommentContentDO> bodies = contents.byIds(commentIds);
+        Map<Long, String> avatars = authors.resolve(List.of(userId));
+        // 订单详情会一次展示多道菜的评价，评论数与预览必须批量取，不能逐条查询。
+        Map<String, ReviewDiscussionService.DiscussionSummary> summaries =
+                discussions.summarize(ReviewType.COMMENT, commentIds, null);
+        if (summaries == null) summaries = Map.of();
+        List<CommentVO> views = new ArrayList<>(found.size());
+        for (CommentRowDO row : found) {
+            views.add(view(row, bodies.get(row.commentId()), avatars.getOrDefault(userId, ""),
+                    summaries.getOrDefault(row.commentId(), EMPTY_DISCUSSION)));
+        }
+        return views;
     }
 
     public CommentVO detail(String id) {
@@ -116,8 +210,142 @@ public class CommentServiceImpl implements CommentService {
             contents.putAll(this.contents.byIds(visible.stream().map(CommentRowDO::commentId).toList()));
         }
         var avatars = authors.resolve(visible.stream().map(CommentRowDO::userId).toList());
-        List<CommentVO> items = visible.stream().map(row -> view(row, contents.get(row.commentId()), avatars.getOrDefault(row.userId(), ""))).toList();
+        // 当前页所有评价的评论数与预览各一次批量查询，避免 50 条评价产生 50 次往返。
+        Map<String, ReviewDiscussionService.DiscussionSummary> summaries =
+                discussions.summarize(ReviewType.COMMENT, commentIds(visible), null);
+        if (summaries == null) summaries = Map.of();
+        List<CommentVO> items = new ArrayList<>(visible.size());
+        for (CommentRowDO row : visible) {
+            items.add(view(row, contents.get(row.commentId()), avatars.getOrDefault(row.userId(), ""),
+                    summaries.getOrDefault(row.commentId(), EMPTY_DISCUSSION)));
+        }
         return new CommentPageVO(items, more ? items.getLast().commentId() : null, more);
+    }
+
+    /**
+     * 修改一条已发布的菜品评价。
+     *
+     * <p>顺序刻意安排为"先改正文、再改元数据"：正文里包含评分之外的展示内容，元数据事务会同时
+     * 调整评分汇总并写 Outbox，一旦后者失败就回滚正文，保证用户看到的失败提示与实际状态一致。
+     * 反过来先写元数据，一旦 Mongo 失败就会出现"评分已变、正文未变"且无法自动回滚的局面。</p>
+     *
+     * @param operatorId 当前登录用户编号
+     * @param roles      当前登录用户的角色编码集合
+     * @param id         公开评价标识
+     * @param input      修改参数
+     * @return 修改后的评价视图
+     */
+    @Override
+    public CommentVO revise(Long operatorId, List<String> roles, String id, UpdateCommentRequest input) {
+        requireUuid(id);
+        if (input == null) throw bad("修改参数不能为空");
+        CommentRowDO row = requireRow(id);
+        authority.requireManageable(operatorId, roles, row.userId(), row.windowId());
+        CommentContentDO current = contents.byId(id);
+        if (current == null) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价内容暂不可用");
+        }
+
+        // 未传的字段表示保持原值；传空数组表示主动清空，二者必须区分。
+        String body = input.content() == null ? current.body() : input.content().trim();
+        List<String> fileKeys = input.imageFileKeys() == null
+                ? current.imageFileKeys() : normalizeImageKeys(input.imageFileKeys());
+        List<String> tags = input.tags() == null ? current.tags() : normalizeTags(input.tags());
+        boolean hasImages = !fileKeys.isEmpty();
+
+        boolean contentChanged = !Objects.equals(body, current.body())
+                || !Objects.equals(fileKeys, current.imageFileKeys())
+                || !Objects.equals(tags, current.tags());
+        boolean scoreChanged = row.score() != input.score();
+        if (!contentChanged && !scoreChanged) {
+            // 内容与评分都没有变化：直接返回原视图，不产生无意义的 Mapper 写入与下游评分事件。
+            return view(row, current, authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), ""));
+        }
+
+        // 只校验本次新增的图片；评价里已有的图片仍归原作者所有，允许原样保留。
+        for (String key : fileKeys) {
+            if (!current.imageFileKeys().contains(key)) {
+                images.requireImageKey(key, operatorId, "COMMENT_IMAGE", null);
+            }
+        }
+        if (contentChanged) {
+            if (contents.updateContent(id, body, fileKeys, tags) != 1) {
+                // 文档不存在或仍在首次提交流程中，不能继续改元数据，否则会出现"有评分没正文"。
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价内容暂不可用");
+            }
+        }
+        try {
+            writer.revise(id, row.productId(), row.score(), input.score(), hasImages);
+        } catch (RuntimeException exception) {
+            // 元数据事务已回滚，这里把正文补偿回修改前的内容。
+            if (contentChanged) {
+                restoreContent(id, current);
+            }
+            throw exception;
+        }
+
+        CommentRowDO updated = new CommentRowDO(row.commentId(), row.userId(), row.authorName(), row.orderId(),
+                row.productId(), row.windowId(), input.score(), row.requestKey(), row.requestHash(),
+                row.createdAt(), hasImages);
+        CommentContentDO content = new CommentContentDO(id, body, fileKeys, tags, current.createdAt(), true);
+        return view(updated, content, authors.resolve(List.of(updated.userId())).getOrDefault(updated.userId(), ""));
+    }
+
+    /**
+     * 删除一条已发布的菜品评价（软删除）。
+     *
+     * <p>正文留在内容库不删：删除后所有查询都按状态过滤，已经不可见；保留原文才能在申诉、
+     * 举报复核或误删恢复时还原事实。评分汇总与下游快照由元数据事务负责。</p>
+     *
+     * @param operatorId 当前登录用户编号
+     * @param roles      当前登录用户的角色编码集合
+     * @param id         公开评价标识
+     */
+    @Override
+    public void remove(Long operatorId, List<String> roles, String id) {
+        requireUuid(id);
+        CommentRowDO row = requireRow(id);
+        authority.requireManageable(operatorId, roles, row.userId(), row.windowId());
+        writer.remove(row);
+    }
+
+    /**
+     * 把正文补偿回修改前的内容。
+     *
+     * <p>补偿本身失败时只记录错误日志并带上评价标识：此时正文与元数据可能不一致，
+     * 需要人工按标识核对，不能吞掉原始异常。</p>
+     *
+     * @param id      评价标识
+     * @param current 修改前的正文快照
+     */
+    private void restoreContent(String id, CommentContentDO current) {
+        try {
+            contents.updateContent(id, current.body(), current.imageFileKeys(), current.tags());
+        } catch (RuntimeException restoreFailure) {
+            log.error("评价正文回滚失败，需人工核对，commentId={}", id, restoreFailure);
+        }
+    }
+
+    /**
+     * 归一化图片文件标识：去空白、统一小写并去重，与创建时的口径保持一致。
+     *
+     * @param keys 客户端提交的文件标识
+     * @return 归一化后的文件标识列表
+     */
+    private static List<String> normalizeImageKeys(List<String> keys) {
+        return keys.stream().map(key -> key.trim().toLowerCase(Locale.ROOT)).distinct().toList();
+    }
+
+    /**
+     * 归一化标签：去空白、去重，并拒绝空标签。
+     *
+     * @param tags 客户端提交的标签
+     * @return 归一化后的标签列表
+     */
+    private static List<String> normalizeTags(List<String> tags) {
+        List<String> normalized = tags.stream().map(String::trim).distinct().toList();
+        if (normalized.stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
+        return normalized;
     }
 
     private CommentRowDO requireRow(String id) {
@@ -134,13 +362,59 @@ public class CommentServiceImpl implements CommentService {
 
     private CommentVO view(CommentRowDO row) {
         CommentContentDO content = contents.byId(row.commentId());
-        return view(row, content, authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), ""));
+        String avatar = authors.resolve(List.of(row.userId())).getOrDefault(row.userId(), "");
+        return view(row, content, avatar, summaryOf(row.commentId()));
     }
 
     private CommentVO view(CommentRowDO row, CommentContentDO content, String avatarUrl) {
+        return view(row, content, avatarUrl, summaryOf(row.commentId()));
+    }
+
+    /**
+     * 拼装评价视图，附带评论数与预览。
+     *
+     * <p>列表与订单详情走批量汇总后调用本方法，单条详情走 {@link #summaryOf(String)}，
+     * 两条路径共用同一套字段拼装，避免字段遗漏或口径不一致。</p>
+     *
+     * @param row       评价元数据
+     * @param content   评价正文；缺失视为服务暂不可用
+     * @param avatarUrl 作者头像
+     * @param summary   评论汇总
+     * @return 评价视图
+     */
+    private CommentVO view(CommentRowDO row, CommentContentDO content, String avatarUrl,
+                           ReviewDiscussionService.DiscussionSummary summary) {
         if (content == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价内容暂不可用");
         return new CommentVO(row.commentId(), row.productId(), row.windowId(), row.authorName(), avatarUrl, row.score(),
-                content.body(), content.imageFileKeys().stream().map(FileReferences::url).toList(), content.tags(), row.createdAt());
+                content.body(), content.imageFileKeys().stream().map(FileReferences::url).toList(), content.tags(),
+                row.createdAt(), summary.count(), summary.previews());
+    }
+
+    /**
+     * 读取单条评价的评论汇总。
+     *
+     * @param commentId 评价公开标识
+     * @return 评论汇总；无评论时返回空汇总
+     */
+    private ReviewDiscussionService.DiscussionSummary summaryOf(String commentId) {
+        Map<String, ReviewDiscussionService.DiscussionSummary> map =
+                discussions.summarize(ReviewType.COMMENT, List.of(commentId), null);
+        ReviewDiscussionService.DiscussionSummary summary = map == null ? null : map.get(commentId);
+        return summary == null ? EMPTY_DISCUSSION : summary;
+    }
+
+    /**
+     * 提取评价公开标识列表。
+     *
+     * @param rows 评价元数据列表
+     * @return 公开标识列表
+     */
+    private static List<String> commentIds(List<CommentRowDO> rows) {
+        List<String> ids = new ArrayList<>(rows.size());
+        for (CommentRowDO row : rows) {
+            ids.add(row.commentId());
+        }
+        return ids;
     }
 
     private String hash(CreateCommentRequest body) {

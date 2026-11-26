@@ -20,6 +20,62 @@ public interface CommentWriteMapper {
             """)
     int updateRating(@Param("productId") Long productId, @Param("score") int score);
 
+    /**
+     * 修改未删除评价的评分与带图标记。
+     *
+     * <p>只更新 {@code status = 1} 的记录：返回 0 说明评价已被删除或并发状态已变化，
+     * 调用方必须据此失败，不能把"没改到"当作修改成功。
+     * {@code has_images} 由本次正文图片数量推导后写入，与评分一起在同一事务内生效。</p>
+     *
+     * @param id        公开评价标识
+     * @param score     新评分
+     * @param hasImages 修改后是否带图
+     * @return 受影响行数，正常为 1
+     */
+    @Update("""
+            UPDATE comments SET score=#{score}, has_images=#{hasImages}, updated_at=NOW(6)
+            WHERE comment_id=#{id} AND status=1
+            """)
+    int updateComment(@Param("id") String id, @Param("score") int score, @Param("hasImages") boolean hasImages);
+
+    /**
+     * 软删除未发布状态之外的评价。
+     *
+     * <p>保留正文与评分原始值，便于申诉与追责；列表、评分与汇总查询都带 {@code status = 1}，
+     * 因此删除后立即不可见。重复删除返回 0，由调用方按"已删除"处理。</p>
+     *
+     * @param id 公开评价标识
+     * @return 受影响行数，正常为 1
+     */
+    @Update("UPDATE comments SET status=2, updated_at=NOW(6) WHERE comment_id=#{id} AND status=1")
+    int deleteComment(@Param("id") String id);
+
+    /**
+     * 按增量调整菜品评分汇总，并递增版本号。
+     *
+     * <p>SQL 中带上界条件（调整后条数与总分都不能为负），命中不到行时返回 0，
+     * 由调用方抛出异常回滚整个本地事务，避免汇总与评价表出现不一致。
+     * 删除最后一条评价时 {@code countDelta = -1}、{@code scoreDelta = -原评分}，
+     * 结果条数与总分同时归零，符合放宽后的区间约束。</p>
+     *
+     * @param productId  菜品编号
+     * @param countDelta 评价条数增量
+     * @param scoreDelta 评分总和增量
+     * @return 受影响行数，正常为 1
+     */
+    @Update("""
+            UPDATE comment_rating_stats
+            SET review_count = review_count + #{countDelta},
+                score_total = score_total + #{scoreDelta},
+                revision = revision + 1
+            WHERE product_id = #{productId}
+              AND review_count + #{countDelta} >= 0
+              AND score_total + #{scoreDelta} >= 0
+            """)
+    int adjustRating(@Param("productId") Long productId,
+                     @Param("countDelta") int countDelta,
+                     @Param("scoreDelta") int scoreDelta);
+
     @Select("SELECT revision,review_count,score_total FROM comment_rating_stats WHERE product_id=#{productId} FOR UPDATE")
     RatingSnapshot lockRating(@Param("productId") Long productId);
 

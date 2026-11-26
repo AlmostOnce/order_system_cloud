@@ -161,3 +161,45 @@ comments.has_images只做筛选投影：新发布时随元数据/评分/Outbox�
 /Users/DELL/.codex/diagnostics/20261106-rating-mq/outbox-before-retry.tsv。
 
 用户自行启动商品服务后复核：product_db.product_rating_stats已从0恢复为2条，评分消息已被实际消费，读模型恢复。Codex未运行Maven或重启服务。
+
+## 2026-11-25 评价评论模型调整（后端已实施，迁移未执行）
+
+首期文档中“暂不含商家回复”的表述已不再作为产品目标。经确认，评价区改为**自由评论**：任何登录用户都可以对菜品评价、店铺评价发表评论，也可以回复其他人的评论；商家角色以官方身份参与，不再是“每条评价仅一条商家回复”。
+
+设计稿见 [评价自由评论区设计](COMMENT_REPLY_DESIGN.md)，关键变化如下：
+
+- 新增 `review_discussion` 表，一条评价对应多条评论，取消旧稿的单条回复唯一键。
+- 两层结构：顶层评论（楼层）+ 楼中楼回复；回复统一挂到楼层根节点，不开放无限嵌套。
+- 评价列表只返回评论数量与前 3 条预览，完整评论走独立分页接口，避免 N+1。
+- 发表/编辑/撤回只认作者本人；屏蔽评论需要档口管理范围，学生不能屏蔽他人。
+- 评论不参与评分汇总、排序、推荐与评分 MQ，评分链路零改动。
+- 防刷采用 Redis 固定窗口计数 + 分布式锁 + `request_key` 唯一键三层防护，复用 `common-redis` 既有能力，不新增限流基础设施。
+- 通知新增 `REVIEW_DISCUSSION` 类型与 `REVIEW` 偏好分类，落库仍走 `SystemNotificationWriter`。
+- 学生端的浏览、发表、撤回属于 CUSTOMER 功能；商家回复与屏蔽入口在 Vue 管理端，不在 uni-app 新增入口。
+
+### 已实施的后端改动
+
+- comment-service：新增 `review_discussion` 读写（`ReviewDiscussionMapper`/`ReviewDiscussionDO`）、
+  `ReviewDiscussionService`（发表、回复、编辑、撤回、屏蔽、顶层与楼层分页、批量汇总）、
+  `ReviewDiscussionController`（9 个接口方法）、消费准入 `DiscussionEligibilityService`、
+  限流与提交锁 `DiscussionGuard`、通知客户端 `CommentNotificationClient`。
+- 评价 VO：`CommentVO`、`WindowReviewVO` 新增 `discussionCount` 与 `discussions`，
+  列表与订单详情按页批量汇总，不产生逐条查询。
+- order-service：新增 `PurchaseFactMapper` 与 `GET /internal/orders/purchase-facts`，
+  按"用户 + 菜品/档口"返回已完成订单的消费事实，只返回布尔值。
+- notification-service：新增 `REVIEW_DISCUSSION` 类型、`REVIEW` 偏好分类、
+  `NotificationMapper.unreadCount` 类型映射与 `POST /internal/notifications/review-discussion`。
+- 学生端 uni-app（另一仓库）：评价卡片评论摘要与“查看全部/写第一条评论”入口、
+  `pages/review/discussions` 评论页（顶层分页、楼层回复、发表/回复/编辑/撤回、商家标识）、
+  通知中心评论区跳转；评论接口层补充分页解析与幂等键。
+- 评论完全不参与评分、排序、推荐与评分 MQ，评分链路零改动。
+
+### 未完成项
+
+- 管理端（Vue，另仓）的商家回复与屏蔽入口尚未接入。
+- `V6__create_review_discussion.sql` 已于 2026-11-26 在开发库 9095 执行并核验：
+  `comment_db.review_discussion` 建表成功，17 列、两个唯一键、三个普通索引与三条 CHECK 约束齐全，
+  `comment_service` 账号已有 SELECT/INSERT/UPDATE 授权。回滚为先下线评论接口再 `DROP TABLE`。
+- 未运行 Maven、未构建、未重启任何服务，Java 源码仅做静态检查；
+  单元测试源码已同步构造参数，但未执行；学生端仅做 Node 静态与行为校验，未构建、未联调。
+- 学生端与管理端前端未接入（分别在 uni-app 与 Vue 管理端仓库）。

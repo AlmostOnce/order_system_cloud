@@ -22,18 +22,24 @@ public interface CommentMapper {
     CommentRowDO byId(@Param("id") String id);
 
     /**
-     * 按本人和幂等请求键查找已有评论，供重复提交时复用原结果。
+     * 按本人和幂等请求键查找未删除的评论，供重复提交时复用原结果。
+     *
+     * <p>带 {@code status = 1}：评价被删除后，同一个请求键不能再被当作"已经创建成功"回放，
+     * 否则客户端会拿到一条实际已删除的评价。</p>
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
                    score, request_key, request_hash, created_at, has_images
             FROM comments
-            WHERE user_id = #{user} AND request_key = #{key}
+            WHERE user_id = #{user} AND request_key = #{key} AND status = 1
             """)
     CommentRowDO byRequest(@Param("user") Long user, @Param("key") String key);
 
     /**
      * 按订单和商品查找既有评论，防止同一购买明细重复评价。
+     *
+     * <p>刻意不带状态过滤：唯一键 {@code uk_comment_purchase} 对已删除评价同样成立，
+     * 这里必须能查到它，才能把"已经评价过、后来删除了"和"从未评价"区分开。</p>
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
@@ -94,13 +100,15 @@ public interface CommentMapper {
                                      @Param("hasImages") Boolean hasImages);
 
     /**
-     * 按本人和订单读取已提交的商品评论，并按评论 ID 稳定排序。
+     * 按本人和订单读取已提交且未删除的商品评论，并按评论 ID 稳定排序。
+     *
+     * <p>订单详情会按这道菜回显"已评价"状态，已删除的评价不能再算作已评价。</p>
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
                    score, request_key, request_hash, created_at, has_images
             FROM comments
-            WHERE user_id = #{user} AND order_id = #{order}
+            WHERE user_id = #{user} AND order_id = #{order} AND status = 1
             ORDER BY id
             """)
     List<CommentRowDO> byOrder(@Param("user") Long user, @Param("order") Long order);

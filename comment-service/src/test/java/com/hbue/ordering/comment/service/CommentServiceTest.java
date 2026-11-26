@@ -2,6 +2,7 @@ package com.hbue.ordering.comment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.comment.dto.CreateCommentRequest;
+import com.hbue.ordering.comment.dto.UpdateCommentRequest;
 import com.hbue.ordering.comment.mapper.CommentMapper;
 import com.hbue.ordering.comment.model.CommentContentDO;
 import com.hbue.ordering.comment.model.CommentRowDO;
@@ -12,6 +13,7 @@ import com.hbue.ordering.common.web.media.ManagedImageClient;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -25,7 +27,8 @@ class CommentServiceTest {
     private final CommentContentRepository mongo = mock(CommentContentRepository.class);
     private final ManagedImageClient images = mock(ManagedImageClient.class);
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
-    private final CommentService service = new CommentServiceImpl(rows, writer, purchases, images, mongo, json, mock(AuthorAvatarService.class));
+    private final CommentService service = new CommentServiceImpl(rows, writer, purchases, images, mongo, json,
+            mock(AuthorAvatarService.class), mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
     private final String key = "a1111111-1111-4111-8111-111111111111";
     private final CreateCommentRequest input = new CreateCommentRequest(7L, 5L, 5, "味道很好", List.of(), List.of("好吃"));
 
@@ -106,6 +109,68 @@ class CommentServiceTest {
         verify(writer).commit(metadata.capture());
         assertEquals(Boolean.FALSE, metadata.getValue().hasImages());
         assertTrue(saved.getValue().tags().isEmpty());
+    }
+
+    /**
+     * 修改评价时先改正文再改元数据，两处使用同一份评分与带图标记。
+     */
+    @Test
+    void reviseWritesContentBeforeMetadata() {
+        String id = key;
+        when(rows.byId(id)).thenReturn(row(id, 5));
+        when(mongo.byId(id)).thenAnswer(a ->
+                new CommentContentDO(id, "旧正文", List.of(), List.of(), Instant.now(), true));
+        when(mongo.updateContent(anyString(), anyString(), any(), any())).thenReturn(1L);
+
+        service.revise(9L, List.of("CUSTOMER"), id, new UpdateCommentRequest(4, "新正文", null, null));
+
+        var ordered = inOrder(mongo, writer);
+        ordered.verify(mongo).updateContent(eq(id), eq("新正文"), any(), any());
+        ordered.verify(writer).revise(id, 5L, 5, 4, false);
+    }
+
+    /**
+     * 元数据事务失败时正文必须回滚到修改前，避免"提示失败但内容已变"。
+     */
+    @Test
+    void reviseRollsBackContentWhenMetadataFails() {
+        String id = key;
+        when(rows.byId(id)).thenReturn(row(id, 5));
+        when(mongo.byId(id)).thenAnswer(a ->
+                new CommentContentDO(id, "旧正文", List.of(), List.of(), Instant.now(), true));
+        when(mongo.updateContent(anyString(), anyString(), any(), any())).thenReturn(1L);
+        doThrow(new IllegalStateException("db down"))
+                .when(writer).revise(anyString(), anyLong(), anyInt(), anyInt(), anyBoolean());
+
+        assertThrows(IllegalStateException.class,
+                () -> service.revise(9L, List.of("CUSTOMER"), id, new UpdateCommentRequest(5, "新正文", null, null)));
+        verify(mongo).updateContent(eq(id), eq("旧正文"), any(), any());
+    }
+
+    /**
+     * 删除只改元数据状态，正文保留在内容库中便于追责。
+     */
+    @Test
+    void removeDelegatesToMetadataWriterAndKeepsContent() {
+        String id = key;
+        var row = row(id, 5);
+        when(rows.byId(id)).thenReturn(row);
+
+        service.remove(9L, List.of("CUSTOMER"), id);
+
+        verify(writer).remove(row);
+        verify(mongo, never()).removeIfPending(anyString());
+    }
+
+    /**
+     * 构造一条已发布评价，供修改与删除用例复用。
+     *
+     * @param id    评价标识
+     * @param score 评分
+     * @return 评价元数据
+     */
+    private CommentRowDO row(String id, int score) {
+        return new CommentRowDO(id, 9L, "同学", 7L, 5L, 2L, score, id, "hash", LocalDateTime.now(), false);
     }
 
 }

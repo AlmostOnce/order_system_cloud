@@ -23,8 +23,10 @@ class ReviewScoreFilterTest {
         var comments = mock(CommentMapper.class);
         var windows = mock(WindowReviewMapper.class);
         var avatars = mock(AuthorAvatarService.class);
-        var service = new CommentServiceImpl(comments, null, null, null, null, new ObjectMapper(), avatars);
-        var shops = new WindowReviewServiceImpl(windows, null, null, new ObjectMapper(), avatars);
+        var service = new CommentServiceImpl(comments, null, null, null, null, new ObjectMapper(), avatars,
+                mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
+        var shops = new WindowReviewServiceImpl(windows, null, null, new ObjectMapper(), avatars,
+                mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
         for (int score : new int[]{0, 2, 3, 4, 6}) {
             assertThrows(BusinessException.class, () -> service.page(null, 1L, null, 20, score, null));
             assertThrows(BusinessException.class, () -> shops.page(null, 1L, null, 20, score, null));
@@ -47,7 +49,8 @@ class ReviewScoreFilterTest {
     void unknownImageMetadataRejectsPhotoFilterInsteadOfReturningFalseEmpty() {
         var rows = mock(CommentMapper.class);
         when(rows.hasUnknownImages(null, 7L)).thenReturn(true);
-        var service = new CommentServiceImpl(rows, null, null, null, null, new ObjectMapper(), null);
+        var service = new CommentServiceImpl(rows, null, null, null, null, new ObjectMapper(), null,
+                mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
         assertThrows(BusinessException.class, () -> service.page(null, 7L, null, 20, null, true));
         verify(rows).hasUnknownImages(null, 7L);
         verifyNoMoreInteractions(rows);

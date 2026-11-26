@@ -8,10 +8,31 @@ import com.hbue.ordering.order.api.vo.OrderReviewSnapshotVO;
 import feign.FeignException;
 import org.springframework.stereotype.Component;
 
+/**
+ * 评价资格的消费凭证校验实现。
+ *
+ * <p>评论服务不保存订单数据，必须向订单服务确认三件事：订单属于当前用户、订单已完成、
+ * 订单明细确实包含待评价菜品。三者全部通过才返回订单的店铺编号，供上层判定评价归属。</p>
+ *
+ * <p>失败映射：下游 401 视为未登录、403/404 统一视为"没有这笔订单"（避免通过状态码枚举他人订单），
+ * 其余异常返回 503；业务码异常一律不写入评价。</p>
+ *
+ * @author order-system
+ * @date 2026-10-28
+ */
 @Component
 public class PurchaseVerifierImpl implements PurchaseVerifier {
+
+    /**
+     * 订单服务内部客户端。
+     */
     private final CommentOrderClient orders;
 
+    /**
+     * 创建校验器。
+     *
+     * @param orders 订单服务内部客户端
+     */
     public PurchaseVerifierImpl(CommentOrderClient orders) {
         this.orders = orders;
     }
@@ -20,7 +41,7 @@ public class PurchaseVerifierImpl implements PurchaseVerifier {
         OrderReviewSnapshotVO order;
         try {
             var response = orders.getOrder(orderId, bearer);
-            if (response == null || !"COMMON_000".equals(response.getCode()) || response.getData() == null)
+            if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode()) || response.getData() == null)
                 throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "无法确认订单，请稍后重试");
             order = response.getData();
         } catch (FeignException exception) {

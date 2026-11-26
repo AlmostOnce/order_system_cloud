@@ -48,6 +48,9 @@ class CommentValidationTest {
         String id = "a1111111-1111-4111-8111-111111111111";
         assertTrue(new ProductRatingChangedEvent(1, id, 1L, 2, 2, 9).valid());
         assertFalse(new ProductRatingChangedEvent(1, id, 1L, 2, 2, 11).valid());
+        // 删掉最后一条评价时推送零值快照；条数为零却带着总分必须被拒绝。
+        assertTrue(new ProductRatingChangedEvent(1, id, 1L, 3, 0, 0).valid());
+        assertFalse(new ProductRatingChangedEvent(1, id, 1L, 3, 0, 1).valid());
         assertNull(ProductRatingVO.of(1L, 0, 0).averageScore());
         assertEquals("4.50", ProductRatingVO.of(1L, 2, 9).averageScore().toPlainString());
     }

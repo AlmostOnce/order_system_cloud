@@ -69,6 +69,15 @@ spring:
           commentOrderClient:
             connectTimeout: 3000
             readTimeout: 5000
+          # 消费准入是评论的前置校验，读超时不宜过长：宁可快速返回 503 让用户重试，
+          # 也不要把请求线程长时间挂在订单服务上。
+          commentPurchaseFactClient:
+            connectTimeout: 2000
+            readTimeout: 3000
+          # 通知属于提交后的旁路调用，失败只记日志，同样需要短超时。
+          commentNotificationClient:
+            connectTimeout: 2000
+            readTimeout: 3000
 security:
   jwt:
     issuer: ${JWT_ISSUER:http://localhost:9094}
