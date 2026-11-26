@@ -184,7 +184,7 @@ public class OrderDetailVO {
 
         return OrderDetailVO.builder()
                 .orderId(order.getOrderId())
-                .paymentExpiresAt(com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(order))
+                .paymentExpiresAt(com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(order))
                 .serverTime(System.currentTimeMillis())
                 .orderNo(order.getOrderNo())
                 .userId(order.getUserId())

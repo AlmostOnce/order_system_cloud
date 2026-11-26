@@ -48,10 +48,18 @@ public class SalesOutboxPublisher {
                     boolean confirmed = stream.send("salesPaid-out-0", MessageBuilder.withPayload(event)
                             .setHeader("KEYS", event.eventId()).build());
                     if (!confirmed) throw new IllegalStateException("Broker 未确认接收销量事件");
-                    outbox.markPublished(row.getEventId());
+                    // 状态更新失败说明这一行没被推进，必须走退避重试；否则消息会被反复重发。
+                    if (outbox.markPublished(row.getEventId()) != 1) {
+                        throw new IllegalStateException("销量事件 outbox 状态未能更新");
+                    }
                 } catch (Exception exception) {
+                    // 退避写入本身失败时只记录，不能中断本轮扫描，剩余待发记录仍应继续处理。
+                    try {
+                        outbox.retryLater(row.getEventId(), exception.getClass().getSimpleName());
+                    } catch (RuntimeException retryFailure) {
+                        log.error("销量事件退避记录失败，eventId={}", row.getEventId(), retryFailure);
+                    }
                     log.warn("销量事件发布待重试，eventId={}", row.getEventId(), exception);
-                    outbox.retryLater(row.getEventId(), exception.getClass().getSimpleName());
                 }
             }
         } catch (Exception exception) {

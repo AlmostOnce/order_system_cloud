@@ -70,7 +70,7 @@ public class OrderInternalVO {
     public static OrderInternalVO from(OrderDO orderDO) {
         return OrderInternalVO.builder()
                 .orderId(orderDO.getOrderId())
-                .paymentExpiresAt(com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(orderDO))
+                .paymentExpiresAt(com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(orderDO))
                 .serverTime(System.currentTimeMillis())
                 .orderNo(orderDO.getOrderNo())
                 .userId(orderDO.getUserId())

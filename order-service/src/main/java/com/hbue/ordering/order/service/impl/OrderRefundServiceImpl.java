@@ -19,7 +19,7 @@ import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.service.OrderRefundService;
 import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
-import com.hbue.ordering.order.service.RefundRules;
+import com.hbue.ordering.order.util.RefundRules;
 import com.hbue.ordering.order.vo.RefundPageVO;
 import com.hbue.ordering.order.vo.RefundVO;
 import org.springframework.beans.factory.annotation.Value;

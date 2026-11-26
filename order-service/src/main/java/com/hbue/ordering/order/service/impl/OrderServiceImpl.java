@@ -559,7 +559,7 @@ public class OrderServiceImpl
         OrderDO current = getOrderForStatusChange(orderId);
         if (getCurrentStatus(current) != OrderStatus.PENDING_PAYMENT)
             return OrderStatusVO.builder().orderId(orderId).status(current.getStatus()).build();
-        if (System.currentTimeMillis() < com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(current))
+        if (System.currentTimeMillis() < com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(current))
             throw new BusinessException(CommonErrorCode.CONFLICT, "订单尚未到支付截止时间");
         return cancelPendingOrder(current.getUserId(), orderId, true);
     }

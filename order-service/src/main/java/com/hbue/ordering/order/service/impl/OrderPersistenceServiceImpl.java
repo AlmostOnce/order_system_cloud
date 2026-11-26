@@ -2,6 +2,7 @@ package com.hbue.ordering.order.service.impl;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.order.coupon.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.enums.OrderStatus;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
@@ -10,7 +11,6 @@ import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.ranking.SalesOutboxWriter;
-import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -170,7 +170,7 @@ public class OrderPersistenceServiceImpl implements OrderPersistenceService {
         }
 
         timeoutOutbox.record(com.hbue.ordering.order.dto.OrderTimeoutEvent.of(order.getOrderId(),
-                com.hbue.ordering.order.service.OrderPaymentDeadline.epochMillis(order)));
+                com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(order)));
         return order;
     }
 

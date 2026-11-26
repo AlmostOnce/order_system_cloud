@@ -1,6 +1,6 @@
 package com.hbue.ordering.order.mapper;
 
-import com.hbue.ordering.order.service.CouponConsumeOutboxRow;
+import com.hbue.ordering.order.model.CouponConsumeOutboxRow;
 import org.apache.ibatis.annotations.*;
 
 import java.util.List;

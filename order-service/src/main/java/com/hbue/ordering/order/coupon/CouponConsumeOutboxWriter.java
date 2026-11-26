@@ -1,4 +1,4 @@
-package com.hbue.ordering.order.service;
+package com.hbue.ordering.order.coupon;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 将成功支付订单绑定的优惠券核销事实可靠写入订单库 Outbox。
+ *
+ * <p>写入与支付状态更新共用同一个本地事务（{@link Propagation#MANDATORY}），因此"订单已支付"
+ * 与"核销事件已落库"要么同时成功、要么同时回滚，不会出现已支付却永远不核销的订单。</p>
+ *
+ * <p>事件载荷在支付确认时一次性序列化落库，重试时只发这一份快照，避免重放时重新拼出不同内容。</p>
+ *
+ * @author order-system
+ * @date 2026-10-24
  */
 @Service
 public class CouponConsumeOutboxWriter {
@@ -23,10 +31,12 @@ public class CouponConsumeOutboxWriter {
      * 本地订单库待发事件存储，和订单支付状态共用本地事务。
      */
     private final CouponConsumeOutboxMapper outbox;
+
     /**
      * 支付 CAS 完成后读取的订单事实来源。
      */
     private final OrderMapper orders;
+
     /**
      * 生成固定消息体快照，不能在重试时重新拼出不同载荷。
      */
@@ -48,6 +58,9 @@ public class CouponConsumeOutboxWriter {
     /**
      * 对已支付且确实绑定用户券的订单记录唯一核销事件；无券订单不产生 MQ 消息。
      *
+     * <p>必须已存在外层事务：本方法以 MANDATORY 传播运行，直接调用会抛
+     * {@code IllegalTransactionStateException}，这是刻意设计，防止脱离支付事务单独落一条无法回溯的事件。</p>
+     *
      * @param orderId 已由支付 CAS 更新为成功的订单主键
      * @throws BusinessException     订单支付事实缺失或不完整时拒绝提交状态
      * @throws IllegalStateException 事件落库或序列化失败时让本地事务一并回滚
@@ -59,6 +72,7 @@ public class CouponConsumeOutboxWriter {
                 || !OrderStatus.PAID.getLabel().equals(order.getStatus())) {
             throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券核销事件缺少已支付订单事实");
         }
+        // 未使用优惠券的订单不需要核销，直接结束，不产生任何消息。
         if (order.getUserCouponId() == null) return;
         if (order.getUserCouponId() <= 0 || order.getOrderNo() == null || order.getOrderNo().isBlank()) {
             throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券核销事件缺少订单或用户券编号");
@@ -78,6 +92,9 @@ public class CouponConsumeOutboxWriter {
 
     /**
      * 核验券服务的消费回执并将 Outbox 标为 CONFIRMED；重复回执只对同一事件三元组幂等成功。
+     *
+     * <p>先尝试条件更新，再查是否已确认：券服务可能先提交核销、后到达回执的重复投递，
+     * 这种情况下必须返回成功而不是报冲突，否则券服务会无限重试。</p>
      *
      * @param request 券服务确认已提交的订单号、用户券和事件 ID
      * @throws BusinessException 请求不完整或与订单 Outbox 快照不匹配时拒绝确认

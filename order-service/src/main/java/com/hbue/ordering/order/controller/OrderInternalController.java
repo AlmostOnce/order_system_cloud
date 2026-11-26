@@ -6,12 +6,14 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.api.dto.CouponConsumeConfirmationRequest;
 import com.hbue.ordering.order.api.dto.OrderPaidCommand;
 import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
+import com.hbue.ordering.order.coupon.CouponConsumeOutboxWriter;
+import com.hbue.ordering.order.mapper.PurchaseFactMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.security.InternalTokenVerifier;
-import com.hbue.ordering.order.service.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.vo.PurchaseFactVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -53,19 +55,28 @@ public class OrderInternalController {
     private final CouponConsumeOutboxWriter couponConsumeOutboxWriter;
 
     /**
+     * 消费事实只读查询。
+     */
+    private final PurchaseFactMapper purchaseFacts;
+
+    /**
      * 创建订单服务内部接口。
      *
      * @param orderService          订单业务服务
      * @param internalTokenVerifier 内部令牌校验器
+     * @param couponConsumeOutboxWriter 支付后优惠券核销 Outbox 回执处理器
+     * @param purchaseFacts         消费事实只读查询
      */
     public OrderInternalController(
             OrderService orderService,
             InternalTokenVerifier internalTokenVerifier,
-            CouponConsumeOutboxWriter couponConsumeOutboxWriter
+            CouponConsumeOutboxWriter couponConsumeOutboxWriter,
+            PurchaseFactMapper purchaseFacts
     ) {
         this.orderService = orderService;
         this.internalTokenVerifier = internalTokenVerifier;
         this.couponConsumeOutboxWriter = couponConsumeOutboxWriter;
+        this.purchaseFacts = purchaseFacts;
     }
 
     /**
@@ -147,6 +158,44 @@ public class OrderInternalController {
         verifyInternalToken(token);
         couponConsumeOutboxWriter.confirm(request);
         return ApiResponse.success(null);
+    }
+
+    /**
+     * 查询用户是否具有某道菜或某个档口的有效消费事实。
+     *
+     * <p>供评论服务在发表评论前校验"必须消费过才能评论"。只返回布尔结论，
+     * 不返回订单号、金额或明细；{@code userId} 由评论服务从已认证身份解析后传入，
+     * 不接受终端用户直接指定他人编号。</p>
+     *
+     * <p>类型白名单在入口处校验：未知类型直接拒绝，避免拼写错误被静默当成某一种维度，
+     * 导致"买过菜"被当成"在该店消费过"这类错误的放行结论。</p>
+     *
+     * @param token      服务间共享令牌
+     * @param userId     用户内部编号
+     * @param targetType 目标类型：PRODUCT 菜品，WINDOW 档口
+     * @param targetId   菜品编号或档口编号
+     * @return 消费事实布尔结果
+     */
+    @GetMapping("/purchase-facts")
+    public ApiResponse<PurchaseFactVO> purchaseFact(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
+            @RequestParam("userId") Long userId,
+            @RequestParam("targetType") String targetType,
+            @RequestParam("targetId") Long targetId
+    ) {
+        verifyInternalToken(token);
+        if (userId == null || userId <= 0 || targetId == null || targetId <= 0) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用户编号与目标编号必须为正数");
+        }
+        if ("PRODUCT".equals(targetType)) {
+            return ApiResponse.success(new PurchaseFactVO(
+                    purchaseFacts.existsCompletedProductPurchase(userId, targetId)));
+        }
+        if ("WINDOW".equals(targetType)) {
+            return ApiResponse.success(new PurchaseFactVO(
+                    purchaseFacts.existsCompletedWindowPurchase(userId, targetId)));
+        }
+        throw new BusinessException(CommonErrorCode.BAD_REQUEST, "不支持的目标类型");
     }
 
     /**

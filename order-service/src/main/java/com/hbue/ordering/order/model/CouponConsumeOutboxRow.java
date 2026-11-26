@@ -1,9 +1,15 @@
-package com.hbue.ordering.order.service;
+package com.hbue.ordering.order.model;
 
 import lombok.Data;
 
 /**
  * 数据库中待发布或已发布的优惠券核销 Outbox 行。
+ *
+ * <p>只是表结构的读写载体，不含业务规则；载荷字段存的是支付确认时序列化的固定 JSON 快照，
+ * 发布器必须原样发送，不能反解析后重新拼装。</p>
+ *
+ * @author order-system
+ * @date 2026-10-24
  */
 @Data
 public class CouponConsumeOutboxRow {

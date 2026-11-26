@@ -1,7 +1,8 @@
-package com.hbue.ordering.order.service;
+package com.hbue.ordering.order.coupon;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.order.mapper.CouponConsumeOutboxMapper;
+import com.hbue.ordering.order.model.CouponConsumeOutboxRow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,22 +14,38 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * 将支付成功后的优惠券核销 Outbox 异步发布至 RocketMQ。
+ *
+ * <p>发布器只依赖本地 Outbox、JSON 解码器和同步确认的消息桥，不参与支付事务；支付事务只负责
+ * 把事件写进 Outbox 表，Broker 的可用性不会拖慢也不会回滚已经完成的支付。</p>
+ *
+ * <p>消息可能在 Broker 已接收但数据库尚未标记时重发，因此券服务必须按事件号/订单号幂等核销。</p>
+ *
+ * <p>本类与 {@link CouponConsumeOutboxWriter}、{@link OrderCouponConsumeEvent} 同属 coupon 特性包，
+ * 与 ranking/notification/recommendation 下的发布器保持一致的包组织方式。</p>
+ *
+ * @author order-system
+ * @date 2026-10-24
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(name = "coupon.consume.messaging.enabled", havingValue = "true")
 public class CouponConsumeOutboxPublisher {
 
+    /**
+     * 当前类日志对象。
+     */
     private static final Logger log = LoggerFactory.getLogger(CouponConsumeOutboxPublisher.class);
 
     /**
      * 读取待发记录并在同步发送后标记状态或安排退避重试。
      */
     private final CouponConsumeOutboxMapper outbox;
+
     /**
      * 验证数据库中已持久化的 JSON 快照。
      */
     private final ObjectMapper json;
+
     /**
      * 向配置好的优惠券核销 RocketMQ binding 发布事件。
      */
@@ -49,7 +66,9 @@ public class CouponConsumeOutboxPublisher {
 
     /**
      * 有界扫描待发记录；Broker 未确认或响应丢失时退避重试，不能影响已完成的支付确认事务。
-     * 消息可能在 Broker 已接收但数据库尚未标记时重发，因此券服务必须按事件号/订单号幂等核销。
+     *
+     * <p>单条失败只退避该条记录，不断开整轮扫描；退避写入本身失败时仅记录错误，
+     * 让下一轮调度重新读取同一行，避免把异常抛给调度线程导致后续任务全部停摆。</p>
      */
     @Scheduled(fixedDelayString = "${coupon.consume.messaging.publish-delay-ms:1000}")
     public void publishPending() {

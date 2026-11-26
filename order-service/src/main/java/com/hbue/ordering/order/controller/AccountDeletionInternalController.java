@@ -2,7 +2,7 @@ package com.hbue.ordering.order.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
-import com.hbue.ordering.order.service.impl.OrderAccountDeletionService;
+import com.hbue.ordering.order.service.OrderAccountDeletionService;
 import com.hbue.ordering.order.vo.AccountDeletionBlockersVO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

@@ -1,4 +1,4 @@
-package com.hbue.ordering.order.service;
+package com.hbue.ordering.order.coupon;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -16,6 +16,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * 支付券核销 Outbox 回执的轻量断言，不依赖数据库、Seata 或 RocketMQ。
+ *
+ * <p>测试与被测类同包，便于后续补充包内可见的辅助断言。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class CouponConsumeOutboxWriterTest {

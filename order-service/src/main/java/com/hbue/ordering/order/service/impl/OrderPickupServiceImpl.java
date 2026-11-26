@@ -17,14 +17,55 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 
+/**
+ * 取餐码生成与核销的实现。
+ *
+ * <p>核销流程固定为：按操作者做频控 → 按取餐码定位订单 → 校验操作者窗口范围 → 校验订单状态
+ * → 带版本条件的完成更新。任一步不满足都返回统一的"取餐码无效或订单不可核销"，
+ * 避免通过错误提示差异枚举有效取餐码。</p>
+ *
+ * <p>频控键按操作者而非 IP 计数：取餐码只有 6 位，必须限制单个账号的尝试次数才能防止穷举。</p>
+ *
+ * @author order-system
+ * @date 2026-10-18
+ */
 @Service
 public class OrderPickupServiceImpl implements OrderPickupService {
+
+    /**
+     * 订单查询。
+     */
     private final OrderMapper orders;
+
+    /**
+     * 取餐码生成与状态推进的持久化服务。
+     */
     private final OrderPersistenceService persistence;
+
+    /**
+     * 窗口数据范围判定，确保店员只能核销自己档口的订单。
+     */
     private final DataScopeService scopes;
+
+    /**
+     * Redis 频控计数。
+     */
     private final RedisOperationsService redis;
+
+    /**
+     * 管理操作审计日志。
+     */
     private final ManagementAuditLogger audit;
 
+    /**
+     * 创建取餐服务。
+     *
+     * @param orders      订单查询
+     * @param persistence 取餐码与状态持久化
+     * @param scopes      窗口数据范围判定
+     * @param redis       频控计数
+     * @param audit       审计日志
+     */
     public OrderPickupServiceImpl(OrderMapper orders, OrderPersistenceService persistence,
                                   DataScopeService scopes, RedisOperationsService redis, ManagementAuditLogger audit) {
         this.orders = orders;

@@ -1,4 +1,4 @@
-package com.hbue.ordering.order.service;
+package com.hbue.ordering.order.util;
 
 import com.hbue.ordering.common.core.exception.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -10,8 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 纯业务规则边界；测试源码随实现交付，当前未授权运行Java测试。
+ *
+ * <p>状态入参仍使用中文标签，与数据库存储值一致；规则内部已改为引用
+ * {@code OrderStatus} 常量，因此这里同时充当"标签值未漂移"的回归断言。</p>
  */
 class RefundRulesTest {
+
     /**
      * 前两份向下分摊，最后一份承接余分，累计始终等于实付而非标价。
      */
