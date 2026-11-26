@@ -70,4 +70,19 @@ public class PaymentOrderGateServiceImpl implements PaymentOrderGateService {
             mapper.beginClose(id);
         });
     }
+
+    /**
+     * 撤销关闭意图，恢复支付入口。
+     *
+     * <p>与 {@link #beginClose(Long)} 使用同一份"补行 → 行锁 → 更新"顺序，避免撤销与并发关单互相覆盖；
+     * 不在事务内做任何远程调用，失败时整体回滚，不会留下半关闭状态。</p>
+     */
+    @Override
+    public void reopen(Long id) {
+        transactions.executeWithoutResult(status -> {
+            mapper.ensure(id);
+            mapper.lock(id);
+            mapper.reopen(id);
+        });
+    }
 }

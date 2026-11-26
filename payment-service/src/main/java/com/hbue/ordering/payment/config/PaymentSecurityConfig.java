@@ -96,6 +96,8 @@ public class PaymentSecurityConfig {
                         .requestMatchers("/internal/payments/notify").permitAll()
                         .requestMatchers("/internal/payments/orders/*/refund-fact", "/internal/payments/orders/*/refund").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/internal/payments/orders/*/close").permitAll()
+                        // 订单取消失败时撤销关闭意图，与关单一样由内部共享令牌鉴权，不经 Gateway 暴露。
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/internal/payments/orders/*/reopen").permitAll()
                         // 模拟收银台仅 dev 环境启用且不经 Gateway 暴露。
                         .requestMatchers("/mock/**").permitAll()
                         .anyRequest().authenticated())

@@ -36,4 +36,15 @@ public interface PaymentOrderGateService {
      * @param orderId 订单主键
      */
     void beginClose(Long orderId);
+
+    /**
+     * 撤销关闭意图，恢复支付入口。
+     *
+     * <p>订单取消在关单之后还可能因回补库存、释放优惠券等步骤失败而整体回滚；此时订单仍是
+     * "待支付"，支付入口不能保持在关闭状态，否则用户既不能取消也不能支付。撤销同样在行锁内执行，
+     * 与并发的关单、支付回调串行；本方法幂等。</p>
+     *
+     * @param orderId 订单主键
+     */
+    void reopen(Long orderId);
 }

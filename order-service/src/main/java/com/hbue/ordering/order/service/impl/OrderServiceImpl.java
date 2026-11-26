@@ -586,66 +586,105 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
-        ApiResponse<PaymentCloseVO> closure = paymentClose.close(orderId, internalScopeToken);
-        if (closure == null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode()))
+        // 关单请求本身可能超时或返回失败；支付库可能已经置位关闭，而订单取消并未成立，因此同样要补偿。
+        ApiResponse<PaymentCloseVO> closure;
+        try {
+            closure = paymentClose.close(orderId, internalScopeToken);
+        } catch (RuntimeException exception) {
+            reopenPaymentGate(orderId);
+            throw exception;
+        }
+        if (closure == null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode())) {
+            reopenPaymentGate(orderId);
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法确认支付关闭结果，请稍后重试");
+        }
         var closeResult = closure.getData();
-        if (closeResult == null)
+        if (closeResult == null) {
+            reopenPaymentGate(orderId);
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "支付服务没有返回关单结果");
+        }
         if ("PAID".equals(closeResult.status())) {
             // 关单与支付成功竞争时，支付服务返回其持久化的 success_time，订单不能自行用当前时间补猜。
+            // 款项已到账不能撤销关闭意图，否则后续回调可能在已支付订单上再次记账。
             if (closeResult.paidAt() == null)
                 throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "无法确认支付成功时间，请稍后重试");
             return markOrderPaid(orderId, closeResult.paidAt());
         }
-        if (!"CLOSED".equals(closeResult.status()))
+        if (!"CLOSED".equals(closeResult.status())) {
+            reopenPaymentGate(orderId);
             throw new BusinessException(CommonErrorCode.CONFLICT, "支付结果待确认，不能取消订单");
-        // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
-        orderDO = getOrderForStatusChange(orderId);
-        if (getCurrentStatus(orderDO) == OrderStatus.CANCELLED)
-            return OrderStatusVO.builder().orderId(orderId).status(OrderStatus.CANCELLED.getLabel()).build();
-        if (getCurrentStatus(orderDO) != OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
-
-        // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
-        // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
-        OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
-        List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
-        if (orderItems == null || orderItems.isEmpty()) {
-            throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
         }
-        // 规格分行不拆分库存；向库存服务提交每道菜的合计回补数量，保持其现有幂等键语义。
-        Map<Long, Long> quantitiesByProduct = new TreeMap<>();
-        for (OrderItemDO item : orderItems) {
-            quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
-        }
-        List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
-        ApiResponse<Void> response;
         try {
-            response = stockServiceClient.restore(internalScopeToken,
-                    StockRestoreRequest.builder()
-                            .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
-                            .items(stockItems).operatorId(automatic ? null : userId)
-                            .remark(automatic ? "订单十五分钟未支付自动取消" : "顾客取消待支付订单").build());
+            // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
+            orderDO = getOrderForStatusChange(orderId);
+            if (getCurrentStatus(orderDO) == OrderStatus.CANCELLED)
+                return OrderStatusVO.builder().orderId(orderId).status(OrderStatus.CANCELLED.getLabel()).build();
+            if (getCurrentStatus(orderDO) != OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
+
+            // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
+            // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
+            OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
+            List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
+            if (orderItems == null || orderItems.isEmpty()) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
+            }
+            // 规格分行不拆分库存；向库存服务提交每道菜的合计回补数量，保持其现有幂等键语义。
+            Map<Long, Long> quantitiesByProduct = new TreeMap<>();
+            for (OrderItemDO item : orderItems) {
+                quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
+            }
+            List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
+            ApiResponse<Void> response;
+            try {
+                response = stockServiceClient.restore(internalScopeToken,
+                        StockRestoreRequest.builder()
+                                .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
+                                .items(stockItems).operatorId(automatic ? null : userId)
+                                .remark(automatic ? "订单十五分钟未支付自动取消" : "顾客取消待支付订单").build());
+            } catch (RuntimeException exception) {
+                log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            }
+            if (response == null || CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            }
+            if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
+                throw new BusinessException(CommonErrorCode.CONFLICT,
+                        response.getMessage() == null || response.getMessage().isBlank()
+                                ? "库存回补失败，请稍后重试取消" : response.getMessage());
+            }
+            if (cancellationNotificationEnabled) {
+                CancellationNotificationTcc participant = cancellationNotification.getIfAvailable();
+                if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
+                    throw new IllegalStateException("取消通知事务准备失败");
+            }
+            // 只有支付已确认关闭、订单取消和库存回补均成功后才释放券；远程失败抛出以回滚整个 Seata 事务。
+            releaseCoupon(orderDO);
+            return result;
         } catch (RuntimeException exception) {
-            log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            // 关单已确认且不存在成功支付，但取消本身未能提交（状态迁移/回补/释放券失败，全局事务回滚）。
+            // 支付库的关闭标记不随 Seata 回滚，这里补偿撤销，避免订单仍是待支付却永久无法支付。
+            reopenPaymentGate(orderId);
+            throw exception;
         }
-        if (response == null || CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+    }
+
+    /**
+     * 尽力撤销支付入口的关闭意图。
+     *
+     * <p>补偿发生在订单取消失败路径上，不能因为补偿本身失败而掩盖原始异常，因此只记录告警。
+     * 若补偿未生效，支付入口会保持关闭直至订单超时自动取消；该情况会留下可检索的告警日志。</p>
+     *
+     * @param orderId 取消失败的订单主键
+     */
+    private void reopenPaymentGate(Long orderId) {
+        try {
+            ApiResponse<Void> response = paymentClose.reopen(orderId, internalScopeToken);
+            if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode()))
+                log.warn("撤销支付入口关闭意图未确认：订单 {}", orderId);
+        } catch (RuntimeException exception) {
+            log.warn("撤销支付入口关闭意图失败：订单 {}", orderId, exception);
         }
-        if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
-            throw new BusinessException(CommonErrorCode.CONFLICT,
-                    response.getMessage() == null || response.getMessage().isBlank()
-                            ? "库存回补失败，请稍后重试取消" : response.getMessage());
-        }
-        if (cancellationNotificationEnabled) {
-            CancellationNotificationTcc participant = cancellationNotification.getIfAvailable();
-            if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
-                throw new IllegalStateException("取消通知事务准备失败");
-        }
-        // 只有支付已确认关闭、订单取消和库存回补均成功后才释放券；远程失败抛出以回滚整个 Seata 事务。
-        releaseCoupon(orderDO);
-        return result;
     }
 
     /**

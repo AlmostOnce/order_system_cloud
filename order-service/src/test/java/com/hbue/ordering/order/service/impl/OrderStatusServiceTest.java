@@ -225,9 +225,59 @@ class OrderStatusServiceTest {
         assertEquals(CommonErrorCode.SERVICE_UNAVAILABLE.code(), exception.getErrorCode().code());
     }
 
+    /**
+     * 关单已确认返回 CLOSED，但后续回补库存失败时订单会回滚为待支付；
+     * 支付库的关闭标记不随全局事务回滚，必须补偿撤销，否则用户再也无法支付该订单。
+     */
     @Test
-    void shouldNotRestoreStockAgainWhenAlreadyCancelled() {
-        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "已取消", 5));
+    void shouldReopenPaymentGateWhenCancellationRollsBackAfterClose() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
+        when(orderPersistenceService.updateStatusIfUnchanged(ORDER_ID, "待支付", 4, "已取消"))
+                .thenReturn(true);
+        OrderItemDO item = new OrderItemDO();
+        item.setProductId(101L);
+        item.setQuantity(2);
+        when(orderItemMapper.selectByOrderId(ORDER_ID)).thenReturn(List.of(item));
+        when(stockServiceClient.restore(eq("test-internal-token"), any()))
+                .thenReturn(ApiResponse.failure(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用"));
+
+        assertThrows(BusinessException.class, () -> orderService.cancelOrder(CUSTOMER_ID, ORDER_ID));
+
+        verify(paymentClose).reopen(ORDER_ID, "test-internal-token");
+    }
+
+    /**
+     * 关单调用本身抛错时订单取消不成立，同样要撤销可能已经置位的关闭标记。
+     */
+    @Test
+    void shouldReopenPaymentGateWhenCloseCallThrows() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
+        when(paymentClose.close(ORDER_ID, "test-internal-token"))
+                .thenThrow(new IllegalStateException("payments unavailable"));
+
+        assertThrows(IllegalStateException.class, () -> orderService.cancelOrder(CUSTOMER_ID, ORDER_ID));
+
+        verify(paymentClose).reopen(ORDER_ID, "test-internal-token");
+    }
+
+    /**
+     * 关单确认支付已成功时不能撤销关闭标记，否则晚到回调可能在已支付订单上再次记账。
+     */
+    @Test
+    void shouldNotReopenPaymentGateWhenPaymentAlreadySucceeded() {
+        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "待支付", 4));
+        when(paymentClose.close(ORDER_ID, "test-internal-token"))
+                .thenReturn(ApiResponse.success(new PaymentCloseVO("PAID", LocalDateTime.of(2026, 11, 17, 10, 30))));
+        when(orderPersistenceService.markPaidIfUnchanged(ORDER_ID, 4, LocalDateTime.of(2026, 11, 17, 10, 30)))
+                .thenReturn(true);
+
+        assertEquals("已支付", orderService.cancelOrder(CUSTOMER_ID, ORDER_ID).getStatus());
+
+        verify(paymentClose, never()).reopen(any(), any());
+    }
+
+    @Test
+    void shouldNotRestoreStockAgainWhenAlreadyCancelled() {        when(orderMapper.selectById(ORDER_ID)).thenReturn(order(CUSTOMER_ID, "已取消", 5));
         assertEquals("已取消", orderService.cancelOrder(CUSTOMER_ID, ORDER_ID).getStatus());
         verify(stockServiceClient, never()).restore(any(), any());
     }

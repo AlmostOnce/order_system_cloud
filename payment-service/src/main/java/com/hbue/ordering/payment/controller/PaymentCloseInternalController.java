@@ -2,6 +2,7 @@ package com.hbue.ordering.payment.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
+import com.hbue.ordering.payment.service.PaymentOrderGateService;
 import com.hbue.ordering.payment.service.PaymentService;
 import com.hbue.ordering.payment.vo.PaymentCloseResult;
 import org.springframework.web.bind.annotation.*;
@@ -17,13 +18,15 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/internal/payments/orders")
 public class PaymentCloseInternalController {
     private final PaymentService payments;
+    private final PaymentOrderGateService gate;
     private final InternalScopeTokenVerifier tokens;
 
     /**
-     * 注入关单业务服务和共享密钥校验器；本 Controller 不实现支付状态迁移本身。
+     * 注入关单业务服务、支付入口闸门和共享密钥校验器；本 Controller 不实现支付状态迁移本身。
      */
-    public PaymentCloseInternalController(PaymentService payments, InternalScopeTokenVerifier tokens) {
+    public PaymentCloseInternalController(PaymentService payments, PaymentOrderGateService gate, InternalScopeTokenVerifier tokens) {
         this.payments = payments;
+        this.gate = gate;
         this.tokens = tokens;
     }
 
@@ -42,5 +45,26 @@ public class PaymentCloseInternalController {
         tokens.verify(token);
         if (orderId == null || orderId <= 0) throw new IllegalArgumentException("订单编号无效");
         return ApiResponse.success(payments.closeUnpaidOrder(orderId));
+    }
+
+    /**
+     * 撤销支付入口关闭意图。
+     *
+     * <p>订单取消是分布式事务：本接口的关单先落在支付库，若订单侧回补库存或释放券失败，
+     * 订单整体回滚为"待支付"，此时必须撤销关闭标记，否则用户无法继续支付。该补偿可重复调用。</p>
+     *
+     * @param orderId 目标订单主键，必须为正数
+     * @param token   订单服务携带的内部共享令牌
+     * @return 空响应，表示已尝试恢复为开放状态
+     */
+    @PostMapping("/{orderId}/reopen")
+    public ApiResponse<Void> reopen(
+            @PathVariable("orderId") Long orderId,
+            @RequestHeader(value = "X-Internal-Token", required = false) String token
+    ) {
+        tokens.verify(token);
+        if (orderId == null || orderId <= 0) throw new IllegalArgumentException("订单编号无效");
+        gate.reopen(orderId);
+        return ApiResponse.success(null);
     }
 }
