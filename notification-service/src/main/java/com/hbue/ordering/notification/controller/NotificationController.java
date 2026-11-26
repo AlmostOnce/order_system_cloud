@@ -4,6 +4,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.notification.dto.NotificationPreferenceUpdateRequest;
 import com.hbue.ordering.notification.service.NotificationPreferenceService;
 import com.hbue.ordering.notification.service.NotificationService;
+import com.hbue.ordering.notification.vo.NotificationConversationVO;
 import com.hbue.ordering.notification.vo.NotificationPageVO;
 import com.hbue.ordering.notification.vo.NotificationPreferenceVO;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,6 +49,17 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public ApiResponse<Long> unread(@AuthenticationPrincipal Jwt jwt) {
         return ApiResponse.success(service.unreadCount(Long.parseLong(jwt.getSubject())));
+    }
+
+    /**
+     * 查询当前用户的系统通知会话。
+     *
+     * <p>会话是消息页的一等对象：是否存在由服务端根据历史通知决定，客户端不再
+     * 硬编码「订单中心」空会话；未读数与红点使用同一统计口径。</p>
+     */
+    @GetMapping("/conversations")
+    public ApiResponse<List<NotificationConversationVO>> conversations(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.success(service.conversations(Long.parseLong(jwt.getSubject())));
     }
 
     /**

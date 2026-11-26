@@ -4,10 +4,13 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.notification.mapper.NotificationMapper;
 import com.hbue.ordering.notification.service.NotificationService;
+import com.hbue.ordering.notification.service.SystemConversationService;
+import com.hbue.ordering.notification.vo.NotificationConversationVO;
 import com.hbue.ordering.notification.vo.NotificationPageVO;
 import com.hbue.ordering.notification.vo.NotificationVO;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -19,10 +22,16 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationMapper repository;
 
     /**
-     * 注入系统通知Mapper，所有读写都由业务方法绑定当前认证用户范围。
+     * 系统会话业务：订单中心等系统会话是持久化实体，由独立服务维护创建与摘要推进。
      */
-    public NotificationServiceImpl(NotificationMapper repository) {
+    private final SystemConversationService systemConversations;
+
+    /**
+     * 注入系统通知Mapper与会话服务，所有读写都由业务方法绑定当前认证用户范围。
+     */
+    public NotificationServiceImpl(NotificationMapper repository, SystemConversationService systemConversations) {
         this.repository = repository;
+        this.systemConversations = systemConversations;
     }
 
     /**
@@ -44,6 +53,21 @@ public class NotificationServiceImpl implements NotificationService {
      */
     public long unreadCount(long userId) {
         return repository.unreadCount(userId);
+    }
+
+    /**
+     * 查询当前用户的系统通知会话。
+     *
+     * <p>系统通知目前归入唯一的「订单中心」会话：有历史通知才返回，从未收到
+     * 通知时返回空列表，由前端展示统一空态，不再伪造空会话。会话未读数复用
+     * 红点统计口径，被通知偏好关闭的分类不计入角标。</p>
+     *
+     * @param userId 当前认证用户内部编号
+     * @return 会话列表；没有历史通知时为空
+     */
+    public List<NotificationConversationVO> conversations(long userId) {
+        // 会话由持久化实体提供：订单中心常驻，历史通知在会话首次读取时回填摘要。
+        return systemConversations.list(userId);
     }
 
     /**

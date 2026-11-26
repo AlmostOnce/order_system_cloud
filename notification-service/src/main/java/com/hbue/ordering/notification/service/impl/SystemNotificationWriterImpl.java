@@ -5,6 +5,7 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.notification.dto.NotificationDraft;
 import com.hbue.ordering.notification.mapper.NotificationMapper;
 import com.hbue.ordering.notification.service.NotificationPreferenceService;
+import com.hbue.ordering.notification.service.SystemConversationService;
 import com.hbue.ordering.notification.service.SystemNotificationWriter;
 import com.hbue.ordering.notification.websocket.NotificationSocketBus;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -76,17 +78,25 @@ public class SystemNotificationWriterImpl implements SystemNotificationWriter {
     private final NotificationPreferenceService preferences;
 
     /**
+     * 系统会话业务：所有系统通知统一推进订单中心会话摘要。
+     */
+    private final SystemConversationService systemConversations;
+
+    /**
      * 创建站内信写入器。
      *
-     * @param repository  通知数据访问
-     * @param socketBus   多实例在线提示总线
-     * @param preferences 通知偏好业务
+     * @param repository          通知数据访问
+     * @param socketBus           多实例在线提示总线
+     * @param preferences         通知偏好业务
+     * @param systemConversations 系统会话业务
      */
     public SystemNotificationWriterImpl(NotificationMapper repository, NotificationSocketBus socketBus,
-                                        NotificationPreferenceService preferences) {
+                                        NotificationPreferenceService preferences,
+                                        SystemConversationService systemConversations) {
         this.repository = repository;
         this.socketBus = socketBus;
         this.preferences = preferences;
+        this.systemConversations = systemConversations;
     }
 
     /**
@@ -118,6 +128,9 @@ public class SystemNotificationWriterImpl implements SystemNotificationWriter {
         try {
             repository.insertEvent(UUID.randomUUID().toString(), recipientId, eventId,
                     draft.type(), safeTitle, safeContent, draft.bizType(), bizId);
+            // 所有系统通知都归入订单中心会话，保持改造前“最新一条通知即会话摘要”的展示口径。
+            systemConversations.advance(recipientId, SystemConversationServiceImpl.TYPE_ORDER,
+                    SystemConversationServiceImpl.TITLE_ORDER, safeContent, LocalDateTime.now());
             // 通知记录始终落库；关闭该类提醒时只跳过实时提示，消息中心仍可查看。
             if (preferences.isEnabled(recipientId, draft.category())) {
                 // 只有通知记录真正提交后才提示在线客户端刷新，回滚时不发送虚假变化。

@@ -24,6 +24,18 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
     List<NotificationDO> page(@Param("userId") long userId, @Param("cursor") String cursor, @Param("size") int size);
 
     /**
+     * 查询当前用户最新一条系统通知，用于生成消息页的会话摘要。
+     *
+     * <p>只按接收人范围取内部主键最大的一行，依赖 recipient_id + id 索引；
+     * 没有通知时返回 null，由上层决定不返回空会话。</p>
+     */
+    @Select("""
+            SELECT notification_id,notification_type,title,content,order_id,biz_type,biz_id,created_at,read_at
+            FROM notifications WHERE recipient_id=#{userId} ORDER BY id DESC LIMIT 1
+            """)
+    NotificationDO latest(@Param("userId") long userId);
+
+    /**
      * 检查公开通知是否属于指定认证用户，用于隐藏他人通知的存在性。
      */
     @Select("SELECT EXISTS(SELECT 1 FROM notifications WHERE recipient_id=#{userId} AND notification_id=#{id})")
