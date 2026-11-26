@@ -257,14 +257,38 @@ public class ChatServiceImpl implements ChatService {
     }
 
     /**
-     * 供在线推送筛选接收者。资源不存在、授权撤销或依赖异常都返回false，不向该连接泄露聊天内容。
+     * 批量筛选在线推送接收者。
+     *
+     * <p>先查一次会话、再查一次订单上下文，之后按用户判权：顾客只需比对订单顾客编号，不产生远程调用；
+     * 店主才回源角色与直接窗口。任一步失败都不推送该用户，不向在线连接泄露会话信息。</p>
      */
-    public boolean canRead(long uid, String uuid) {
+    public java.util.Set<Long> readableUsers(String uuid, java.util.Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) return java.util.Set.of();
         try {
-            require(uid, uuid);
-            return true;
+            var row = conversations.find(uuid);
+            if (row == null) return java.util.Set.of();
+            var order = access.order(row.getOrderId());
+            if (order == null) return java.util.Set.of();
+            var allowed = new java.util.HashSet<Long>();
+            for (Long uid : userIds) {
+                if (uid == null) continue;
+                // 顾客归属只比对订单事实，命中即授权，无需再查用户服务。
+                if (uid.equals(order.customerId())) {
+                    allowed.add(uid);
+                    continue;
+                }
+                try {
+                    var actor = access.actor(uid);
+                    if ("STALL_MANAGER".equals(actor.role()) && actor.windows().contains(order.windowId()))
+                        allowed.add(uid);
+                } catch (RuntimeException ignored) {
+                    // 单个接收者授权失败只跳过本人，不影响同一事件的其他连接。
+                }
+            }
+            return allowed;
         } catch (RuntimeException e) {
-            return false;
+            // 会话或订单事实不可用时整条事件都不推送，保持与逐条校验一致的 fail-closed。
+            return java.util.Set.of();
         }
     }
 

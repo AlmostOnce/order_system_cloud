@@ -189,18 +189,30 @@ public class NotificationSocketHandler extends TextWebSocketHandler implements S
     }
 
     /**
-     * 对在线连接逐一复核该会话当前权限，仅向授权用户发送chat.changed。无权限或依赖不可用时不发送会话正文。
+     * 向该会话的授权在线用户推送 chat.changed。
+     *
+     * <p>先汇总在线身份，再由业务层一次性判定接收者：每条事件只回源一次会话与订单上下文，
+     * 不再按连接逐条回源，避免在线连接数把跨服务调用放大成 N 倍。无权限或依赖不可用时不发送正文。</p>
      */
     public void notifyChat(String uuid) {
         if (!chatEnabled || uuid == null || !uuid.matches("[0-9a-f-]{36}")) return;
+        var recipients = new java.util.HashMap<String, NotificationTicketService.SessionIdentity>();
+        var userIds = new java.util.HashSet<Long>();
         for (var session : sessions.values()) {
             var identity = (NotificationTicketService.SessionIdentity) session.getAttributes().get(IDENTITY);
             if (!valid(identity)) {
                 close(session);
                 continue;
             }
-            // 只推轻量信号；每次核验当前权限，不向撤权店主发送任何正文。
-            if (!chats.canRead(identity.userId(), uuid)) continue;
+            recipients.put(session.getId(), identity);
+            userIds.add(identity.userId());
+        }
+        if (recipients.isEmpty()) return;
+        var allowed = chats.readableUsers(uuid, userIds);
+        for (var entry : recipients.entrySet()) {
+            if (!allowed.contains(entry.getValue().userId())) continue;
+            var session = sessions.get(entry.getKey());
+            if (session == null) continue;
             try {
                 reply(session, java.util.Map.of("type", "chat.changed", "conversationUuid", uuid));
             } catch (java.io.IOException | RuntimeException e) {

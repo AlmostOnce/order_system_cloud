@@ -48,9 +48,36 @@ class ChatServiceTest {
         when(a.order(8)).thenReturn(new OrderChatContextVO(8L, "O8", 7L, 3L, "店铺", "已支付", null));
     }
 
+    /**
+     * 每条聊天事件只查一次会话与订单：顾客按订单顾客编号直接命中，店主按直接窗口判定。
+     */
     @Test
-    void retryReturnsCommittedMessageWithoutWritingOrRateLimit() {
-        sender();
+    void readableUsersResolvesRecipientsFromSingleConversationLookup() {
+        when(c.find(CHAT)).thenReturn(conversation());
+        when(a.order(8)).thenReturn(new OrderChatContextVO(8L, "O8", 7L, 3L, "店铺", "已支付", null));
+        when(a.actor(9)).thenReturn(new ChatAccessService.Actor(9, KEY, "店主", "STALL_MANAGER", List.of(3L)));
+        when(a.actor(10)).thenReturn(new ChatAccessService.Actor(10, KEY, "店主", "STALL_MANAGER", List.of(4L)));
+
+        assertEquals(java.util.Set.of(7L, 9L), service.readableUsers(CHAT, List.of(7L, 9L, 10L)));
+
+        verify(c).find(CHAT);
+        verify(a, times(1)).order(8);
+        // 顾客本人只比对订单事实，不再为每个连接回源用户服务。
+        verify(a, never()).actor(7);
+    }
+
+    /**
+     * 会话或订单事实不可用时整条事件都不推送，保持与逐条校验一致的 fail-closed。
+     */
+    @Test
+    void readableUsersReturnsEmptyWhenConversationLookupFails() {
+        when(c.find(CHAT)).thenThrow(new IllegalStateException("db down"));
+
+        assertEquals(java.util.Set.of(), service.readableUsers(CHAT, List.of(7L)));
+    }
+
+    @Test
+    void retryReturnsCommittedMessageWithoutWritingOrRateLimit() {        sender();
         var old = new ChatMessageDO();
         old.setContent("你好");
         old.setSeq(1L);

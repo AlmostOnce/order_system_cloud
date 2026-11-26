@@ -45,9 +45,18 @@ public interface ChatService {
     long unread(long userId);
 
     /**
-     * 供在线推送筛选接收者。资源不存在、授权撤销或依赖异常都返回false，不向该连接泄露聊天内容。
+     * 批量筛选在线推送接收者。
+     *
+     * <p>每条聊天事件只回源一次会话与订单上下文：顾客按订单顾客编号直接命中，店主才回源角色与直接窗口。
+     * 用于替代"按连接逐条 canRead"的写法，避免在线连接数把跨服务调用放大为 N 倍。</p>
+     *
+     * <p>会话不存在、依赖异常或用户授权失败一律不返回该用户，保持 fail-closed 语义。</p>
+     *
+     * @param conversationUuid 会话公开标识
+     * @param userIds          当前在线用户编号集合，允许含重复
+     * @return 有权限接收该会话变更信号的用户编号
      */
-    boolean canRead(long userId, String uuid);
+    java.util.Set<Long> readableUsers(String conversationUuid, java.util.Collection<Long> userIds);
 
     /**
      * 仅本人消息可在十分钟内撤回，重复撤回幂等返回，已读不限制撤回。
