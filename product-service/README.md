@@ -221,6 +221,7 @@
 |---|---|---|
 | GET | `/products/restaurants`、`/products/windows` | 餐厅/窗口列表 |
 | GET | `/products/windows/{windowId}/menu` | 窗口菜单（含规格） |
+| GET | `/products/windows/{windowId}` | 单个窗口摘要（含取餐地点，历史订单回看用，不按营业状态过滤） |
 | GET | `/products/images?productIds=` | 菜品图片（1–50） |
 | GET | `/products/windows/{windowId}/stocks` | 窗口库存聚合 |
 | GET | `/products/{productId}/rating` | 商品评分 |

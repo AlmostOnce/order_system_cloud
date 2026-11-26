@@ -1,6 +1,6 @@
 # notification-service 通知与消息服务
 
-> 站内通知（订单状态、工单反馈）、顾客与商家的订单聊天、WebSocket 实时提示与一次性票据签发、通知分类偏好。默认端口 `9107`，数据库 `notification_db`。消费订单状态事件落库后经 Redis Pub/Sub 推送轻量信号；聊天授权每次回源订单/用户服务（fail-closed）。默认端口 `9107`。
+> 站内通知（订单状态、工单反馈）、持久化系统会话（订单中心）、顾客与商家的订单聊天、WebSocket 实时提示与一次性票据签发、通知分类偏好。默认端口 `9107`，数据库 `notification_db`。消费订单状态事件落库后经 Redis Pub/Sub 推送轻量信号；聊天授权每次回源订单/用户服务（fail-closed）。默认端口 `9107`。
 
 ## 模块定位与职责边界
 
@@ -32,15 +32,17 @@
 | `OrderNotificationServiceImpl` | 订单事件幂等落库 + 事务提交后推送信号 |
 | `SupportNotificationService` | 工单通知落库（按通知偏好决定是否实时提示） |
 | `NotificationPreferenceServiceImpl` | 分类偏好稀疏存储与开关判断 |
+| `SystemConversationServiceImpl` | 系统会话实体：首次读取创建常驻会话、历史通知懒回填、摘要由写入链路推进 |
+| `SystemConversationMapper` | 系统会话的幂等创建、摘要推进与按用户有序查询 |
 | `ChatServiceImpl` / `ChatAccessServiceImpl` | 聊天业务与授权事实（订单状态窗口、角色校验） |
 | `OrderNotificationConsumer` / `OrderNotificationEvent` | MQ 消费入口与事件契约校验 |
 | `ChatOutboxPublisher` | 聊天事件定时发布 |
 | `NotificationWebSocketConfig` 等 | 握手拦截、票据校验、连接管理、Pub/Sub 总线 |
-| Mapper ×5 | 通知、偏好、会话、消息、聊天 Outbox |
+| Mapper ×6 | 通知、偏好、系统会话、聊天会话、聊天消息、聊天 Outbox |
 
 ## 领域模型与数据表
 
-迁移脚本：`docs/database/migrations/notification_db/V1–V6`。
+迁移脚本：`docs/database/migrations/notification_db/V1–V12`。
 
 ### notifications（站内通知）
 
@@ -72,6 +74,23 @@
 | updated_at | DATETIME(3) | NOT NULL，自动更新 | — | 最后修改时间 |
 
 - 联合主键 `(user_id, category)`；**缺记录 = 默认开启**（稀疏存储）。
+
+### system_conversations（系统通知会话）
+
+| 字段 | 类型 | 约束 | 键 | 说明 |
+|---|---|---|---|---|
+| conversation_id | BIGINT | NOT NULL，自增 | 主键 | 会话内部主键 |
+| customer_id | BIGINT | NOT NULL | uk_system_conversation；排序索引参与 | 接收用户内部编号 |
+| conversation_type | VARCHAR(32) | NOT NULL | uk_system_conversation | 系统会话类型，当前为 ORDER 订单中心 |
+| title | VARCHAR(64) | NOT NULL | — | 会话名称 |
+| preview | VARCHAR(255) | NOT NULL，默认空串 | — | 最新一条通知摘要 |
+| latest_at | DATETIME(3) | 可空 | 排序索引参与 | 最新通知时间，NULL 表示尚无通知 |
+| created_at | DATETIME(3) | NOT NULL，默认当前时间 | — | 创建时间 |
+| updated_at | DATETIME(3) | NOT NULL，自动更新 | — | 最后更新时间 |
+
+- 唯一键 `uk_system_conversation(customer_id, conversation_type)`：每个用户每类系统会话仅一行，创建冲突时保留已有摘要。
+- 普通索引 `idx_system_conversation_latest(customer_id, latest_at)`：按用户取会话并按最新时间排序。
+- 表与库统一 `utf8mb4_unicode_ci`；V10–V12 修正排序规则、中文注释并回填迁移前已有通知的用户。
 
 ### chat_conversations（订单聊天会话）
 
@@ -147,6 +166,12 @@
 
 客服服务事务提交后调用内部接口落库；`(recipient_id,event_id)` 幂等；SUPPORT 分类关闭时只跳过实时提示，消息中心仍可查看。
 
+### 系统会话与订单中心
+
+- 学生首次读取会话列表时创建 `ORDER` 系统会话并持久化，之后无论是否已读、是否还有新通知都常驻，不会出现伪造的空会话。
+- 订单与工单通知落库后在同一事务推进会话 `preview` 与 `latest_at`；时间只前进不后退，MQ 重投不会刷新摘要时间。
+- 迁移前已有通知的用户首次读取时用最新一条通知回填摘要；没有通知时接口返回该会话但预览为“暂无通知”。
+
 ### 聊天
 
 - 建会话：仅顾客显式发起；授权通过后插入会话（唯一键兜底并发）并写聊天 Outbox。
@@ -166,6 +191,7 @@
 | 竞争点 | 处理方法 | 失败行为 |
 |---|---|---|
 | 订单事件重复投递 | 通知唯一键 `(recipient_id, event_id)`：落库唯一键冲突时校验是否同一事件——同一事件幂等吸收，不同事件抛异常交 Broker 重投 | 重复消息不产生第二条通知；错配事件不吞掉，留死信排查 |
+| 系统会话并发创建 | 唯一键 `(customer_id, conversation_type)` + 幂等插入：冲突时保留已有摘要 | 并发读取只产生一行会话，不会覆盖已推进的预览与时间 |
 | 会话消息并发写入 | 会话行 `FOR UPDATE` 锁内完成「幂等回查 → 授权校验 → 限流 → seq 分配（lastSeq+1）→ 消息 + 会话推进 + Outbox」单事务 | 任何一步失败整体回滚；seq 唯一键兜底并发插入 |
 | 客户端重复发送 | 幂等键 `(conversation_id, sender_id, client_message_id)`：同键同内容返回已落库消息，同键不同内容 409 | 首次成功后被关闭的会话重试仍返回首次结果 |
 | 发送限流 | Redis 计数：每人每秒 2 条 / 每分钟 30 条，业务事务前检查 | 超限直接拒绝当次发送，不占用 seq |
@@ -180,6 +206,7 @@
 |---|---|---|---|
 | GET | `/notifications?cursor=` | 认证 | 游标分页（cursor 属主校验） |
 | GET | `/notifications/unread-count` | 认证 | 系统通知未读数（按偏好过滤关闭分类） |
+| GET | `/notifications/conversations` | 认证 | 系统会话列表（订单中心为持久化实体，未读数复用红点口径） |
 | POST | `/notifications/{id}/read`、`/notifications/read-all` | 认证 | 标记已读 |
 | GET/PUT | `/notifications/preferences` | 认证 | 分类偏好读写（ORDER/SUPPORT/CHAT） |
 | POST | `/notifications/socket-ticket` | 认证 | 签发 WebSocket 票据（30 秒有效） |
@@ -240,6 +267,7 @@
 
 - 实时推送不保证送达，弱网与离线场景完全依赖客户端补拉。
 - 聊天已完成订单 24 小时后只读，不可再恢复沟通。
+- 系统会话目前只有订单中心一类；会话级免打扰、置顶与多系统会话需扩展会话类型与偏好模型。
 - 运行联调与真机 WebSocket 验收待执行。
 
 ## 关联文档

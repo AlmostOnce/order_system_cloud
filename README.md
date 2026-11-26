@@ -70,8 +70,8 @@ flowchart LR
 | [stock-service](stock-service/README.md) | 9104 | stock_db | 库存扣减/回补、流水、快照缓存、对账（纯内部接口） |
 | [cart-service](cart-service/README.md) | 9103 | 无（Redis） | 购物车与下单后清理，Lua 保证原子性 |
 | [comment-service](comment-service/README.md) | 9105 | comment_db（MySQL+Mongo） | 菜品/窗口评价、评分聚合与事件 |
-| [notification-service](notification-service/README.md) | 9107 | notification_db | 站内通知、订单聊天、WebSocket、通知偏好 |
-| [support-service](support-service/README.md) | 9114 | support_db | 帮助反馈工单、注销阻断计数 |
+| [notification-service](notification-service/README.md) | 9107 | notification_db | 站内通知、持久化系统会话（订单中心）、订单聊天、WebSocket、通知偏好 |
+| [support-service](support-service/README.md) | 9114 | support_db | 帮助反馈工单（用餐问题必须关联本人订单）、注销阻断计数 |
 | [statistics-service](statistics-service/README.md) | 9111 | statistics_db | 销量投影与榜单（口径唯一所有者） |
 | [recommendation-service](recommendation-service/README.md) | 9112 | recommendation_db | 首页可解释推荐（rule-v1） |
 | [search-service](search-service/README.md) | 9106 | Elasticsearch | 菜品搜索与索引维护 |
