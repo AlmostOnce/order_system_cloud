@@ -6,7 +6,7 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.file.mapper.FileObjectMapper;
 import com.hbue.ordering.file.model.FileObjectDO;
-import com.hbue.ordering.file.service.FileContent;
+import com.hbue.ordering.file.model.FileContent;
 import com.hbue.ordering.file.service.FileStorageService;
 import com.hbue.ordering.file.storage.FileStorage;
 import com.hbue.ordering.file.storage.FileTypeValidator;

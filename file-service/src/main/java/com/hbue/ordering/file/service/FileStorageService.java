@@ -1,5 +1,6 @@
 package com.hbue.ordering.file.service;
 
+import com.hbue.ordering.file.model.FileContent;
 import com.hbue.ordering.file.vo.FileMetaVO;
 import com.hbue.ordering.file.vo.FileUploadVO;
 import org.springframework.web.multipart.MultipartFile;

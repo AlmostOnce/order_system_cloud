@@ -1,7 +1,7 @@
 package com.hbue.ordering.file.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.file.service.FileContent;
+import com.hbue.ordering.file.model.FileContent;
 import com.hbue.ordering.file.service.FileStorageService;
 import com.hbue.ordering.file.vo.FileMetaVO;
 import com.hbue.ordering.file.vo.FileUploadVO;

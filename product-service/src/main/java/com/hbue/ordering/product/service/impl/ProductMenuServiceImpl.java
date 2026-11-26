@@ -18,7 +18,7 @@ import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
 import com.hbue.ordering.product.service.ProductSpecificationService;
-import com.hbue.ordering.product.service.WindowImageGallery;
+import com.hbue.ordering.product.util.WindowImageGallery;
 import com.hbue.ordering.product.vo.*;
 import org.springframework.stereotype.Service;
 

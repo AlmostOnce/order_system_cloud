@@ -21,7 +21,7 @@ import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.service.ProductAdministrationService;
-import com.hbue.ordering.product.service.WindowImageGallery;
+import com.hbue.ordering.product.util.WindowImageGallery;
 import com.hbue.ordering.product.vo.ProductAdminVO;
 import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;

@@ -1,10 +1,13 @@
-package com.hbue.ordering.file.service;
+package com.hbue.ordering.file.model;
 
 /**
  * 文件内容读取的返回载体。
  *
  * <p>承载文件字节内容及其类型、原始文件名，供内容接口设置响应头并写出字节流；
  * 只在服务层内部传递，不作为持久化映射对象或对外响应体。</p>
+ *
+ * <p>放在 model 包而不是 service 包：它是数据载体而非可注入的服务，
+ * 与 {@code FileStorageService} 的接口方法签名一起构成"读文件"的返回值契约。</p>
  *
  * @author order-system
  * @date 2026-10-16

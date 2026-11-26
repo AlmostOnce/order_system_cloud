@@ -12,10 +12,30 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 店铺编号到名称的批量查询实现。
+ *
+ * <p>参数校验在入口完成（非空、上限 100、编号为正），随后用一条 IN 查询只取两列；
+ * 店铺已停用同样返回名称，保证历史订单不出现空白店铺名。</p>
+ *
+ * <p>结果使用 {@link LinkedHashMap} 保持数据库返回顺序，便于调用方按同一顺序拼装下游列表。</p>
+ *
+ * @author order-system
+ * @date 2026-10-18
+ */
 @Service
 public class WindowCatalogServiceImpl implements WindowCatalogService {
+
+    /**
+     * 店铺数据访问。
+     */
     private final DiningWindowMapper windows;
 
+    /**
+     * 创建查询服务。
+     *
+     * @param windows 店铺数据访问
+     */
     public WindowCatalogServiceImpl(DiningWindowMapper windows) {
         this.windows = windows;
     }

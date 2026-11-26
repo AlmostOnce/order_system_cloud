@@ -1,4 +1,4 @@
-package com.hbue.ordering.product.service;
+package com.hbue.ordering.product.util;
 
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
@@ -13,8 +13,11 @@ import static org.mockito.Mockito.*;
 
 /**
  * 店铺图片数量、顺序及文件校验回归；本次仅提供测试源码，不运行Java测试。
+ *
+ * <p>测试与被测工具类同包，便于断言包内可见的常量语义。</p>
  */
 class WindowImageGalleryTest {
+
     private static final String A = "a".repeat(32), B = "b".repeat(32);
 
     /**
