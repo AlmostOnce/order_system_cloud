@@ -85,7 +85,7 @@ security:
     blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
   order:
     # 调用 order-service 内部接口的共享密钥，必须与 order-service 的 payment.internal.order-token 一致。
     # 消费事实与待评价候选都属于订单内部数据，不能复用 scope.token，否则订单服务会返回 401。

@@ -127,7 +127,7 @@ payment:
 internal:
   scope:
     # 数据范围相关内部接口的共享密钥，与 user-service / product-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 seata:
   # 下单扣库存使用 Seata AT 模式：order-service 既是全局事务发起者，也是订单库本地分支。

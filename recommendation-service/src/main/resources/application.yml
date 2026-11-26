@@ -59,7 +59,7 @@ security:
 
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
   order:
     token: ${INTERNAL_ORDER_TOKEN:internal_order_token_dev_2026}
 

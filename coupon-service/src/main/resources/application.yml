@@ -70,7 +70,7 @@ security:
 internal:
   scope:
     # 与订单服务使用相同的内部共享令牌；不要作为外部用户权限凭据使用。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 seata:
   # 锁券和取消释放需要在订单全局事务回滚时恢复本地券状态。

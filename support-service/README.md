@@ -181,7 +181,7 @@
 |---|---|---|
 | `SUPPORT_SERVER_PORT` | 9114 | 服务端口 |
 | `SUPPORT_DB_URL/USERNAME/PASSWORD` | 127.0.0.1:9095/support_db | 数据库 |
-| `INTERNAL_SCOPE_TOKEN` | 开发默认值 | 服务间共享令牌 |
+| `INTERNAL_SCOPE_TOKEN` | 必填，无默认值 | 服务间共享令牌 |
 | `file.service-base-url` | :9102 | 文件归属校验直连地址 |
 | `identity.user-service-base-url` | :9092 | 身份回查直连地址 |
 | `REDIS_HOST/PORT/PASSWORD` | 127.0.0.1:9096 | 黑名单 Redis |

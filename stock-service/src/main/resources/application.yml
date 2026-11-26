@@ -74,7 +74,7 @@ security:
 internal:
   scope:
     # 服务间内部接口共享密钥，与 order-service / product-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 seata:
   # 库存扣减作为下单全局事务的本地分支（RM）。

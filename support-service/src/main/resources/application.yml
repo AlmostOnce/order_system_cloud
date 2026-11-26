@@ -69,7 +69,7 @@ security:
 # 服务间共享密钥；未配置时内部调用与本服务发起的内部请求都会被拒绝。
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 # 图片归属校验需要直连文件服务；其余依赖按 Nacos 服务名调用。
 file:

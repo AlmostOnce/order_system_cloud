@@ -126,7 +126,7 @@
 | `AUTH_LOGIN_MAX_FAILURES / FAILURE_WINDOW / LOCK_DURATION` | 5 / 15m / 15m | 登录保护 |
 | `security.jwt.refresh-token-ttl-seconds` | 2592000 | 刷新令牌有效期（访问令牌为代码常量 1800 秒） |
 | `REDIS_HOST/PORT/PASSWORD` | 127.0.0.1:9096 | Redis |
-| `INTERNAL_SCOPE_TOKEN` | 开发默认值 | 共享令牌 |
+| `INTERNAL_SCOPE_TOKEN` | 必填，无默认值 | 共享令牌 |
 | `SWAGGER_ENABLED / SWAGGER_GATEWAY_BASE_URL` | 开 | 文档 |
 
 ## 异常与失败行为

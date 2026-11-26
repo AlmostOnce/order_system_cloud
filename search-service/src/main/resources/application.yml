@@ -45,7 +45,7 @@ security:
 
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 # 沿用JwtUserIdentity解析当前用户；网络调用仅在推荐意图后台任务内发生，失败丢弃该弱信号。
 identity:

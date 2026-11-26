@@ -97,7 +97,7 @@ payment:
 internal:
   scope:
     # payment-service 调用用户服务余额扣款内部接口的共享密钥，与 user-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 # 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
 springdoc:

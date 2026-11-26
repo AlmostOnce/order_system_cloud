@@ -112,7 +112,8 @@ USER_MANAGER_BOOTSTRAP_PASSWORD: ""
 internal:
   scope:
     # 数据范围相关内部接口的共享密钥，与 order-service / product-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    # 必须由运行环境注入，不提供仓库内默认值：漏配时启动失败，避免用公开默认串通过内部鉴权。
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 security:
   jwt:
