@@ -81,10 +81,10 @@ public class DiscussionEligibilityServiceImpl implements DiscussionEligibilitySe
      *
      * @param facts         订单服务消费事实客户端
      * @param redis         Redis 基础操作服务
-     * @param internalToken 服务间共享内部令牌
+     * @param internalToken 订单服务内部接口共享令牌，必须与 order-service 的 order-token 一致
      */
     public DiscussionEligibilityServiceImpl(CommentPurchaseFactClient facts, RedisOperationsService redis,
-                                            @Value("${internal.scope.token:}") String internalToken) {
+                                            @Value("${internal.order.token:}") String internalToken) {
         this.facts = facts;
         this.redis = redis;
         this.internalToken = internalToken;
