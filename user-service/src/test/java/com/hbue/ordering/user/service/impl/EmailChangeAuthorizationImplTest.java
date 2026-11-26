@@ -14,11 +14,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-class EmailChangeAuthorizationServiceTest {
+class EmailChangeAuthorizationImplTest {
     private final UserMapper users = mock(UserMapper.class);
     private final PasswordEncoder passwords = mock(PasswordEncoder.class);
     private final RedisOperationsService redis = mock(RedisOperationsService.class);
-    private final EmailChangeAuthorizationService service = new EmailChangeAuthorizationService(users, passwords, redis);
+    private final EmailChangeAuthorizationImpl service = new EmailChangeAuthorizationImpl(users, passwords, redis);
 
     @Test
     void correctLoginPasswordIssuesShortLivedUserScopedOpaqueToken() {

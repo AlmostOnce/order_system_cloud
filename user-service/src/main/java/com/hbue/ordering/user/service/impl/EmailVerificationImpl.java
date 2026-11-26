@@ -27,7 +27,7 @@ import java.util.Locale;
  * 邮箱验证码：与用户、目标邮箱绑定，限制发送与校验次数。
  */
 @Service
-public class EmailVerificationService implements EmailVerification {
+public class EmailVerificationImpl implements EmailVerification {
     private static final SecureRandom RANDOM = new SecureRandom();
     static final DefaultRedisScript<Long> CONSUME = new DefaultRedisScript<>("""
             local current = redis.call('GET', KEYS[1])
@@ -55,7 +55,7 @@ public class EmailVerificationService implements EmailVerification {
     private final EmailChangeAuthorization authorization;
     private final String secret;
 
-    public EmailVerificationService(RedisOperationsService redis, EmailCodeSender sender,
+    public EmailVerificationImpl(RedisOperationsService redis, EmailCodeSender sender,
                                     EmailChangeAuthorization authorization,
                                     @Value("${email.verification.secret:}") String secret) {
         this.redis = redis;

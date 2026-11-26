@@ -80,7 +80,7 @@ class PayPasswordRecoveryServiceTest {
     @Test
     void wrongCodeAndCrossUserCannotIssueGrant() {
         String token = service.authorize(9L, "login-pass").authorizationToken();
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME), anyList(), any(), eq("5"))).thenReturn(0L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME), anyList(), any(), eq("5"))).thenReturn(0L);
         assertThrows(BusinessException.class, () -> service.verify(9L, token, "012345"));
         assertThrows(BusinessException.class, () -> service.verify(10L, token, "012345"));
         assertTrue(values.keySet().stream().noneMatch(key -> key.contains(":grant:")));
@@ -88,8 +88,8 @@ class PayPasswordRecoveryServiceTest {
 
     private String grant() {
         String token = service.authorize(9L, "login-pass").authorizationToken();
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME), anyList(), any(), eq("5"))).thenReturn(1L);
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME_MATCHING_TICKET), anyList(), any())).thenAnswer(call -> {
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME), anyList(), any(), eq("5"))).thenReturn(1L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME_MATCHING_TICKET), anyList(), any())).thenAnswer(call -> {
             java.util.List<String> keys = call.getArgument(1);
             return values.remove(keys.getFirst(), call.getArgument(2)) ? 1L : 0L;
         });

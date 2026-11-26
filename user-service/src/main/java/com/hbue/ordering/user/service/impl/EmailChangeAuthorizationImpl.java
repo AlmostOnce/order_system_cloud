@@ -22,7 +22,7 @@ import java.util.List;
  * 登录密码校验后签发短时、绑定当前用户且仅可成功消费一次的邮箱变更凭据。
  */
 @Service
-public class EmailChangeAuthorizationService implements EmailChangeAuthorization {
+public class EmailChangeAuthorizationImpl implements EmailChangeAuthorization {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Duration TOKEN_TTL = Duration.ofMinutes(10);
     private static final String KEY_PREFIX = "email:change:authorization:";
@@ -36,7 +36,7 @@ public class EmailChangeAuthorizationService implements EmailChangeAuthorization
     private final PasswordEncoder passwords;
     private final RedisOperationsService redis;
 
-    public EmailChangeAuthorizationService(UserMapper users, PasswordEncoder passwords,
+    public EmailChangeAuthorizationImpl(UserMapper users, PasswordEncoder passwords,
                                            RedisOperationsService redis) {
         this.users = users;
         this.passwords = passwords;

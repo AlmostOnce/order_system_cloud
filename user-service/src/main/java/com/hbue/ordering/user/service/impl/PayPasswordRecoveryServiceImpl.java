@@ -77,7 +77,7 @@ public class PayPasswordRecoveryServiceImpl implements PayPasswordRecoveryServic
         try {
             sender.sendPayPasswordReset(user.getEmail(), code);
         } catch (RuntimeException error) {
-            redis.executeScript(EmailVerificationService.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
+            redis.executeScript(EmailVerificationImpl.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
             throw error;
         }
     }
@@ -88,7 +88,7 @@ public class PayPasswordRecoveryServiceImpl implements PayPasswordRecoveryServic
         UserDO user = available(users.selectPayPasswordRecovery(id));
         String proof = proof("authorization", id, token, user);
         if (code == null || !code.matches("[0-9]{6}")) throw bad("请输入六位邮箱验证码");
-        Long consumed = redis.executeScript(EmailVerificationService.CONSUME, List.of(key("code", id, token)),
+        Long consumed = redis.executeScript(EmailVerificationImpl.CONSUME, List.of(key("code", id, token)),
                 digest("code", id + "\n" + token + "\n" + proof + "\n" + code), "5");
         if (!Long.valueOf(1).equals(consumed)) throw bad("邮箱验证码错误、已过期或已使用");
         // 登录凭据仅可转化为一个重置授权，不能通过反复发信重复使用。
@@ -133,7 +133,7 @@ public class PayPasswordRecoveryServiceImpl implements PayPasswordRecoveryServic
     }
 
     private void consume(String purpose, Long id, String token, String value) {
-        Long result = redis.executeScript(EmailVerificationService.CONSUME_MATCHING_TICKET, List.of(key(purpose, id, token)), value);
+        Long result = redis.executeScript(EmailVerificationImpl.CONSUME_MATCHING_TICKET, List.of(key(purpose, id, token)), value);
         if (!Long.valueOf(1).equals(result)) throw bad("验证已失效，请重新验证登录密码");
     }
 

@@ -47,7 +47,7 @@ class EmailOwnershipServiceTest {
             code.set(call.getArgument(1));
             return null;
         }).when(sender).sendOwnershipVerification(anyString(), anyString());
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME), anyList(), any(), eq("5"))).thenAnswer(call -> {
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME), anyList(), any(), eq("5"))).thenAnswer(call -> {
             List<String> keys = call.getArgument(1);
             String stored = values.get(keys.getFirst());
             String expected = call.getArgument(2);
@@ -57,7 +57,7 @@ class EmailOwnershipServiceTest {
             }
             return 0L;
         });
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME_MATCHING_TICKET), anyList(), any())).thenAnswer(call -> {
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME_MATCHING_TICKET), anyList(), any())).thenAnswer(call -> {
             List<String> keys = call.getArgument(1);
             return values.remove(keys.getFirst(), call.getArgument(2)) ? 1L : 0L;
         });

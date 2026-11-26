@@ -22,6 +22,21 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.function.Supplier;
 
+/**
+ * 找回密码三步流程的实现。
+ *
+ * <p>发送前必须通过图片验证码与来源 IP 频控（发送 10 次/10 分钟、校验 30 次/10 分钟、
+ * 重置 20 次/10 分钟），频控键使用来源 IP 的 SHA-256 摘要，避免在 Redis 中留存明文网络标识。</p>
+ *
+ * <p>认证服务不保存重置凭据内容，只校验用户服务返回的凭据形态（64 位小写十六进制串），
+ * 形态不符即视为下游异常并返回 503，防止把畸形凭据透给前端。</p>
+ *
+ * <p>远端 400/409/422/429 按业务失败透出原始错误码与提示；其余异常统一收敛为 503，
+ * 避免网络抖动被误报成"验证码错误"而诱导用户反复重试。</p>
+ *
+ * @author order-system
+ * @date 2026-11-20
+ */
 @Service
 public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     private final PasswordRecoveryClient users;
@@ -72,7 +87,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         try {
             var response = operation.get();
             if (response == null) throw unavailable();
-            if (!"COMMON_000".equals(response.getCode())) throw failure(response.getCode(), response.getMessage());
+            if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) throw failure(response.getCode(), response.getMessage());
             return response.getData();
         } catch (FeignException error) {
             if (error.status() == 400 || error.status() == 409 || error.status() == 422 || error.status() == 429) {

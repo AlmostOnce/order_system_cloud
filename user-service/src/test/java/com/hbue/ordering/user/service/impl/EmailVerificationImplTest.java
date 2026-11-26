@@ -19,11 +19,11 @@ import static org.mockito.Mockito.*;
 /**
  * 邮箱换绑的人机验证、一次性发送凭据和验证码边界。
  */
-class EmailVerificationServiceTest {
+class EmailVerificationImplTest {
     private final RedisOperationsService redis = mock(RedisOperationsService.class);
     private final EmailCodeSender sender = mock(EmailCodeSender.class);
     private final EmailChangeAuthorization authorization = mock(EmailChangeAuthorization.class);
-    private final EmailVerificationService service = new EmailVerificationService(redis, sender, authorization,
+    private final EmailVerificationImpl service = new EmailVerificationImpl(redis, sender, authorization,
             "0123456789abcdef0123456789abcdef");
     private final String authToken = "a".repeat(64);
     private final String captchaTicket = "b".repeat(64);

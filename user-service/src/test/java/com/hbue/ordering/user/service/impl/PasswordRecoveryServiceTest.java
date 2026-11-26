@@ -41,7 +41,7 @@ class PasswordRecoveryServiceTest {
 
     @Test
     void wrongCodeCannotProduceResetGrant() {
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME), anyList(), any(), eq("5"))).thenReturn(0L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME), anyList(), any(), eq("5"))).thenReturn(0L);
         assertThrows(BusinessException.class, () -> recovery.verify("user@example.com", "012345"));
         verifyNoInteractions(users);
         verify(redis, never()).setValue(anyString(), anyString(), any(Duration.class));
@@ -49,7 +49,7 @@ class PasswordRecoveryServiceTest {
 
     @Test
     void successfulVerificationCreatesShortLivedAccountBoundGrant() {
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME), anyList(), any(), eq("5"))).thenReturn(1L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME), anyList(), any(), eq("5"))).thenReturn(1L);
         var user = new UserDO();
         user.setUserId(9L);
         user.setCredentialVersion(2L);
@@ -76,10 +76,10 @@ class PasswordRecoveryServiceTest {
         when(encoder.matches("old-password", "old-hash")).thenReturn(true);
         var error = assertThrows(BusinessException.class, () -> recovery.confirm("a".repeat(64), "old-password"));
         assertEquals("新密码不能与旧密码相同，请设置其他密码", error.getMessage());
-        verify(redis, never()).executeScript(eq(EmailVerificationService.CONSUME_MATCHING_TICKET), anyList(), any());
+        verify(redis, never()).executeScript(eq(EmailVerificationImpl.CONSUME_MATCHING_TICKET), anyList(), any());
         verify(users, never()).resetLoginPassword(anyLong(), anyString(), anyLong(), anyString());
         verify(encoder, never()).encode(anyString());
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME_MATCHING_TICKET), anyList(), any())).thenReturn(1L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME_MATCHING_TICKET), anyList(), any())).thenReturn(1L);
         when(encoder.encode("different-password")).thenReturn("new-hash");
         when(users.resetLoginPassword(9L, "user@example.com", 2L, "new-hash")).thenReturn(1);
         recovery.confirm("a".repeat(64), "different-password");
@@ -89,7 +89,7 @@ class PasswordRecoveryServiceTest {
     @Test
     void resetConsumesProofAndUsesAtomicVersionCheckedWrite() {
         currentPassword(2L);
-        when(redis.executeScript(eq(EmailVerificationService.CONSUME_MATCHING_TICKET), anyList(), any())).thenReturn(1L);
+        when(redis.executeScript(eq(EmailVerificationImpl.CONSUME_MATCHING_TICKET), anyList(), any())).thenReturn(1L);
         when(redis.getValue(startsWith("password-recovery:grant:"))).thenReturn("9\n2\nuser@example.com", null);
         when(encoder.encode("new-password")).thenReturn("bcrypt-hash");
         when(users.resetLoginPassword(9L, "user@example.com", 2L, "bcrypt-hash")).thenReturn(1);

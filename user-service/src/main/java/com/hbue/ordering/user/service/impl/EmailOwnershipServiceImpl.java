@@ -138,19 +138,19 @@ public class EmailOwnershipServiceImpl implements EmailOwnershipService {
         try {
             sender.sendOwnershipVerification(email, code);
         } catch (RuntimeException error) {
-            redis.executeScript(EmailVerificationService.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
+            redis.executeScript(EmailVerificationImpl.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
             throw error;
         }
     }
 
     private void consumeCode(String purpose, String target, String binding, String code) {
         if (code == null || !code.matches("[0-9]{6}")) throw bad("请输入六位邮箱验证码");
-        Long consumed = redis.executeScript(EmailVerificationService.CONSUME, List.of(key(purpose + ":code", target)), digest(purpose + ":code", binding + "\n" + code), "5");
+        Long consumed = redis.executeScript(EmailVerificationImpl.CONSUME, List.of(key(purpose + ":code", target)), digest(purpose + ":code", binding + "\n" + code), "5");
         if (!Long.valueOf(1).equals(consumed)) throw bad("邮箱验证码错误、已过期或已使用");
     }
 
     private void consumeExact(String key, String value) {
-        Long result = redis.executeScript(EmailVerificationService.CONSUME_MATCHING_TICKET, List.of(key), value);
+        Long result = redis.executeScript(EmailVerificationImpl.CONSUME_MATCHING_TICKET, List.of(key), value);
         if (!Long.valueOf(1).equals(result)) throw expired();
     }
 

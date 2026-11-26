@@ -22,6 +22,21 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.function.Supplier;
 
+/**
+ * 邮箱归属注册校验与账号绑定的实现。
+ *
+ * <p>本类只做三件事：按来源 IP 做滑动窗口频控、校验图片验证码、转调用户服务并把失败翻译为统一业务码。
+ * 邮箱是否已被占用、验证码是否正确等权威判断全部在用户服务，避免两处规则各写一份而漂移。</p>
+ *
+ * <p>频控键按"动作 + 来源 IP 摘要"区分：发送 10 次/10 分钟，校验与确认 30 次/10 分钟。
+ * 用 SHA-256 摘要而不是明文 IP，避免 Redis 中出现可直接关联到个人的网络标识。</p>
+ *
+ * <p>远端失败处理原则：400/409/429 视为业务失败并原样透出错误码与提示，其余状态（超时、5xx、
+ * 响应体损坏）统一收敛为 503，调用方据此提示"稍后重试"而不是误报"验证码错误"。</p>
+ *
+ * @author order-system
+ * @date 2026-11-20
+ */
 @Service
 public class EmailOwnershipServiceImpl implements EmailOwnershipService {
     private final EmailOwnershipClient users;
@@ -89,7 +104,7 @@ public class EmailOwnershipServiceImpl implements EmailOwnershipService {
         try {
             var response = operation.get();
             if (response == null) throw unavailable();
-            if (!"COMMON_000".equals(response.getCode())) throw failure(response.getCode(), response.getMessage());
+            if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) throw failure(response.getCode(), response.getMessage());
             return response.getData();
         } catch (FeignException error) {
             if (error.status() == 400 || error.status() == 409 || error.status() == 429) {

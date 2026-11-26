@@ -21,16 +21,70 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * 找回密码的权威实现。
+ *
+ * <p>发送环节做三层限流（目标邮箱维度 1 次/分钟、3 次/10 分钟），既不泄露邮箱是否注册，
+ * 也不让接口成为邮件轰炸通道。验证码与重置凭据都是 HMAC 摘要后存 Redis，
+ * 库中不出现可用明文。</p>
+ *
+ * <p>重置凭据一次性消费且 5 分钟有效。确认时先校验密码规则，再用 Lua 原子消费凭据，
+ * 最后在带邮箱与凭据版本条件的 UPDATE 中写入新密码：凭据版本或邮箱已变化时拒绝旧授权，
+ * 密码与会话撤销版本同库原子更新。</p>
+ *
+ * <p>未配置签名密钥（{@code email.verification.secret}）时拒绝服务而不是降级为无签名校验，
+ * 否则任何人都能伪造有效的验证码摘要。</p>
+ *
+ * @author order-system
+ * @date 2026-11-20
+ */
 @Service
 public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
+
+    /**
+     * 当前类日志对象。
+     */
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PasswordRecoveryServiceImpl.class);
+
+    /**
+     * 验证码生成用的安全随机源。
+     */
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    /**
+     * 用户数据访问。
+     */
     private final UserMapper users;
+
+    /**
+     * 验证码与凭据的 Redis 存储。
+     */
     private final RedisOperationsService redis;
+
+    /**
+     * 邮件发送器。
+     */
     private final EmailCodeSender sender;
+
+    /**
+     * 密码加密器。
+     */
     private final PasswordEncoder encoder;
+
+    /**
+     * 摘要签名密钥，缺失时拒绝服务。
+     */
     private final String secret;
 
+    /**
+     * 创建找回密码服务。
+     *
+     * @param users   用户数据访问
+     * @param redis   验证码与凭据存储
+     * @param sender  邮件发送器
+     * @param encoder 密码加密器
+     * @param secret  摘要签名密钥
+     */
     public PasswordRecoveryServiceImpl(UserMapper users, RedisOperationsService redis, EmailCodeSender sender,
                                        PasswordEncoder encoder, @Value("${email.verification.secret:}") String secret) {
         this.users = users;
@@ -57,7 +111,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
         try {
             sender.sendPasswordReset(email, code);
         } catch (RuntimeException error) {
-            redis.executeScript(EmailVerificationService.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
+            redis.executeScript(EmailVerificationImpl.REMOVE_IF_SAME, List.of(key), value.substring(0, 64));
             // 对外保持相同受理结果，不借 SMTP 失败暴露邮箱是否有账号。
             log.warn("找回密码邮件发送失败，等待重新申请");
         }
@@ -66,7 +120,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
     public PasswordRecoveryGrantVO verify(String input, String code) {
         String email = email(input);
         if (code == null || !code.matches("[0-9]{6}")) throw bad("请输入六位邮箱验证码");
-        Long verified = redis.executeScript(EmailVerificationService.CONSUME, List.of(codeKey(email)), digest("code", email + "\n" + code), "5");
+        Long verified = redis.executeScript(EmailVerificationImpl.CONSUME, List.of(codeKey(email)), digest("code", email + "\n" + code), "5");
         if (!Long.valueOf(1).equals(verified)) throw bad("邮箱验证码错误、已过期或已使用");
         var user = users.selectRecoveryByEmail(email);
         if (user == null) throw bad("验证已失效，请重新获取验证码");
@@ -103,7 +157,7 @@ public class PasswordRecoveryServiceImpl implements PasswordRecoveryService {
             throw bad("账号状态或邮箱已变化，请重新验证");
         // BCrypt 使用随机盐，必须校验明文与现有哈希，不能比较两个新生成的哈希。
         if (encoder.matches(password, current.getPasswordHash())) throw bad("新密码不能与旧密码相同，请设置其他密码");
-        Long consumed = redis.executeScript(EmailVerificationService.CONSUME_MATCHING_TICKET,
+        Long consumed = redis.executeScript(EmailVerificationImpl.CONSUME_MATCHING_TICKET,
                 List.of(grantKey(token)), value);
         if (!Long.valueOf(1).equals(consumed)) throw bad("验证已失效，请重新验证邮箱");
         // 邮箱或凭据版本变化会拒绝旧授权；密码与会话撤销版本同库原子更新。
