@@ -1,6 +1,7 @@
 package com.hbue.ordering.coupon.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.hbue.ordering.coupon.dto.CouponExpiryReminderRow;
 import com.hbue.ordering.coupon.dto.CouponMineRow;
 import com.hbue.ordering.coupon.model.UserCouponDO;
 import org.apache.ibatis.annotations.Param;
@@ -74,4 +75,45 @@ public interface UserCouponMapper extends BaseMapper<UserCouponDO> {
               AND valid_until <= NOW()
             """)
     int expireAvailable(@Param("userId") Long userId);
+
+    /**
+     * 扫描进入"到期前 24 小时"窗口且尚未提醒的可用券。
+     *
+     * <p>条件刻意收紧为 {@code valid_until > NOW()}：已经过期但尚未被惰性标记的券不提醒，
+     * 否则会向学生推送"即将过期"却点进去发现已失效的矛盾提醒。</p>
+     *
+     * <p>按截止时间升序返回，最紧急的券优先发送；数量由调用方限制，避免一次扫描把整表
+     * 拉进内存。已提醒记录由 {@code expiry_reminded_at} 排除，天然幂等。</p>
+     *
+     * @param limit 单次最多扫描条数
+     * @return 待提醒的券行
+     */
+    @Select("""
+            SELECT uc.user_coupon_id AS userCouponId, uc.user_id AS userId,
+                   t.title AS title, uc.valid_until AS validUntil
+            FROM user_coupon uc
+            JOIN coupon_template t ON t.coupon_template_id = uc.coupon_template_id
+            WHERE uc.status = 'AVAILABLE'
+              AND uc.expiry_reminded_at IS NULL
+              AND uc.valid_until > NOW()
+              AND uc.valid_until <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+            ORDER BY uc.valid_until ASC, uc.user_coupon_id ASC
+            LIMIT #{limit}
+            """)
+    List<CouponExpiryReminderRow> findExpiryReminderCandidates(@Param("limit") int limit);
+
+    /**
+     * 标记某张券已发送到期提醒。
+     *
+     * <p>条件更新带 {@code expiry_reminded_at IS NULL}：多实例并发扫描时只有一次能写入成功，
+     * 未命中说明已被其它实例处理，不视为错误。</p>
+     *
+     * @param userCouponId 用户券记录编号
+     * @return 受影响行数，首次标记为 1
+     */
+    @Update("""
+            UPDATE user_coupon SET expiry_reminded_at = NOW(3)
+            WHERE user_coupon_id = #{userCouponId} AND expiry_reminded_at IS NULL
+            """)
+    int markExpiryReminded(@Param("userCouponId") Long userCouponId);
 }

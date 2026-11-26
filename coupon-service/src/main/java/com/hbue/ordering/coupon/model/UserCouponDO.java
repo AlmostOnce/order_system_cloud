@@ -60,6 +60,14 @@ public class UserCouponDO {
     @TableField("used_at")
     private LocalDateTime usedAt;
     /**
+     * 到期前 24 小时提醒的发送时间；为空表示尚未提醒。
+     *
+     * <p>提醒任务按该列做"只提醒一次"的判定，写入后不回退：
+     * 即便通知在传输中丢失，也不会在同一张券上反复产生提醒。</p>
+     */
+    @TableField("expiry_reminded_at")
+    private LocalDateTime expiryRemindedAt;
+    /**
      * 记录创建时间。
      */
     @TableField("created_at")

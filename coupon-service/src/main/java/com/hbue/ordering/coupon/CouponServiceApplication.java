@@ -1,5 +1,6 @@
 package com.hbue.ordering.coupon;
 
+import com.hbue.ordering.coupon.client.CouponNotificationClient;
 import com.hbue.ordering.order.api.client.OrderCouponConsumeAckClient;
 import com.hbue.ordering.product.api.client.WindowInternalClient;
 import com.hbue.ordering.user.api.client.UserScopeInternalClient;
@@ -8,6 +9,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 优惠券服务启动入口。
@@ -17,15 +19,21 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * 并作为 order-service 全局事务中的 Seata RM 分支。
  * 管理操作必须按用户数据范围授权；范围服务不可用时应拒绝操作。支付核销消费者提交券状态后，
  * 还会回调订单服务确认 Outbox，避免消息进入死信队列后订单侧失去恢复入口。</p>
+ *
+ * <p>同时启用定时调度，用于"到期前 24 小时提醒"：任务在本地扫描即将过期的可用券，
+ * 通过内部令牌调用通知服务写入站内信。提醒与订单、工单通知分属不同通知类型和偏好分类，
+ * 关闭订单或工单提醒不会影响券到期提醒。</p>
  */
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
 @EnableFeignClients(clients = {
         UserScopeInternalClient.class,
         WindowInternalClient.class,
-        OrderCouponConsumeAckClient.class
+        OrderCouponConsumeAckClient.class,
+        CouponNotificationClient.class
 })
 @MapperScan("com.hbue.ordering.coupon.mapper")
+@EnableScheduling
 public class CouponServiceApplication {
 
     /**
