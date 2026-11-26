@@ -28,7 +28,7 @@
 |---|---|
 | `ProductSearchController` | 顾客搜索入口（CUSTOMER） |
 | `SearchInternalController` | 内部全量重建入口（`X-Internal-Token`） |
-| `ProductSearchServiceImpl` | 查询、整窗/单品增量刷新、全量重建、对账修复 |
+| `ProductSearchServiceImpl` | 查询、菜名前缀联想、整窗/单品增量刷新、全量重建、对账修复 |
 | `SearchIntentRecorderImpl` | 成功首屏的有界异步意图采集 |
 | `RecommendationSearchIntentClient` | Feign → 推荐服务搜索意图接口 |
 | `ProductSearchRefreshConsumer` | 事件消费入口与错误处理 |
@@ -53,6 +53,13 @@
 
 1. 搜索：`bool_prefix` 多字段匹配（菜名及其 n-gram、描述、分类、窗口、餐厅）+ 餐厅/窗口/分类 term 过滤，分页返回。
 2. 第一页且带查询标识时记录意图：后台线程校验查询 ID 格式与长度 → 截取前 20 个结果商品 ID → 解析内部用户 ID → 转发推荐服务；任何失败仅记日志类别，不重试、不阻塞搜索。
+
+### 输入联想
+
+- `GET /search/suggest` 只做菜名前缀匹配：`bool_prefix` 查询 `productName` 及其 `_2gram/_3gram`，不查描述、档口和餐厅，也不采集搜索意图。
+- 多取 `limit × 3` 条文档后按菜名去重，最多返回 20 条；同名菜分布在多个档口时不会占满下拉。
+- Redis 缓存键 `search:suggest:{limit}:{小写前缀}`，TTL 60 秒；缓存读失败回退 ES，写失败仅放弃本次缓存。
+- 按用户固定窗口限频（60 次/分钟）：超限或 Redis 不可用均降级为空候选，不影响正式搜索。
 
 ### 事件增量同步
 
@@ -83,6 +90,7 @@
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | GET | `/search/products` | CUSTOMER | 关键词（≤80 字符）+ 餐厅/窗口/分类过滤 + 分页（size ≤100）；可带查询标识用于意图采集 |
+| GET | `/search/suggest` | CUSTOMER | 菜名前缀联想：`keyword`（≤80 字符）+ `limit`（默认 8，≤20）；返回去重菜名数组，限频或缓存异常时为空 |
 | POST | `/internal/search/rebuild` | X-Internal-Token | 全量重建，返回窗口数 |
 | GET | `/actuator/health`、swagger | 匿名 | 健康与文档 |
 
@@ -96,7 +104,8 @@
 | 生产方 | 商品服务 Outbox（延迟发布、同步发送） |
 | 幂等 | 按主库快照整体替换，重复消费结果相同 |
 | 死信 | 无独立死信处理，依赖 Broker 重投 16 次后进 DLQ 与每日对账兜底 |
-| 缓存 | 无结果缓存；Redisson 锁键 `search:menu:index-switch` 与 `search:menu:reindex:{windowId}` |
+| 缓存 | 联想结果缓存 `search:suggest:{limit}:{keyword}`（TTL 60 秒）；Redisson 锁键 `search:menu:index-switch` 与 `search:menu:reindex:{windowId}`；商品搜索本身无结果缓存 |
+| 限频 | 联想按用户固定窗口计数 `search:suggest:rate:{userUuid}`，60 次/分钟；超限返回空候选 |
 
 ## 安全设计
 

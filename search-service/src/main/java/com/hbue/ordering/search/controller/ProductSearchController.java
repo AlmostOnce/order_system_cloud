@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @Validated
 @RestController
 @RequestMapping("/search")
@@ -63,5 +65,27 @@ public class ProductSearchController {
         if (page == 1 && queryId != null)
             intents.recordSuccessfulFirstPage(jwt, queryId, result, restaurantId, windowId, categoryId);
         return ApiResponse.success(result);
+    }
+
+    /**
+     * 输入联想：按前缀返回菜名候选，供搜索框下拉使用。
+     *
+     * <p>与正式搜索的区别：只匹配菜名字段、只返回菜名、不采集搜索意图。
+     * 限频与缓存都在服务层完成；超限或 Redis 不可用时降级为空列表，
+     * 前端表现为「暂无候选」，不影响用户继续提交正式搜索。</p>
+     *
+     * @param keyword 用户当前输入，最长 80 字符，与服务端搜索关键词约束一致
+     * @param limit   候选数量，默认 8，最大 20
+     * @param jwt     已验签的学生 JWT，subject 为公开 UUID，仅用于限频计数
+     * @return 去重后的菜名列表，可能为空
+     */
+    @GetMapping("/suggest")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @Operation(summary = "菜名输入联想", description = "按菜名前缀返回去重后的候选菜名；仅学生可用，超限时返回空列表。")
+    public ApiResponse<List<String>> suggestProducts(
+            @RequestParam("keyword") @NotBlank @Size(max = 80) String keyword,
+            @RequestParam(value = "limit", defaultValue = "8") @Min(1) @Max(20) int limit,
+            @AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.success(search.suggest(keyword, limit, jwt.getSubject()));
     }
 }
