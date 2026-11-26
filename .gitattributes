@@ -1,1 +1,4 @@
 /backup/nacos-init.sh text eol=lf
+# GitHub Linguist 语言统计口径：与前端仓库保持一致
+*.uvue linguist-language=Vue
+*.uts linguist-language=TypeScript
