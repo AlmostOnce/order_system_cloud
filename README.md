@@ -62,10 +62,10 @@ flowchart LR
 
 | 模块 | 端口 | 数据库 | 职责 |
 |---|---|---|---|
-| [user-service](user-service/README.md) | 9092 | user_db | 账号、角色与数据范围、余额账务、支付密码、邮箱、收藏、账号注销 |
+| [user-service](user-service/README.md) | 9092 | user_db | 账号、角色与数据范围、余额账务（唯一权威）、支付密码、邮箱、收藏、账号注销 |
 | [product-service](product-service/README.md) | 9093 | product_db | 餐厅/窗口/分类/菜品/规格、报价、评分投影、搜索与推荐数据源 |
 | [order-service](order-service/README.md) | 9091 | order_db | 订单状态机、Seata 下单、支付推进、超时关单、取餐码、退款、事件发布 |
-| [payment-service](payment-service/README.md) | 9101 | payment_db | 支付单生命周期、余额结算、渠道回调、关单与退款入账 |
+| [payment-service](payment-service/README.md) | 9101 | payment_db | 支付单生命周期、余额渠道编排（扣款/入账委托用户服务）、渠道回调、关单与退款协作 |
 | [coupon-service](coupon-service/README.md) | 9113 | coupon_db | 平台满减券：模板、领取、锁券、核销、释放 |
 | [stock-service](stock-service/README.md) | 9104 | stock_db | 库存扣减/回补、流水、快照缓存、对账（纯内部接口） |
 | [cart-service](cart-service/README.md) | 9103 | 无（Redis） | 购物车与下单后清理，Lua 保证原子性 |
@@ -175,7 +175,8 @@ docker compose --profile edge up -d        # Nginx
 
 ## 系统边界
 
-- 服务数量上限 13 个：新增服务必须先回答「能学到什么新技术」，否则并入现有服务。
+- 当前共 16 个可运行服务（2 个入口 + 14 个业务服务）：新增服务必须先回答「能学到什么新技术」，否则并入现有服务。
+- 已评估可合并项：statistics 与 recommendation 同为 MQ 投影读模型，可合并为一个投影服务；stock 仅服务下单扣减，可并入 product。当前保留独立主要用于覆盖不同技术点，全量启动约需 4–6GB 内存，按链路按需启动即可。
 - Postman 集合导出在 `docs/postman/`（网关合并版 + 各服务直连版）。
 
 ## 共享约定
