@@ -36,4 +36,24 @@ class AuthorAvatarServiceTest {
         assertTrue(new AuthorAvatarServiceImpl(users, "internal").resolve(List.of()).isEmpty());
         verifyNoInteractions(users);
     }
+
+    /**
+     * 作者数超过批量上限时应分片回源并合并结果，而不是抛异常导致整页 500。
+     */
+    @Test
+    void splitsLargePagesIntoSeveralBatchesInsteadOfFailing() {
+        var users = mock(CommentUserClient.class);
+        var ids = java.util.stream.LongStream.rangeClosed(1, 120).boxed().toList();
+        when(users.avatars(ids.subList(0, 50), "internal"))
+                .thenReturn(ApiResponse.success(Map.of(1L, "/a1")));
+        when(users.avatars(ids.subList(50, 100), "internal"))
+                .thenReturn(ApiResponse.success(Map.of(51L, "/a51")));
+        when(users.avatars(ids.subList(100, 120), "internal"))
+                .thenReturn(ApiResponse.success(Map.of(101L, "/a101")));
+
+        var result = new AuthorAvatarServiceImpl(users, "internal").resolve(ids);
+
+        assertEquals(Map.of(1L, "/a1", 51L, "/a51", 101L, "/a101"), result);
+        verify(users, times(3)).avatars(anyList(), eq("internal"));
+    }
 }
