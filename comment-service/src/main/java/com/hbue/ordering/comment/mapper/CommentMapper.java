@@ -137,6 +137,38 @@ public interface CommentMapper {
             + "AND ((#{user} IS NOT NULL AND user_id=#{user}) OR (#{user} IS NULL AND product_id=#{product})) LIMIT 1)")
     boolean hasUnknownImages(@Param("user") Long user, @Param("product") Long product);
 
+    /**
+     * 批量读取用户指定订单下已提交且未删除的菜品评价。
+     *
+     * <p>用于统计待评价订单：评价服务拿到订单服务的候选订单后，一次查出这些订单中
+     * 已评价的菜品，避免逐单逐菜查询。已删除评价不算已评价，因此必须带 {@code status = 1}；
+     * 只返回订单号与菜品号，不读取正文，也不跨用户查询。</p>
+     *
+     * @param userId   用户内部编号
+     * @param orderIds 候选订单编号，调用方保证非空且数量有限
+     * @return 已评价的订单与菜品组合
+     */
+    @Select("""
+            <script>
+            SELECT order_id AS orderId, product_id AS productId
+            FROM comments
+            WHERE user_id = #{userId} AND status = 1
+              AND order_id IN
+              <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">#{orderId}</foreach>
+            </script>
+            """)
+    List<ReviewedProduct> reviewedProducts(@Param("userId") Long userId,
+                                           @Param("orderIds") List<Long> orderIds);
+
     record Summary(long reviewCount, long scoreTotal) {
+    }
+
+    /**
+     * 已评价菜品投影。
+     *
+     * @param orderId   订单编号
+     * @param productId 菜品编号
+     */
+    record ReviewedProduct(Long orderId, Long productId) {
     }
 }

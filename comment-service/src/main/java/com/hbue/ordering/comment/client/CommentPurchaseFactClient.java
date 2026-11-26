@@ -1,11 +1,14 @@
 package com.hbue.ordering.comment.client;
 
 import com.hbue.ordering.comment.client.vo.PurchaseFactVO;
+import com.hbue.ordering.comment.client.vo.ReviewCandidateVO;
 import com.hbue.ordering.common.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
 
 /**
  * 订单服务消费事实内部客户端。
@@ -39,5 +42,24 @@ public interface CommentPurchaseFactClient {
             @RequestParam("userId") Long userId,
             @RequestParam("targetType") String targetType,
             @RequestParam("targetId") Long targetId
+    );
+
+    /**
+     * 读取用户最近已完成订单的明细编号，用于统计待评价订单。
+     *
+     * <p>订单服务只返回编号行，评论服务再与自己的评价表比对；该查询不携带用户 JWT，
+     * 用户编号由评论服务从已认证身份解析，禁止由终端直接传入他人编号。
+     * 返回上限由 order-service 再次收紧，评论服务传入的 limit 只作为期望值。</p>
+     *
+     * @param internalToken 服务间共享令牌
+     * @param userId        用户内部编号
+     * @param limit         最多扫描的已完成订单数
+     * @return 订单明细候选；调用失败由 Feign 抛出异常，由统计服务统一映射为 503
+     */
+    @GetMapping("/internal/orders/review-candidates")
+    ApiResponse<List<ReviewCandidateVO>> reviewCandidates(
+            @RequestHeader("X-Internal-Token") String internalToken,
+            @RequestParam("userId") Long userId,
+            @RequestParam("limit") int limit
     );
 }

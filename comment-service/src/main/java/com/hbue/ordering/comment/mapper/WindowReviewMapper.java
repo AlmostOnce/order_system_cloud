@@ -156,6 +156,28 @@ public interface WindowReviewMapper {
     com.hbue.ordering.comment.vo.ReviewSummaryVO reviewSummary(@Param("id") Long id);
 
     /**
+     * 批量读取用户已提交且未删除的店铺评价所对应的订单。
+     *
+     * <p>用于统计待评价订单：店铺评价每个订单最多一条，只需返回订单号集合。
+     * 已删除评价不算已评价，因此必须带 {@code status = 1}；不读取正文与图片。</p>
+     *
+     * @param userId   用户内部编号
+     * @param orderIds 候选订单编号，调用方保证非空且数量有限
+     * @return 已提交店铺评价的订单编号
+     */
+    @Select("""
+            <script>
+            SELECT order_id AS orderId
+            FROM window_reviews
+            WHERE user_id = #{userId} AND status = 1
+              AND order_id IN
+              <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">#{orderId}</foreach>
+            </script>
+            """)
+    List<Long> reviewedOrderIds(@Param("userId") Long userId,
+                                @Param("orderIds") List<Long> orderIds);
+
+    /**
      * 评价行的内部投影。
      *
      * @param id         公开评价标识
