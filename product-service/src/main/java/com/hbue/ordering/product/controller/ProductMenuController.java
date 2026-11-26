@@ -84,4 +84,20 @@ public class ProductMenuController {
     ) {
         return ApiResponse.success(productMenuService.getWindowMenu(windowId));
     }
+
+    /**
+     * 查询单个窗口的展示摘要，供订单详情展示取餐地点。
+     *
+     * <p>与菜单接口相互独立：订单详情用它在窗口停用或休息时也能回看取餐地点；
+     * 查询失败只影响地点行展示，不影响订单正文、取餐码和支付。</p>
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口摘要；窗口不存在时 data 为 null
+     */
+    @GetMapping("/windows/{windowId}")
+    public ApiResponse<WindowSummaryVO> getWindowSummary(
+            @PathVariable("windowId") @Positive Long windowId
+    ) {
+        return ApiResponse.success(productMenuService.getWindowSummary(windowId));
+    }
 }

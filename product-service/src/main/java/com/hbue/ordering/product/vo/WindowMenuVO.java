@@ -44,6 +44,14 @@ public class WindowMenuVO {
     private String location;
 
     /**
+     * 是否营业：1 营业，0 休息；与启用状态相互独立。
+     *
+     * <p>菜单仍允许浏览，但顾客端在休息时应禁用加购与结算；
+     * 最终下单正确性仍由商品核价校验，不能只依赖前端禁用。</p>
+     */
+    private Integer isOpen;
+
+    /**
      * 窗口下启用的分类，保留没有在售菜品的空分类。
      */
     private List<ProductCategoryMenuVO> categories;

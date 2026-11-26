@@ -57,8 +57,16 @@ public class WindowSummaryVO {
      */
     private String imageUrl;
 
+    /**
+     * 是否营业：1 营业，0 休息；与启用状态相互独立。
+     *
+     * <p>顾客端需要据此展示“休息中”并停止加购，因此必须进入面向顾客的摘要视图，
+     * 不能只在管理端返回。旧缓存缺少该字段时按 null 处理，由客户端兼容为营业中。</p>
+     */
+    private Integer isOpen;
+
     public WindowSummaryVO(Long windowId, Long restaurantId, String windowCode, String windowName,
                            String description, Integer sortOrder, String location) {
-        this(windowId, restaurantId, windowCode, windowName, description, sortOrder, location, null);
+        this(windowId, restaurantId, windowCode, windowName, description, sortOrder, location, null, null);
     }
 }

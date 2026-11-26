@@ -51,6 +51,11 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
     private static final int ACTIVE_STATUS = 1;
 
     /**
+     * 窗口营业状态：1 营业，0 休息。休息中的档口允许浏览菜单，但不允许下单。
+     */
+    private static final int OPEN_STATUS = 1;
+
+    /**
      * 在售状态值。
      */
     private static final int ON_SALE_STATUS = 1;
@@ -124,7 +129,9 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
 
         DiningWindowDO window = diningWindowMapper.selectById(request.getWindowId());
         if (window == null
-                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())
+                // 停用与休息都必须拒绝：前端禁用只是体验，下单正确性以这里为准。
+                || !Integer.valueOf(OPEN_STATUS).equals(window.getIsOpen())) {
             // 用窗口状态标记拒绝本次核价，调用方据此中止订单创建。
             return new ProductQuoteResponse(false, List.of());
         }

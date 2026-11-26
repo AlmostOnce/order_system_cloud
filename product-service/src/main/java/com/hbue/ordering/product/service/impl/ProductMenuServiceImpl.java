@@ -163,7 +163,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     restaurant.getRestaurantId(),
                     restaurant.getRestaurantCode(),
                     restaurant.getRestaurantName(),
-                    restaurant.getLocation()
+                    restaurant.getLocation(),
+                    restaurant.getNotice(),
+                    restaurant.getPhone()
             ));
         }
         return summaries;
@@ -232,7 +234,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getDescription(),
                     window.getSortOrder(),
                     window.getLocation(),
-                    FileReferences.url(window.getImageFileKey())
+                    FileReferences.url(window.getImageFileKey()),
+                    window.getIsOpen()
             ));
         }
         menuCacheService.saveActiveWindows(summaries);
@@ -311,6 +314,37 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             menuCacheService.saveWindowMenu(windowId, menu);
             return menu;
         }
+    }
+
+    /**
+     * 查询单个窗口的展示摘要，供订单详情展示取餐地点。
+     *
+     * <p>只按主键读取一行窗口数据，不校验启用/营业状态：历史订单即使窗口已停用，
+     * 也应能展示当时的取餐地点。这里不加缓存也不抢锁，单行主键查询本身足够廉价，
+     * 且学生可能刚下单就查看，缓存反而会延后管理端对位置的临时修改。</p>
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口摘要；窗口不存在时返回 null
+     */
+    @Override
+    public WindowSummaryVO getWindowSummary(Long windowId) {
+        validateWindowId(windowId);
+        DiningWindowDO window = diningWindowMapper.selectById(windowId);
+        if (window == null) {
+            return null;
+        }
+        // 复用列表摘要结构，保证订单详情与首页对同一窗口的名称、位置展示一致。
+        return new WindowSummaryVO(
+                window.getWindowId(),
+                window.getRestaurantId(),
+                window.getWindowCode(),
+                window.getWindowName(),
+                window.getDescription(),
+                window.getSortOrder(),
+                window.getLocation(),
+                FileReferences.url(window.getImageFileKey()),
+                window.getIsOpen()
+        );
     }
 
     /**
@@ -405,6 +439,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         );
         // 一次读取窗口行即可得到完整有序图片，不为每张图片跨服务查询或访问文件数据库。
         menu.setImageUrls(WindowImageGallery.read(window).stream().map(FileReferences::url).toList());
+        // 营业状态来自同一行窗口数据，随菜单一起返回，避免客户端再发一次档口详情请求。
+        menu.setIsOpen(window.getIsOpen());
         return menu;
     }
 

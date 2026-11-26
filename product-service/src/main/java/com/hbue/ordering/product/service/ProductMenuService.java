@@ -45,4 +45,21 @@ public interface ProductMenuService {
      * @throws com.hbue.ordering.common.core.exception.BusinessException 窗口 ID 无效或窗口不存在/停用时抛出
      */
     WindowMenuVO getWindowMenu(Long windowId);
+
+    /**
+     * 查询单个窗口的展示摘要，供订单详情展示取餐地点。
+     *
+     * <p>与菜单查询刻意不同：这里<b>不按启用状态和营业状态过滤</b>。订单一旦产生，
+     * 学生就需要能回看自己去哪取餐；窗口被停用或当前休息不应让历史订单丢失位置信息。
+     * 因此只回源读取窗口行，返回编号、名称、位置等展示字段，不返回菜品、库存或管理状态，
+     * 避免为了一个地点把整个菜单聚合加载出来。</p>
+     *
+     * <p>订单详情把它作为独立展示链路调用：查询失败只会隐藏地点行，不影响订单正文、
+     * 取餐码和支付流程。</p>
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口摘要；窗口编号不存在时返回 null
+     * @throws com.hbue.ordering.common.core.exception.BusinessException 窗口 ID 非法时抛出
+     */
+    WindowSummaryVO getWindowSummary(Long windowId);
 }
