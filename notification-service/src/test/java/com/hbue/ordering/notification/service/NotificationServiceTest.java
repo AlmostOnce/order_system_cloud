@@ -16,7 +16,7 @@ class NotificationServiceTest {
     @Test
     void rejectsAnotherUsersCursorAndDoesNotQueryPage() {
         var repository = mock(NotificationMapper.class);
-        var service = new NotificationServiceImpl(repository);
+        var service = new NotificationServiceImpl(repository, mock(SystemConversationService.class));
         assertThrows(BusinessException.class, () -> service.page(7, ID, 20));
         verify(repository, never()).page(anyLong(), any(), anyInt());
     }
@@ -25,7 +25,7 @@ class NotificationServiceTest {
     void markReadIsScopedToTheAuthenticatedUser() {
         var repository = mock(NotificationMapper.class);
         when(repository.existsForUser(7, ID)).thenReturn(true);
-        var service = new NotificationServiceImpl(repository);
+        var service = new NotificationServiceImpl(repository, mock(SystemConversationService.class));
         service.markRead(7, ID);
         verify(repository).markRead(7, ID);
         assertThrows(BusinessException.class, () -> service.markRead(8, ID));
@@ -36,7 +36,7 @@ class NotificationServiceTest {
     void emptyPageContainsNoCursor() {
         var repository = mock(NotificationMapper.class);
         when(repository.page(7, null, 21)).thenReturn(List.of());
-        var page = new NotificationServiceImpl(repository).page(7, null, 20);
+        var page = new NotificationServiceImpl(repository, mock(SystemConversationService.class)).page(7, null, 20);
         assertTrue(page.items().isEmpty());
         assertFalse(page.hasMore());
         assertNull(page.nextCursor());
