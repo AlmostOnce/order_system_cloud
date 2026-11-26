@@ -200,6 +200,8 @@ comments.has_images只做筛选投影：新发布时随元数据/评分/Outbox�
 - `V6__create_review_discussion.sql` 已于 2026-11-26 在开发库 9095 执行并核验：
   `comment_db.review_discussion` 建表成功，17 列、两个唯一键、三个普通索引与三条 CHECK 约束齐全，
   `comment_service` 账号已有 SELECT/INSERT/UPDATE 授权。回滚为先下线评论接口再 `DROP TABLE`。
+- notification V7/V8 也已执行并核验：只重写 `biz_type` 与偏好分类的列注释，增加 COUPON、COMMENT、
+  WINDOW_REVIEW、REVIEW 说明，不改变列类型、长度与数据。
 - 未运行 Maven、未构建、未重启任何服务，Java 源码仅做静态检查；
   单元测试源码已同步构造参数，但未执行；学生端仅做 Node 静态与行为校验，未构建、未联调。
 - 学生端与管理端前端未接入（分别在 uni-app 与 Vue 管理端仓库）。
