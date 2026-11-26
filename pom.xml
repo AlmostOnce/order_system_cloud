@@ -53,6 +53,8 @@
         <springdoc.version>2.9.1</springdoc.version>
         <!-- 覆盖 Spring Boot 管理的 Lombok 版本，适配本机 JDK 25 编译环境 -->
         <lombok.version>1.18.48</lombok.version>
+        <!-- 取餐二维码渲染：ZXing 只负责把六位取餐码编码为 PNG，不引入扫码端依赖。 -->
+        <zxing.version>3.5.3</zxing.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 

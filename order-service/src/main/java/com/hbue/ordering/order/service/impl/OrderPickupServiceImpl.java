@@ -10,6 +10,7 @@ import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderPickupService;
+import com.hbue.ordering.order.util.PickupQrCodeRenderer;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import org.springframework.stereotype.Service;
 
@@ -80,6 +81,14 @@ public class OrderPickupServiceImpl implements OrderPickupService {
         OrderDO order = orders.selectById(orderId);
         if (order == null || !userId.equals(order.getUserId())) throw notFound();
         return persistence.ensurePickupCode(orderId, userId);
+    }
+
+    @Override
+    public String getOwnPickupQrCode(Long userId, Long orderId) {
+        // 复用取餐码入口：归属校验、订单状态与退还口径都在 getOwnPickupCode 内完成。
+        // 二维码只是展示形式，不能因为新增接口而绕过原有可见条件。
+        String pickupCode = getOwnPickupCode(userId, orderId);
+        return PickupQrCodeRenderer.base64Png(pickupCode);
     }
 
     @Override

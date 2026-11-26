@@ -186,6 +186,19 @@
             <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
 
+        <!-- 取餐二维码：core 负责编码矩阵，javase 提供 PNG 输出；版本在根 pom 统一管理。 -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+        <!-- 仅服务端渲染二维码图片，扫码端仍由浏览器/扫码枪负责。 -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+
         <!-- 请求参数校验 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

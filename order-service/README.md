@@ -17,6 +17,7 @@
 | 数据 | MyBatis-Plus 3.5.8 + Druid（max-active=10）+ MySQL `order_db`（默认 `127.0.0.1:9095`，账号 `order_user`） |
 | 消息 | Spring Cloud Stream RocketMQ：5 个生产 binding + 2 个自消费 binding |
 | 并发 | Redisson（排行投影重建锁）、Redis 取餐码限流 |
+| 二维码 | ZXing 3.5.3 服务端渲染取餐码 PNG（Base64），不依赖客户端 QR 库 |
 
 - profile 组 `order-timeout = ranking-mq + order-timeout-mq + coupon-mq`；Feign connect 2000 / read 3000。
 - 三个事件发布器默认每 1 秒扫描 Outbox，同步发送 3 秒超时；各事件域均有独立开关（关闭时 Outbox 照常记录，恢复后补发）。
@@ -28,11 +29,11 @@
 |---|---|
 | `OrderController` | 下单、列表、详情、取消、商家状态推进 |
 | `OrderRefundController` | 退款申请/查询/申诉/撤回、商家退款队列与裁决 |
-| `OrderPickupController` | 取餐码查询与核销 |
+| `OrderPickupController` | 取餐码查询、取餐二维码查询与核销 |
 | `OrderServiceImpl`（核心） | 幂等、报价编排、锁券与分摊、扣减、落库、取消、支付推进 |
 | `OrderPersistenceServiceImpl` | 落库、乐观锁状态更新、取餐码持久化 |
 | `RefundRules` / `OrderRefundServiceImpl` / `OrderRefundTask` | 纯退款规则、退款业务、到期自动审批与执行 |
-| `OrderPickupServiceImpl` | 取餐码生成、限流、常量时间比较、核销 |
+| `OrderPickupServiceImpl` / `PickupQrCodeRenderer` | 取餐码生成、限流、常量时间比较、核销；取餐码静态二维码渲染 |
 | `OrderTimeoutOutboxService` / `OrderTimeoutMessaging` / `OrderTimeoutService` | 超时事件记录、发布、消费取消 |
 | `SalesOutboxWriter/Publisher`、`OrderNotificationOutboxWriter/Publisher`、`CouponConsumeOutboxWriter/Publisher`、`RecommendationPurchaseOutboxWriter/Publisher` | 四类事件 Outbox 与发布 |
 | `CancellationNotificationTcc(Impl/Transactions)` | 取消通知 Seata TCC 分支 |
@@ -258,6 +259,7 @@
 | GET | `/orders/list`、`/orders/{orderId}` | 列表与详情 |
 | PATCH | `/orders/{orderId}/cancel` | 取消待支付订单 |
 | GET | `/orders/{orderId}/pickup-code` | 本人取餐码 |
+| GET | `/orders/{orderId}/pickup-qrcode` | 本人取餐码二维码（PNG Base64，内容为六位取餐码） |
 | POST/GET | `/orders/{orderId}/refunds` | 退款申请/查询 |
 | POST | `/orders/{orderId}/refunds/{refundId}/appeal`、`/withdraw` | 申诉、撤回 |
 | GET | `/orders/rankings/sales` | 销量榜（旧入口，现由统计服务直达） |

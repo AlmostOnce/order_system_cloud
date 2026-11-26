@@ -26,6 +26,18 @@ public interface OrderPickupService {
     String getOwnPickupCode(Long userId, Long orderId);
 
     /**
+     * 读取当前用户名下订单取餐码对应的二维码图片。
+     *
+     * <p>二维码内容就是 {@link #getOwnPickupCode(Long, Long)} 返回的六位取餐码，
+     * 因此归属、状态与退款校验完全复用同一入口，不额外放宽二维码的可展示范围。</p>
+     *
+     * @param userId  当前登录用户编号
+     * @param orderId 订单主键
+     * @return PNG 的 Base64 字符串，不带 data URL 前缀
+     */
+    String getOwnPickupQrCode(Long userId, Long orderId);
+
+    /**
      * 商家核销取餐码，把订单从待取货推进到已完成。
      *
      * @param operatorId 核销操作者编号
