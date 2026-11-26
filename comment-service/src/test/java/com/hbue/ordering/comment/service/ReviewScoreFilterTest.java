@@ -33,12 +33,12 @@ class ReviewScoreFilterTest {
         }
         verifyNoInteractions(comments, windows);
         for (Integer score : new Integer[]{null, 1, 5}) {
-            when(comments.page(null, 1L, null, 21, score, null)).thenReturn(List.of());
-            when(windows.page(null, 1L, null, 21, score, null)).thenReturn(List.of());
+            when(comments.pageByProduct(1L, null, 21, score, null)).thenReturn(List.of());
+            when(windows.pageByWindow(1L, null, 21, score, null)).thenReturn(List.of());
             assertFalse(service.page(null, 1L, null, 20, score, null).hasMore());
             assertFalse(shops.page(null, 1L, null, 20, score, null).hasMore());
-            verify(comments).page(null, 1L, null, 21, score, null);
-            verify(windows).page(null, 1L, null, 21, score, null);
+            verify(comments).pageByProduct(1L, null, 21, score, null);
+            verify(windows).pageByWindow(1L, null, 21, score, null);
         }
     }
 
