@@ -140,7 +140,10 @@ class UserServiceImplAssignRoleTest {
 
         assertEquals(TARGET_USER_ID, result.getUserId());
         assertEquals("STALL_MANAGER", result.getRoleCode());
-        verify(userMapper).update(eq(null), any());
+        // 变更角色必须同时递增 credential_version，否则旧 Access Token 会继续携带原角色直到过期。
+        verify(userMapper).update(eq(null), argThat(wrapper ->
+                wrapper instanceof com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<?> update
+                        && update.getSqlSet().contains("credential_version = credential_version + 1")));
         verify(auditLogger).record(
                 eq(OPERATOR_ID),
                 eq("USER_ROLE_ASSIGN"),

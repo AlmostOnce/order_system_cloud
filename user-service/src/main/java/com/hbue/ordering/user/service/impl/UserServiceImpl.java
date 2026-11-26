@@ -485,9 +485,12 @@ public class UserServiceImpl
         String beforeRoleCode = targetUser.getRoleCode();
         if (!targetRole.getCode().equals(beforeRoleCode)) {
             // 只写 role_code，不触碰任何业务数据范围。
+            // 同时递增 credential_version：JWT 里的角色是签发时快照，且各资源服务只比对 credential_version。
+            // 不递增的话，降权用户手里未过期的 Access Token 仍带原管理角色，最长可持续约 30 分钟越权。
             UpdateWrapper<UserDO> update = new UpdateWrapper<>();
             update.eq("user_id", targetUserId)
                     .set("role_code", targetRole.getCode())
+                    .setSql("credential_version = credential_version + 1")
                     .set("updated_at", LocalDateTime.now());
             update(null, update);
             targetUser.setRoleCode(targetRole.getCode());
