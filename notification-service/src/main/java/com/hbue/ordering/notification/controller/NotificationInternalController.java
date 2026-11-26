@@ -2,8 +2,12 @@ package com.hbue.ordering.notification.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
+import com.hbue.ordering.notification.dto.CouponExpiryNotificationRequest;
+import com.hbue.ordering.notification.dto.ReviewDiscussionNotificationRequest;
 import com.hbue.ordering.notification.dto.SupportReplyNotificationRequest;
 import com.hbue.ordering.notification.dto.SupportStatusNotificationRequest;
+import com.hbue.ordering.notification.service.impl.CouponExpiryNotificationService;
+import com.hbue.ordering.notification.service.impl.ReviewDiscussionNotificationService;
 import com.hbue.ordering.notification.service.impl.SupportNotificationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,15 +40,31 @@ public class NotificationInternalController {
     private final InternalScopeTokenVerifier internalScopeTokenVerifier;
 
     /**
+     * 优惠券到期提醒业务服务。
+     */
+    private final CouponExpiryNotificationService couponExpiryNotificationService;
+
+    /**
+     * 评价评论提醒业务服务。
+     */
+    private final ReviewDiscussionNotificationService reviewDiscussionNotificationService;
+
+    /**
      * 创建通知内部接口控制器。
      *
-     * @param supportNotificationService 支持回复通知业务服务
-     * @param internalScopeTokenVerifier 服务间共享密钥校验器
+     * @param supportNotificationService           支持回复通知业务服务
+     * @param internalScopeTokenVerifier           服务间共享密钥校验器
+     * @param couponExpiryNotificationService      优惠券到期提醒业务服务
+     * @param reviewDiscussionNotificationService  评价评论提醒业务服务
      */
     public NotificationInternalController(SupportNotificationService supportNotificationService,
-                                          InternalScopeTokenVerifier internalScopeTokenVerifier) {
+                                          InternalScopeTokenVerifier internalScopeTokenVerifier,
+                                          CouponExpiryNotificationService couponExpiryNotificationService,
+                                          ReviewDiscussionNotificationService reviewDiscussionNotificationService) {
         this.supportNotificationService = supportNotificationService;
         this.internalScopeTokenVerifier = internalScopeTokenVerifier;
+        this.couponExpiryNotificationService = couponExpiryNotificationService;
+        this.reviewDiscussionNotificationService = reviewDiscussionNotificationService;
     }
 
     /**
@@ -79,6 +99,45 @@ public class NotificationInternalController {
             @RequestBody SupportStatusNotificationRequest request) {
         internalScopeTokenVerifier.verify(internalToken);
         supportNotificationService.sendSupportStatus(request);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 写入并推送优惠券到期提醒站内信。
+     *
+     * <p>由优惠券服务的扫描任务在券进入"到期前 24 小时"窗口时调用。该通知使用独立的
+     * 类型与偏好分类，不写 order_id，与订单状态、工单通知互不影响。</p>
+     *
+     * @param internalToken 服务间共享密钥
+     * @param request       幂等事件、券记录与正文
+     * @return 处理成功响应
+     */
+    @PostMapping("/coupon-expiring")
+    public ApiResponse<Void> couponExpiring(
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+            @RequestBody CouponExpiryNotificationRequest request) {
+        internalScopeTokenVerifier.verify(internalToken);
+        couponExpiryNotificationService.sendExpiring(request);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 写入并推送评价评论站内信。
+     *
+     * <p>由评论服务在评论或回复提交后调用。事件标识携带评论版本，
+     * 同一版本重试不会重复通知；该通知使用独立的类型与偏好分类，
+     * 不写 order_id，与订单、工单、优惠券提醒互不影响。</p>
+     *
+     * @param internalToken 服务间共享密钥
+     * @param request       幂等事件、评价标识与正文
+     * @return 处理成功响应
+     */
+    @PostMapping("/review-discussion")
+    public ApiResponse<Void> reviewDiscussion(
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken,
+            @RequestBody ReviewDiscussionNotificationRequest request) {
+        internalScopeTokenVerifier.verify(internalToken);
+        reviewDiscussionNotificationService.send(request);
         return ApiResponse.success(null);
     }
 }

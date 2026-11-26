@@ -46,6 +46,8 @@ public interface NotificationMapper extends BaseMapper<NotificationDO> {
                         WHEN 'ORDER_STATUS' THEN 'ORDER'
                         WHEN 'SUPPORT_REPLY' THEN 'SUPPORT'
                         WHEN 'SUPPORT_STATUS' THEN 'SUPPORT'
+                        WHEN 'COUPON_EXPIRING' THEN 'COUPON'
+                        WHEN 'REVIEW_DISCUSSION' THEN 'REVIEW'
                         ELSE '' END)
             """)
     long unreadCount(@Param("userId") long userId);
