@@ -5,7 +5,7 @@
 2026-10-28 新增 comment-service（端口9105）和 comment-api
 共享评分契约。首期提供已完成订单的菜品评价、本人/菜品分页、评价详情、评分汇总及商品侧异步评分投影。每笔订单的每道菜限评一次，评分1至5，正文1至1000字符，每份评价最多3张图片、5个最多20字符的标签。暂不含评论修改删除、商家回复、点赞、审核后台及前端入口。
 
-初始实现阶段只修改源码、必要依赖声明和部署配置；Java测试源码已补，未构建或端到端联调。后续MongoDB部署结果见下方，MySQL迁移、Nacos路由发布和业务服务启停仍未执行，也未运行Maven。
+初始实现阶段只修改源码、必要依赖声明和部署配置；Java测试源码已补，未构建或端到端联调。后续MongoDB部署结果见下方；MySQL 迁移已按节执行并核验，Nacos 路由发布和业务服务启停仍未执行，也未运行 Maven。
 
 ## 接口
 
@@ -15,6 +15,7 @@
 |------|--------------------------------------------------------|-------------------------------------------------|
 | POST | /api/comments                                          | 发布评价；必须携带稳定UUID格式的Idempotency-Key |
 | GET  | /api/comments/me?limit=20&cursor=...                   | 本人评价                                        |
+| GET  | /api/comments/me/pending-reviews/count                 | 待评价订单数（店铺或任一菜品缺评价）            |
 | GET  | /api/comments/products/{productId}?limit=20&cursor=... | 菜品评价                                        |
 | GET  | /api/comments/{commentId}                              | 评价详情                                        |
 | GET  | /api/comments/products/{productId}/rating              | 评论服务权威评分汇总的短缓存                    |
@@ -191,7 +192,11 @@ comments.has_images只做筛选投影：新发布时随元数据/评分/Outbox�
   `NotificationMapper.unreadCount` 类型映射与 `POST /internal/notifications/review-discussion`。
 - 学生端 uni-app（另一仓库）：评价卡片评论摘要与“查看全部/写第一条评论”入口、
   `pages/review/discussions` 评论页（顶层分页、楼层回复、发表/回复/编辑/撤回、商家标识）、
-  通知中心评论区跳转；评论接口层补充分页解析与幂等键。
+  通知中心评论区跳转；评论接口层补充分页解析与幂等键；我的评价页支持编辑评分/正文/标签与删除，
+  个人中心显示待评价订单数。
+- 待评价统计：`PendingReviewController`/`PendingReviewService` 通过订单服务
+  `GET /internal/orders/review-candidates` 读取最近已完成订单明细，再批量比对店铺评价与菜品评价；
+  只返回数量，按最近 200 个已完成订单计算。
 - 评论完全不参与评分、排序、推荐与评分 MQ，评分链路零改动。
 
 ### 未完成项
@@ -200,6 +205,10 @@ comments.has_images只做筛选投影：新发布时随元数据/评分/Outbox�
 - `V6__create_review_discussion.sql` 已于 2026-11-26 在开发库 9095 执行并核验：
   `comment_db.review_discussion` 建表成功，17 列、两个唯一键、三个普通索引与三条 CHECK 约束齐全，
   `comment_service` 账号已有 SELECT/INSERT/UPDATE 授权。回滚为先下线评论接口再 `DROP TABLE`。
+- `V5__review_edit_and_delete.sql` 也已执行并核验：`comments.updated_at`、
+  `window_reviews.status/updated_at`、状态与评分约束、`idx_window_review_user_status`、
+  `idx_window_review_window_status` 均存在。执行前 `window_reviews` 缺少 `status`，
+  会导致评价编辑/删除与待评价查询直接失败。
 - notification V7/V8 也已执行并核验：只重写 `biz_type` 与偏好分类的列注释，增加 COUPON、COMMENT、
   WINDOW_REVIEW、REVIEW 说明，不改变列类型、长度与数据。
 - 未运行 Maven、未构建、未重启任何服务，Java 源码仅做静态检查；
