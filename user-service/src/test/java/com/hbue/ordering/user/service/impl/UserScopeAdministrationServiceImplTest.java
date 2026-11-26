@@ -251,7 +251,7 @@ class UserScopeAdministrationServiceImplTest {
         );
         when(windowInternalClient.getWindow(7L, INTERNAL_TOKEN))
                 .thenReturn(ApiResponse.success(
-                        new WindowInfoVO(7L, 1L, 1)
+                        new WindowInfoVO(7L, "七号档口", 1L, 1)
                 ));
         UserDataScopeDO persisted = scope(100L, "WINDOW", 7L);
         when(userDataScopeService.listByUserId(TARGET_USER_ID))

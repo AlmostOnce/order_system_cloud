@@ -66,7 +66,7 @@ class PasswordRecoveryServiceTest {
         user.setEmail("user@example.com");
         user.setCredentialVersion(version);
         user.setPasswordHash("old-hash");
-        when(users.selectPasswordRecoveryForUpdate(9L)).thenReturn(user);
+        when(users.selectPasswordCredentialForUpdate(9L)).thenReturn(user);
     }
 
     @Test
