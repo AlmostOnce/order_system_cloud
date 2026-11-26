@@ -6,11 +6,11 @@ import org.apache.ibatis.annotations.*;
 @Mapper
 public interface CommentWriteMapper {
     /**
-     * 有图标记与元数据、评分、Outbox在同一事务写入，不依赖异步修补新评价。
+     * 有图标记、匿名标记与元数据、评分、Outbox在同一事务写入，不依赖异步修补新评价。
      */
     @Insert("""
-            INSERT INTO comments(comment_id,user_id,author_name,order_id,product_id,window_id,score,request_key,request_hash,created_at,has_images)
-            VALUES(#{row.commentId},#{row.userId},#{row.authorName},#{row.orderId},#{row.productId},#{row.windowId},#{row.score},#{row.requestKey},#{row.requestHash},#{row.createdAt},#{row.hasImages})
+            INSERT INTO comments(comment_id,user_id,author_name,order_id,product_id,window_id,score,request_key,request_hash,created_at,has_images,anonymous)
+            VALUES(#{row.commentId},#{row.userId},#{row.authorName},#{row.orderId},#{row.productId},#{row.windowId},#{row.score},#{row.requestKey},#{row.requestHash},#{row.createdAt},#{row.hasImages},#{row.anonymous})
             """)
     int insertComment(@Param("row") CommentRowDO row);
 

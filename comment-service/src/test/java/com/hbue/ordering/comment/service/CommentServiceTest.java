@@ -30,7 +30,7 @@ class CommentServiceTest {
     private final CommentService service = new CommentServiceImpl(rows, writer, purchases, images, mongo, json,
             mock(AuthorAvatarService.class), mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
     private final String key = "a1111111-1111-4111-8111-111111111111";
-    private final CreateCommentRequest input = new CreateCommentRequest(7L, 5L, 5, "味道很好", List.of(), List.of("好吃"));
+    private final CreateCommentRequest input = new CreateCommentRequest(7L, 5L, 5, "味道很好", List.of(), List.of("好吃"), false);
 
     CommentServiceTest() {
         when(purchases.requireCompletedPurchase(7L, 5L, "Bearer signed")).thenReturn(2L);
@@ -54,7 +54,7 @@ class CommentServiceTest {
         assertEquals(first.commentId(), replay.commentId());
         verify(writer, times(1)).commit(any());
         assertThrows(BusinessException.class, () -> service.create(9L, "同学", "Bearer signed", key,
-                new CreateCommentRequest(7L, 5L, 1, "改了内容", List.of(), List.of())));
+                new CreateCommentRequest(7L, 5L, 1, "改了内容", List.of(), List.of(), false)));
         String response = json.writeValueAsString(first);
         for (String privateField : List.of("userId", "orderId", "requestHash", "requestKey"))
             assertFalse(response.contains(privateField));
@@ -70,7 +70,7 @@ class CommentServiceTest {
 
     @Test
     void duplicatePurchaseRejectsBeforeWritingMongo() {
-        when(rows.byPurchase(7L, 5L)).thenReturn(new CommentRowDO(key, 9L, "同学", 7L, 5L, 2L, 5, key, "hash", null, false));
+        when(rows.byPurchase(7L, 5L)).thenReturn(new CommentRowDO(key, 9L, "同学", 7L, 5L, 2L, 5, key, "hash", null, false, false));
         assertThrows(BusinessException.class, () -> service.create(9L, "同学", "Bearer signed", key, input));
         verify(mongo, never()).insert(any(CommentContentDO.class));
     }
@@ -82,7 +82,7 @@ class CommentServiceTest {
         when(mongo.byId(anyString())).thenAnswer(a ->
                 new CommentContentDO(a.getArgument(0), "正文", List.of(fileKey), List.of(), Instant.now(), true));
         var response = service.create(9L, "同学", "Bearer signed", key,
-                new CreateCommentRequest(7L, 5L, 5, "正文", List.of(fileKey.toUpperCase()), List.of()));
+                new CreateCommentRequest(7L, 5L, 5, "正文", List.of(fileKey.toUpperCase()), List.of(), false));
         var saved = org.mockito.ArgumentCaptor.forClass(CommentContentDO.class);
         verify(mongo).insert(saved.capture());
         assertEquals(List.of(fileKey), saved.getValue().imageFileKeys());
@@ -98,7 +98,7 @@ class CommentServiceTest {
         when(mongo.byId(anyString())).thenAnswer(a ->
                 new CommentContentDO(a.getArgument(0), "", List.of(), List.of(), Instant.now(), true));
         var response = service.create(9L, "同学", "Bearer signed", key,
-                new CreateCommentRequest(7L, 5L, 4, null, null, null));
+                new CreateCommentRequest(7L, 5L, 4, null, null, null, null));
         assertEquals(4, response.score());
         assertEquals("", response.content());
         var saved = org.mockito.ArgumentCaptor.forClass(CommentContentDO.class);
@@ -170,7 +170,7 @@ class CommentServiceTest {
      * @return 评价元数据
      */
     private CommentRowDO row(String id, int score) {
-        return new CommentRowDO(id, 9L, "同学", 7L, 5L, 2L, score, id, "hash", LocalDateTime.now(), false);
+        return new CommentRowDO(id, 9L, "同学", 7L, 5L, 2L, score, id, "hash", LocalDateTime.now(), false, false);
     }
 
 }

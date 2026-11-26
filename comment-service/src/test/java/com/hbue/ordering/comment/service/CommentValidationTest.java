@@ -17,10 +17,10 @@ class CommentValidationTest {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             for (int score : new int[]{0, 6})
-                assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, score, "好吃", List.of(), List.of())).isEmpty());
-            assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好".repeat(1001), List.of(), List.of())).isEmpty());
-            assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好吃", List.of("invalid"), List.of())).isEmpty());
-            assertTrue(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好吃", List.of(), List.of())).isEmpty());
+                assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, score, "好吃", List.of(), List.of(), null)).isEmpty());
+            assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好".repeat(1001), List.of(), List.of(), null)).isEmpty());
+            assertFalse(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好吃", List.of("invalid"), List.of(), null)).isEmpty());
+            assertTrue(validator.validate(new CreateCommentRequest(1L, 2L, 5, "好吃", List.of(), List.of(), null)).isEmpty());
         }
     }
 
@@ -36,9 +36,9 @@ class CommentValidationTest {
             for (int count : new int[]{0, 3, 4}) {
                 var images = keys.subList(0, count);
                 assertEquals(count <= 3, validator.validate(new CreateCommentRequest(
-                        1L, 2L, 5, "", images, List.of())).isEmpty());
+                        1L, 2L, 5, "", images, List.of(), null)).isEmpty());
                 assertEquals(count <= 3, validator.validate(new CreateWindowReviewRequest(
-                        1L, 5, "", images, List.of())).isEmpty());
+                        1L, 5, "", images, List.of(), null)).isEmpty());
             }
         }
     }

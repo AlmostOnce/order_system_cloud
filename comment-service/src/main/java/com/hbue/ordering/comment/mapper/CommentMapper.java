@@ -15,7 +15,7 @@ public interface CommentMapper {
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE comment_id = #{id} AND status = 1
             """)
@@ -29,7 +29,7 @@ public interface CommentMapper {
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE user_id = #{user} AND request_key = #{key} AND status = 1
             """)
@@ -43,7 +43,7 @@ public interface CommentMapper {
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE order_id = #{order} AND product_id = #{product}
             """)
@@ -52,7 +52,7 @@ public interface CommentMapper {
     /** 按本人读取评价页；游标、评分和图片筛选均限定在该用户范围内。 */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE status = 1
               AND user_id = #{userId}
@@ -77,7 +77,7 @@ public interface CommentMapper {
     /** 按商品读取评价页；游标、评分和图片筛选均限定在该商品范围内。 */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE status = 1
               AND product_id = #{productId}
@@ -106,7 +106,7 @@ public interface CommentMapper {
      */
     @Select("""
             SELECT comment_id, user_id, author_name, order_id, product_id, window_id,
-                   score, request_key, request_hash, created_at, has_images
+                   score, request_key, request_hash, created_at, has_images, anonymous
             FROM comments
             WHERE user_id = #{user} AND order_id = #{order} AND status = 1
             ORDER BY id

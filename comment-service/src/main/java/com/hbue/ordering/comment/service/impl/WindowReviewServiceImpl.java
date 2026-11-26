@@ -132,7 +132,9 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         CommentServiceImpl.requireUuid(key);
         var body = new CreateWindowReviewRequest(input.orderId(), input.score(), input.content() == null ? "" : input.content().trim(),
                 (input.imageFileKeys() == null ? List.<String>of() : input.imageFileKeys()).stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
-                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList());
+                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList(),
+                // 匿名意图属于提交内容：同一幂等键先实名后匿名会被摘要判为冲突，避免静默改写展示方式。
+                Boolean.TRUE.equals(input.anonymous()));
         if (body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
         String hash;
         try {
@@ -147,7 +149,8 @@ public class WindowReviewServiceImpl implements WindowReviewService {
         String name = author == null || author.isBlank() ? "校园用户" : author.substring(0, Math.min(64, author.length()));
         try {
             var row = new Row(UUID.randomUUID().toString(), userId, name, body.orderId(), order.windowId(), body.score(),
-                    body.content(), json.writeValueAsString(keys), json.writeValueAsString(body.tags()), key, hash, LocalDateTime.now());
+                    body.content(), json.writeValueAsString(keys), json.writeValueAsString(body.tags()), key, hash, LocalDateTime.now(),
+                    body.anonymous());
             try {
                 reviews.insert(row);
             } catch (DuplicateKeyException e) {
@@ -209,7 +212,7 @@ public class WindowReviewServiceImpl implements WindowReviewService {
             throw new BusinessException(CommonErrorCode.CONFLICT, "评价已被删除或状态已变化，请刷新后重试");
         }
         Row revised = new Row(row.id(), row.userId(), row.author(), row.orderId(), row.windowId(), input.score(),
-                body, imagesJson, tagsJson, row.requestKey(), row.requestHash(), row.createdAt());
+                body, imagesJson, tagsJson, row.requestKey(), row.requestHash(), row.createdAt(), row.anonymous());
         return view(revised);
     }
 
@@ -361,6 +364,9 @@ public class WindowReviewServiceImpl implements WindowReviewService {
      * <p>列表与订单详情走批量汇总后调用本方法，单条详情走 {@link #summaryOf(String)}，
      * 两条路径共用同一套字段拼装。</p>
      *
+     * <p>匿名脱敏与其他评价类型保持同一口径：昵称保留首字、其余字符用星号替换，头像返回空串由
+     * 客户端回落到默认头像；真实昵称仍留在库内供作者回溯与管理端核查，不进入公开视图。</p>
+     *
      * @param row       评价行
      * @param avatarUrl 作者头像地址
      * @param summary   评论汇总
@@ -369,7 +375,10 @@ public class WindowReviewServiceImpl implements WindowReviewService {
     private WindowReviewVO view(Row row, String avatarUrl, ReviewDiscussionService.DiscussionSummary summary) {
         List<String> keys = readList(row.images());
         List<String> tags = readList(row.tags());
-        return new WindowReviewVO(row.id(), row.windowId(), row.author(), avatarUrl, row.score(), row.content(),
+        String author = row.anonymous() ? CommentServiceImpl.maskAuthorName(row.author()) : row.author();
+        // 匿名评价不返回真实头像地址，客户端拿到空串后统一回落到默认头像。
+        String avatar = row.anonymous() ? "" : avatarUrl;
+        return new WindowReviewVO(row.id(), row.windowId(), author, avatar, row.score(), row.content(),
                 keys.stream().map(FileReferences::url).toList(), tags, row.createdAt(),
                 summary.count(), summary.previews());
     }

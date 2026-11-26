@@ -138,7 +138,9 @@ public class CommentServiceImpl implements CommentService {
         // 统一归一化后计算幂等摘要；更改内容不能复用原请求键。
         var body = new CreateCommentRequest(input.orderId(), input.productId(), input.score(), input.content() == null ? "" : input.content().trim(),
                 (input.imageFileKeys() == null ? List.<String>of() : input.imageFileKeys()).stream().map(k -> k.toLowerCase(Locale.ROOT)).distinct().toList(),
-                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList());
+                (input.tags() == null ? List.<String>of() : input.tags()).stream().map(String::trim).distinct().toList(),
+                // 匿名意图属于提交内容：同一幂等键先实名后匿名会被摘要判为冲突，避免静默改写展示方式。
+                Boolean.TRUE.equals(input.anonymous()));
         if (body.tags().stream().anyMatch(String::isEmpty)) throw bad("评价标签不能为空");
         String hash = hash(body);
         CommentRowDO existing = rows.byRequest(userId, key);
@@ -150,7 +152,7 @@ public class CommentServiceImpl implements CommentService {
                 .map(file -> images.requireImageKey(file, userId, "COMMENT_IMAGE", null)).toList();
         String id = UUID.randomUUID().toString();
         String author = authorName == null || authorName.isBlank() ? "校园用户" : authorName.substring(0, Math.min(64, authorName.length()));
-        var row = new CommentRowDO(id, userId, author, body.orderId(), body.productId(), window, body.score(), key, hash, LocalDateTime.now(), !fileKeys.isEmpty());
+        var row = new CommentRowDO(id, userId, author, body.orderId(), body.productId(), window, body.score(), key, hash, LocalDateTime.now(), !fileKeys.isEmpty(), body.anonymous());
         contents.insert(new CommentContentDO(id, body.content(), fileKeys, body.tags(), Instant.now(), false));
         try {
             writer.commit(row);
@@ -286,7 +288,7 @@ public class CommentServiceImpl implements CommentService {
 
         CommentRowDO updated = new CommentRowDO(row.commentId(), row.userId(), row.authorName(), row.orderId(),
                 row.productId(), row.windowId(), input.score(), row.requestKey(), row.requestHash(),
-                row.createdAt(), hasImages);
+                row.createdAt(), hasImages, row.anonymous());
         CommentContentDO content = new CommentContentDO(id, body, fileKeys, tags, current.createdAt(), true);
         return view(updated, content, authors.resolve(List.of(updated.userId())).getOrDefault(updated.userId(), ""));
     }
@@ -376,6 +378,9 @@ public class CommentServiceImpl implements CommentService {
      * <p>列表与订单详情走批量汇总后调用本方法，单条详情走 {@link #summaryOf(String)}，
      * 两条路径共用同一套字段拼装，避免字段遗漏或口径不一致。</p>
      *
+     * <p>匿名脱敏只在这里执行：昵称保留首字、其余用星号替换，头像返回空串由客户端回落到默认头像。
+     * 真实昵称与用户编号仍保存在服务端，供作者回溯、申诉和管理端核查使用，不进入公开视图。</p>
+     *
      * @param row       评价元数据
      * @param content   评价正文；缺失视为服务暂不可用
      * @param avatarUrl 作者头像
@@ -385,9 +390,29 @@ public class CommentServiceImpl implements CommentService {
     private CommentVO view(CommentRowDO row, CommentContentDO content, String avatarUrl,
                            ReviewDiscussionService.DiscussionSummary summary) {
         if (content == null) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价内容暂不可用");
-        return new CommentVO(row.commentId(), row.productId(), row.windowId(), row.authorName(), avatarUrl, row.score(),
+        String authorName = row.anonymous() ? maskAuthorName(row.authorName()) : row.authorName();
+        // 匿名评价不返回真实头像地址，客户端拿到空串后统一回落到默认头像。
+        String avatar = row.anonymous() ? "" : avatarUrl;
+        return new CommentVO(row.commentId(), row.productId(), row.windowId(), authorName, avatar, row.score(),
                 content.body(), content.imageFileKeys().stream().map(FileReferences::url).toList(), content.tags(),
                 row.createdAt(), summary.count(), summary.previews());
+    }
+
+    /**
+     * 匿名称谓脱敏：保留首字，其余字符逐个替换为星号。
+     *
+     * <p>按 Unicode 码点处理，避免昵称以 emoji 等代理对开头时被截断成半个字符；
+     * 空昵称统一回落为“匿名用户”，单字昵称在首字后补一个星号，确保展示上始终能看出已匿名。</p>
+     *
+     * @param name 发布时的真实昵称快照
+     * @return 可直接对外展示的匿名称谓
+     */
+    static String maskAuthorName(String name) {
+        String normalized = name == null ? "" : name.trim();
+        if (normalized.isEmpty()) return "匿名用户";
+        int codePoints = normalized.codePointCount(0, normalized.length());
+        int headEnd = normalized.offsetByCodePoints(0, 1);
+        return normalized.substring(0, headEnd) + "*".repeat(Math.max(1, codePoints - 1));
     }
 
     /**

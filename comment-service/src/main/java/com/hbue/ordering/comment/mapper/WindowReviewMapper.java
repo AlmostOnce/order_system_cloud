@@ -25,7 +25,7 @@ public interface WindowReviewMapper {
     /**
      * 对外返回的列集合；不含 status 与 updated_at，避免内部字段泄漏到视图对象。
      */
-    String COLUMNS = "review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at";
+    String COLUMNS = "review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at,anonymous";
 
     /**
      * 按公开评价标识读取未删除的评价。
@@ -49,8 +49,8 @@ public interface WindowReviewMapper {
     Row byOrder(@Param("user") Long user, @Param("order") Long order);
 
     @Insert("""
-            INSERT INTO window_reviews(review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at)
-            VALUES(#{row.id},#{row.userId},#{row.author},#{row.orderId},#{row.windowId},#{row.score},#{row.content},#{row.images},#{row.tags},#{row.requestKey},#{row.requestHash},#{row.createdAt})
+            INSERT INTO window_reviews(review_id,user_id,author_name,order_id,window_id,score,content,image_file_keys,tags,request_key,request_hash,created_at,anonymous)
+            VALUES(#{row.id},#{row.userId},#{row.author},#{row.orderId},#{row.windowId},#{row.score},#{row.content},#{row.images},#{row.tags},#{row.requestKey},#{row.requestHash},#{row.createdAt},#{row.anonymous})
             """)
     int insert(@Param("row") Row row);
 
@@ -97,7 +97,7 @@ public interface WindowReviewMapper {
      */
     @Select("""
             SELECT review_id, user_id, author_name, order_id, window_id, score,
-                   content, image_file_keys, tags, request_key, request_hash, created_at
+                   content, image_file_keys, tags, request_key, request_hash, created_at, anonymous
             FROM window_reviews
             WHERE status = 1
               AND user_id = #{userId}
@@ -124,7 +124,7 @@ public interface WindowReviewMapper {
      */
     @Select("""
             SELECT review_id, user_id, author_name, order_id, window_id, score,
-                   content, image_file_keys, tags, request_key, request_hash, created_at
+                   content, image_file_keys, tags, request_key, request_hash, created_at, anonymous
             FROM window_reviews
             WHERE status = 1
               AND window_id = #{windowId}
@@ -182,7 +182,7 @@ public interface WindowReviewMapper {
      *
      * @param id         公开评价标识
      * @param userId     作者编号
-     * @param author     作者昵称快照
+     * @param author     作者昵称快照（真实昵称，匿名展示由服务层脱敏）
      * @param orderId    订单编号
      * @param windowId   档口编号
      * @param score      评分
@@ -192,10 +192,11 @@ public interface WindowReviewMapper {
      * @param requestKey 幂等键
      * @param requestHash 内容摘要
      * @param createdAt  创建时间
+     * @param anonymous  是否匿名展示
      */
     record Row(String id, Long userId, String author, Long orderId, Long windowId, int score,
                String content, String images, String tags, String requestKey, String requestHash,
-               LocalDateTime createdAt) {
+               LocalDateTime createdAt, boolean anonymous) {
     }
 
     /**
