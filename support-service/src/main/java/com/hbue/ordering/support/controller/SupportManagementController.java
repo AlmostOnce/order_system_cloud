@@ -6,6 +6,7 @@ import com.hbue.ordering.support.dto.SupportInternalNoteRequest;
 import com.hbue.ordering.support.dto.SupportReplyRequest;
 import com.hbue.ordering.support.service.SupportActor;
 import com.hbue.ordering.support.service.SupportManagementService;
+import com.hbue.ordering.support.support.SupportRole;
 import com.hbue.ordering.support.vo.SupportManagementPageVO;
 import com.hbue.ordering.support.vo.SupportManagementTicketVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +40,7 @@ import java.util.Set;
 @RestController
 @Tag(name = "管理端反馈接口")
 @RequestMapping("/support/management/tickets")
-@PreAuthorize("hasAnyRole('RESTAURANT_MANAGER','GENERAL_MANAGER','SYSTEM_ADMIN')")
+@PreAuthorize(SupportRole.MANAGEMENT_ACCESS)
 public class SupportManagementController {
 
     /**

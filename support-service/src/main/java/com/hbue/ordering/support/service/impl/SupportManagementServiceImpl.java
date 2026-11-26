@@ -3,6 +3,7 @@ package com.hbue.ordering.support.service.impl;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.support.assembler.SupportTicketViewAssembler;
 import com.hbue.ordering.support.client.SupportNotificationClient;
 import com.hbue.ordering.support.client.vo.SupportReplyNotificationRequest;
 import com.hbue.ordering.support.client.vo.SupportStatusNotificationRequest;
@@ -14,8 +15,11 @@ import com.hbue.ordering.support.mapper.SupportTicketMessageMapper;
 import com.hbue.ordering.support.model.SupportTicketDO;
 import com.hbue.ordering.support.model.SupportTicketMessageDO;
 import com.hbue.ordering.support.service.SupportActor;
+import com.hbue.ordering.support.service.SupportImageService;
 import com.hbue.ordering.support.service.SupportManagementService;
 import com.hbue.ordering.support.service.SupportScope;
+import com.hbue.ordering.support.service.SupportScopeService;
+import com.hbue.ordering.support.support.SupportRole;
 import com.hbue.ordering.support.support.SupportSenderType;
 import com.hbue.ordering.support.support.SupportStatus;
 import com.hbue.ordering.support.support.SupportType;
@@ -151,19 +155,14 @@ public class SupportManagementServiceImpl implements SupportManagementService {
         String statusFilter = normalizeStatus(status);
         SupportType typeFilter = normalizeType(type);
         int pageSize = normalizeLimit(limit);
-        if (typeFilter != null) {
-            if (actor.hasRole("SYSTEM_ADMIN") && typeFilter != SupportType.SOFTWARE) {
-                throw new BusinessException(CommonErrorCode.FORBIDDEN, "系统管理员只能查看软件问题");
-            }
-            if (scopeService.diningOnly(actor, scope) && typeFilter != SupportType.DINING) {
-                throw new BusinessException(CommonErrorCode.FORBIDDEN, "当前范围只能查看用餐问题");
-            }
-        }
+        // 类型筛选的越权判定统一交给范围服务，与详情/处理路径共用同一套角色规则，
+        // 避免出现"列表能查到、点进详情却 403"的口径漂移。
+        scopeService.requireTypeFilterAllowed(actor, scope, typeFilter);
 
         List<SupportTicketDO> rows;
         if (scopeService.usesPlatformQueue(actor, scope)) {
             // 系统管理员即使不传类型也强制只看软件工单，防止默认展示用餐业务数据。
-            String queryType = actor.hasRole("SYSTEM_ADMIN")
+            String queryType = actor.hasRole(SupportRole.SYSTEM_ADMIN)
                     ? SupportType.SOFTWARE.getCode()
                     : (typeFilter == null ? null : typeFilter.getCode());
             rows = ticketMapper.pageForPlatform(statusFilter, queryType, windowId,

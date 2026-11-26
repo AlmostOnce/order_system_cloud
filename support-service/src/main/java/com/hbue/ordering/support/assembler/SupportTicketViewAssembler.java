@@ -1,7 +1,8 @@
-package com.hbue.ordering.support.service.impl;
+package com.hbue.ordering.support.assembler;
 
 import com.hbue.ordering.support.model.SupportTicketDO;
 import com.hbue.ordering.support.model.SupportTicketMessageDO;
+import com.hbue.ordering.support.service.SupportImageService;
 import com.hbue.ordering.support.support.SupportCategory;
 import com.hbue.ordering.support.support.SupportSenderType;
 import com.hbue.ordering.support.support.SupportStatus;
@@ -18,9 +19,11 @@ import java.util.List;
 /**
  * 工单持久化对象到接口视图的转换器（Assembler）。
  *
- * <p>集中处理类型、分类、状态的中文映射与图片地址派生，避免学生端和管理端
- * 返回字段口径不一致。列表描述截断到 60 字，详情返回完整正文；内部备注
- * 是否返回由查询 SQL 决定，转换器不做二次过滤。</p>
+ * <p>集中处理类型、分类、状态的中文映射与图片地址派生，避免学生端和管理端返回字段口径不一致。
+ * 列表描述截断到 60 字，详情返回完整正文；内部备注是否返回由查询 SQL 决定，转换器不做二次过滤。</p>
+ *
+ * <p>本类不承载业务规则、不访问数据库，放在独立的 assembler 包而不是 service.impl，
+ * 以免被误认为某个服务接口的实现。</p>
  *
  * @author order-system
  * @date 2026-11-23
