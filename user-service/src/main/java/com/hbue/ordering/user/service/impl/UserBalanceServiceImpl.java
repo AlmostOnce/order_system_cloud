@@ -160,7 +160,8 @@ public class UserBalanceServiceImpl implements UserBalanceService {
         try {
             balanceRecordMapper.insert(record);
         } catch (DuplicateKeyException exception) {
-            BalanceRecordDO concurrent = selectRecord(userId, bizType, bizRef);
+            // 唯一键冲突说明对端事务已提交同号流水；必须当前读回查，普通快照读会停留在冲突前的视图。
+            BalanceRecordDO concurrent = balanceRecordMapper.selectPayForUpdate(userId, bizType, bizRef);
             if (concurrent == null) {
                 // 非业务单据冲突（例如主键异常），按真实故障抛出。
                 throw exception;
@@ -257,11 +258,14 @@ public class UserBalanceServiceImpl implements UserBalanceService {
     /**
      * 读取用户当前余额。
      *
+     * <p>使用加锁当前读而非快照读：并发扣款时快照可能看不到其他事务已提交的扣减，
+     * 会把偏高的旧余额写进流水 balance_after，造成账实不符。</p>
+     *
      * @param userId 用户 ID
      * @return 当前余额
      */
     private BigDecimal readBalance(Long userId) {
-        UserDO user = userMapper.selectBalanceById(userId);
+        UserDO user = userMapper.selectBalanceForUpdate(userId);
         return user == null ? BigDecimal.ZERO : user.getBalance();
     }
 

@@ -73,7 +73,7 @@ class UserBalanceServiceImplTest {
         when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
                 .thenReturn(1);
         when(userMapper.deductBalance(USER_ID, AMOUNT)).thenReturn(1);
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("81.50"));
+        when(userMapper.selectBalanceForUpdate(USER_ID)).thenReturn(user("81.50"));
 
         UserBalanceDeductResultVO result =
                 userBalanceService.deduct(USER_ID, command(AMOUNT));
@@ -84,6 +84,8 @@ class UserBalanceServiceImplTest {
         assertFalse(result.getIdempotent());
         verify(payPasswordService).verifyPayPassword(USER_ID, "pay-pass-123456");
         verify(balanceRecordMapper).insert(any(BalanceRecordDO.class));
+        // 扣后余额必须用加锁当前读取，避免并发下写出偏高的 balance_after。
+        verify(userMapper).selectBalanceForUpdate(USER_ID);
         verify(balanceRecordMapper).updateBalanceAfter(
                 any(), eq(new BigDecimal("81.50"))
         );
@@ -109,12 +111,14 @@ class UserBalanceServiceImplTest {
     @Test
     void shouldTreatDuplicateKeyAsIdempotentReplay() {
         when(balanceRecordMapper.selectOne(any(Wrapper.class)))
-                .thenReturn(null)
-                .thenReturn(record("81.50"));
+                .thenReturn(null);
         when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
                 .thenThrow(new DuplicateKeyException(
                         "uk_balance_records_user_biz"
                 ));
+        // 冲突后按加锁当前读回查：真实 MySQL 下快照读看不到对端已提交的流水。
+        when(balanceRecordMapper.selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF))
+                .thenReturn(record("81.50"));
 
         UserBalanceDeductResultVO result =
                 userBalanceService.deduct(USER_ID, command(AMOUNT));
