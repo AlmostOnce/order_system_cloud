@@ -349,11 +349,12 @@ public class SupportTicketServiceImpl implements SupportTicketService {
     }
 
     /**
-     * 校验并补全用餐问题的订单与窗口快照。
+     * 校验并补全用餐问题的订单快照。
      *
-     * <p>订单号优先作为关联依据：订单服务已经按学生 JWT 校验归属，反馈服务只读取
-     * 窗口与订单号快照。同时提交窗口时必须与订单窗口一致；只提交窗口时通过窗口
-     * 内部接口换算餐厅。两者都为空直接拒绝，避免无法落实管理端数据范围。</p>
+     * <p>用餐问题必须关联本人订单：订单服务按学生 JWT 校验归属，反馈服务只读取
+     * 订单中的窗口与餐厅快照，保证管理端处理范围来自真实消费记录。
+     * 窗口编号不再作为独立关联方式；旧客户端仍提交窗口时只允许与订单窗口一致，
+     * 防止绕过订单伪造关联窗口。</p>
      *
      * @param ticket        待插入工单
      * @param request       提交内容
@@ -363,29 +364,27 @@ public class SupportTicketServiceImpl implements SupportTicketService {
                                    String authorization) {
         Long orderId = request.getOrderId();
         Long requestedWindowId = request.getWindowId();
-        if (orderId == null && requestedWindowId == null) {
-            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用餐问题请选择关联订单或窗口");
+        // 订单号是学生真实消费的凭证；窗口编号本身无法证明学生在该窗口消费过。
+        if (orderId == null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用餐问题请选择关联订单");
         }
-        SupportOrderSnapshotVO order = null;
-        if (orderId != null) {
-            if (authorization == null || authorization.isBlank()) {
-                throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录状态已失效，请重新登录");
-            }
-            order = requireOrder(orderId, authorization);
-            if (order.windowId() == null) {
-                throw new BusinessException(CommonErrorCode.BAD_REQUEST,
-                        "该订单没有关联窗口，请通过软件问题反馈");
-            }
-            if (requestedWindowId != null && !requestedWindowId.equals(order.windowId())) {
-                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "所选窗口与订单不一致");
-            }
-            ticket.setOrderId(order.orderId());
-            ticket.setOrderNo(order.orderNo());
-            ticket.setWindowId(order.windowId());
-            ticket.setWindowName(order.windowName());
-        } else {
-            ticket.setWindowId(requestedWindowId);
+        // 读取订单快照依赖学生凭据，缺失时无法校验订单是否属于当前学生。
+        if (authorization == null || authorization.isBlank()) {
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录状态已失效，请重新登录");
         }
+        SupportOrderSnapshotVO order = requireOrder(orderId, authorization);
+        if (order.windowId() == null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST,
+                    "该订单没有关联窗口，请通过软件问题反馈");
+        }
+        // 兼容旧客户端仍传窗口：只允许与订单快照一致，不能借窗口覆盖订单归属。
+        if (requestedWindowId != null && !requestedWindowId.equals(order.windowId())) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "所选窗口与订单不一致");
+        }
+        ticket.setOrderId(order.orderId());
+        ticket.setOrderNo(order.orderNo());
+        ticket.setWindowId(order.windowId());
+        ticket.setWindowName(order.windowName());
         SupportWindowInfoVO window = requireWindow(ticket.getWindowId());
         if (window.restaurantId() == null) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "无法确定窗口所属餐厅");

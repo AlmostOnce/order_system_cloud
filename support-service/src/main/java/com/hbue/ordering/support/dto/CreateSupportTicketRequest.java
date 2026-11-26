@@ -29,12 +29,15 @@ public class CreateSupportTicketRequest {
     private String category;
 
     /**
-     * 关联订单编号；用餐问题可选，软件问题忽略。
+     * 关联订单编号；用餐问题必填，软件问题忽略。
      */
     private Long orderId;
 
     /**
-     * 关联窗口编号；用餐问题可选，软件问题忽略。
+     * 兼容旧客户端的窗口编号；不再作为独立关联方式。
+     *
+     * <p>用餐问题以订单快照中的窗口为准，仅当该值与订单窗口一致时接受，
+     * 防止绕过订单伪造关联窗口；软件问题忽略。</p>
      */
     private Long windowId;
 
