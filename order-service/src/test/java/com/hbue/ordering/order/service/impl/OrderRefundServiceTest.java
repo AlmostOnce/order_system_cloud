@@ -17,6 +17,7 @@ import com.hbue.ordering.order.model.RefundActionDO;
 import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.service.RecommendationPurchaseOutboxWriter;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -34,7 +35,7 @@ class OrderRefundServiceTest {
     private final RefundActionMapper actions = mock(RefundActionMapper.class);
     private final DataScopeService scopes = mock(DataScopeService.class);
     private final PaymentRefundClient payments = mock(PaymentRefundClient.class);
-    private final OrderRefundServiceImpl service = new OrderRefundServiceImpl(orders, items, refunds, actions, scopes, payments, mock(OrderNotificationOutboxWriter.class), "internal-test", false, mock(RecommendationPurchaseOutboxWriter.class));
+    private final OrderRefundServiceImpl service = new OrderRefundServiceImpl(orders, items, refunds, actions, scopes, payments, mock(OrderNotificationOutboxWriter.class), "internal-test", false, mock(RecommendationPurchaseOutboxWriter.class), mock(PlatformTransactionManager.class));
     private final RefundApplyRequest request = new RefundApplyRequest(12L, 1, "少一份");
 
     /**
@@ -47,6 +48,8 @@ class OrderRefundServiceTest {
         order.setWindowId(1L);
         order.setStatus(status);
         order.setTotalAmount(new BigDecimal("30.00"));
+        // 申请流程先在事务外无锁预读订单，再于事务内加锁，两处读取都要能拿到订单。
+        when(orders.selectById(9L)).thenReturn(order);
         when(orders.lockRefundOrder(9L)).thenReturn(order);
         var item = new OrderItemDO();
         item.setItemId(12L);
@@ -101,6 +104,7 @@ class OrderRefundServiceTest {
         discountedOrder.setTotalAmount(new BigDecimal("30.00"));
         discountedOrder.setDiscountAmount(new BigDecimal("6.00"));
         discountedOrder.setPayableAmount(new BigDecimal("24.00"));
+        when(orders.selectById(9L)).thenReturn(discountedOrder);
         when(orders.lockRefundOrder(9L)).thenReturn(discountedOrder);
         var discountedItem = new OrderItemDO();
         discountedItem.setItemId(12L);
@@ -140,6 +144,24 @@ class OrderRefundServiceTest {
         verify(items, never()).reserveRefund(any(), any(), anyInt(), anyInt());
         verify(payments, never()).fact(any(), any());
         assertThrows(BusinessException.class, () -> service.apply(8L, 9L, "request-one", request));
+    }
+
+    /**
+     * 远程支付事实必须在取得订单行锁之前完成；否则支付服务变慢会阻塞同订单的接单、核销与退款审批。
+     *
+     * <p>用 {@link org.mockito.InOrder} 固定调用顺序：先 {@code fact}，后 {@code lockRefundOrder}。
+     * 若有人把远程调用改回锁内，本用例会变红。</p>
+     */
+    @Test
+    void paymentFactIsCheckedBeforeOrderRowLock() {
+        order("已支付");
+        when(items.reserveRefund(12L, 9L, 1, 1)).thenReturn(1);
+
+        service.apply(7L, 9L, "fact-lock-order", request);
+
+        var ordered = inOrder(payments, orders);
+        ordered.verify(payments).fact(9L, "internal-test");
+        ordered.verify(orders).lockRefundOrder(9L);
     }
 
     /**

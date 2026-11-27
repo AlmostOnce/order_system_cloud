@@ -24,7 +24,9 @@ import com.hbue.ordering.order.vo.RefundPageVO;
 import com.hbue.ordering.order.vo.RefundVO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -52,14 +54,25 @@ public class OrderRefundServiceImpl implements OrderRefundService {
      * 仅成功退款时生成净购买快照，拒绝、批准和处理中均不能提前撤销购买兴趣。
      */
     private final RecommendationPurchaseOutboxWriter recommendationOutbox;
+    /**
+     * 显式事务模板，只包裹"加订单行锁之后"的本地读写。
+     *
+     * <p>退款申请需要先远程核对支付事实；若继续用方法级 {@code @Transactional}，事务会在方法入口开启，
+     * 远程调用期间虽然未持行锁，但仍占用数据库连接，且不容易从代码上保证锁的获取一定在远程调用之后。
+     * 改用模板后，事务边界与加锁边界重合：{@code payments.fact} 在事务外完成，慢响应不会拖住
+     * 同订单的接单、核销与退款审批，也不会长期占用连接池。</p>
+     */
+    private final TransactionTemplate transactions;
 
     /**
      * 注入订单本地事实、远程退款能力及Outbox；推荐写入失败会回滚本次订单确认，资金由原退款号幂等核对。
+     *
+     * @param manager 平台事务管理器，用于构造只在加锁阶段生效的显式事务模板
      */
     public OrderRefundServiceImpl(OrderMapper orders, OrderItemMapper items, OrderRefundMapper refunds, RefundActionMapper actions,
                                   DataScopeService scopes, PaymentRefundClient payments, OrderNotificationOutboxWriter notifications,
                                   @Value("${internal.scope.token:}") String token, @Value("${notification.order-events.enabled:false}") boolean notifyEnabled,
-                                  RecommendationPurchaseOutboxWriter recommendationOutbox) {
+                                  RecommendationPurchaseOutboxWriter recommendationOutbox, PlatformTransactionManager manager) {
         this.orders = orders;
         this.items = items;
         this.refunds = refunds;
@@ -70,32 +83,63 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         this.token = token;
         this.notifyEnabled = notifyEnabled;
         this.recommendationOutbox = recommendationOutbox;
+        this.transactions = new TransactionTemplate(manager);
     }
 
     /**
      * 先验证本人，再在锁内确认未接单/已接单分支；同一幂等键携带不同内容返回冲突。
+     *
+     * <p>执行顺序刻意拆成"事务外远程校验 + 事务内加锁写入"两段：</p>
+     * <ol>
+     *   <li>事务外预读订单，仅用于确认归属、快速返回幂等重放、取实付金额；不当作最终事实；</li>
+     *   <li>事务外调用 payment-service 的 {@code fact}；这是最容易变慢的远程步骤，放在加锁之前，
+     *       付款服务慢 10 秒也只占用本次请求，不阻塞同订单的其它操作；</li>
+     *   <li>进入显式事务后加订单行锁，并在锁内二次校验幂等键、金额一致性与业务状态后才落库。</li>
+     * </ol>
+     *
+     * <p>预读与锁内读到的实付金额必须一致：若在远程校验后金额发生变化（正常支付完成后不会发生），
+     * 说明校验依据已失效，返回冲突让客户端重试，避免按旧金额校验、再按新金额退款。</p>
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public RefundVO apply(Long userId, Long orderId, String key, RefundApplyRequest request) {
         if (key == null || !key.matches("[A-Za-z0-9_-]{8,64}") || request == null || request.itemId() == null || request.itemId() <= 0
                 || request.quantity() == null || request.quantity() <= 0 || request.reason() == null || request.reason().isBlank() || request.reason().length() > 500)
             throw bad("退款申请参数无效");
+        // 事务外预读：无锁普通查询，只做归属校验与远程校验所需的金额快照，最终仍以锁内读取为准。
+        OrderDO snapshot = orders.selectById(orderId);
+        if (snapshot == null || !userId.equals(snapshot.getUserId())) throw missing();
+        // 幂等重放优先返回历史单：既不再占用份数，也不依赖支付服务是否可用。
+        OrderRefundDO replay = refunds.byRequest(userId, key);
+        if (replay != null) return replay(replay, orderId, request);
+        BigDecimal snapshotPayable = snapshot.getPayableAmount() == null ? snapshot.getTotalAmount() : snapshot.getPayableAmount();
+        // 远程支付事实校验在事务与行锁之外执行，这是本次修复的核心：慢调用不再持有订单行锁。
+        var fact = payments.fact(orderId, token);
+        if (snapshotPayable == null || fact == null || !"COMMON_000".equals(fact.getCode()) || fact.getData() == null || !userId.equals(fact.getData().userId())
+                || !"BALANCE".equals(fact.getData().channelCode()) || fact.getData().paidAmount() == null || fact.getData().paidAmount().compareTo(snapshotPayable) != 0)
+            throw bad("实际支付记录尚未确认，暂不能申请退款");
+        // 显式事务只包裹加锁后的本地校验与写入；lambda 抛出的业务异常会触发整体回滚。
+        return transactions.execute(status -> applyLocked(userId, orderId, key, request, snapshotPayable));
+    }
+
+    /**
+     * 在订单行锁内完成退款申请落库，锁内不发起任何远程调用。
+     *
+     * <p>二次幂等检查是并发安全的关键：事务外的幂等查询之后，另一实例可能已先提交同一
+     * {@code request_key}。这里拿到订单行锁后重新读取，返回先提交的退款单，避免唯一键冲突
+     * 把一次正常重试暴露成 500。</p>
+     *
+     * @param expectedPayable 事务外远程校验时使用的实付金额，必须与锁内读取一致
+     */
+    private RefundVO applyLocked(Long userId, Long orderId, String key, RefundApplyRequest request, BigDecimal expectedPayable) {
         OrderDO order = ownLocked(userId, orderId);
         OrderRefundDO old = refunds.byRequest(userId, key);
-        if (old != null) {
-            if (!orderId.equals(old.getOrderId()) || !request.itemId().equals(old.getItemId()) || !request.quantity().equals(old.getQuantity()) || !request.reason().trim().equals(old.getReason()))
-                throw bad("该请求标识已用于其他退款申请");
-            return RefundVO.from(old);
-        }
+        if (old != null) return replay(old, orderId, request);
         LocalDateTime now = LocalDateTime.now();
         RefundRules.requireApplicable(order.getStatus(), order.getCompletedAt(), now);
         BigDecimal payableAmount = order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount();
-        // 锁内确认支付人、真实余额渠道和优惠后的实付总额，拒绝仅凭订单状态对MOCK记录发钱。
-        var fact = payments.fact(orderId, token);
-        if (payableAmount == null || fact == null || !"COMMON_000".equals(fact.getCode()) || fact.getData() == null || !userId.equals(fact.getData().userId())
-                || !"BALANCE".equals(fact.getData().channelCode()) || fact.getData().paidAmount() == null || fact.getData().paidAmount().compareTo(payableAmount) != 0)
-            throw bad("实际支付记录尚未确认，暂不能申请退款");
+        // 远程校验用的是预读金额；锁内金额若变化，校验依据失效，返回冲突让客户端重试而不是按新金额直接退。
+        if (expectedPayable == null || !expectedPayable.equals(payableAmount))
+            throw bad("订单实付金额已变化，请重新申请退款");
         OrderItemDO item = items.selectById(request.itemId());
         if (item == null || !orderId.equals(item.getOrderId())) throw missing();
         // 已支付就是未接单；与接单竞争时同一订单行锁和版本让先提交的状态决定分支。
@@ -129,6 +173,15 @@ public class OrderRefundServiceImpl implements OrderRefundService {
         audit(row, userId, "APPLY", row.getReason());
         if (direct) audit(row, null, "APPROVE", "未接单，自动同意并回补库存");
         return RefundVO.from(row);
+    }
+
+    /**
+     * 幂等重放：同一 {@code request_key} 的订单、明细、份数与理由必须完全一致，否则视为键被复用。
+     */
+    private RefundVO replay(OrderRefundDO old, Long orderId, RefundApplyRequest request) {
+        if (!orderId.equals(old.getOrderId()) || !request.itemId().equals(old.getItemId()) || !request.quantity().equals(old.getQuantity()) || !request.reason().trim().equals(old.getReason()))
+            throw bad("该请求标识已用于其他退款申请");
+        return RefundVO.from(old);
     }
 
     /**
