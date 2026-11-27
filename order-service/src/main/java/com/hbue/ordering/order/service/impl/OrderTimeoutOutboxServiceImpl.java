@@ -67,6 +67,17 @@ public class OrderTimeoutOutboxServiceImpl implements OrderTimeoutOutboxService 
     }
 
     /**
+     * 尝试占用一条待发事件的租约。
+     *
+     * <p>租约由条件更新实现：只有把 {@code next_attempt_at} 从"已到期"推进到未来的调用方得到 1，
+     * 并发实例会得到 0 并跳过发送。租约到期前其它实例不会重发，到期后若仍未标记已发送则可被重新领取。</p>
+     */
+    @Override
+    public boolean lease(String id, int seconds) {
+        return mapper.lease(id, seconds) == 1;
+    }
+
+    /**
      * 标记事件已发送。
      */
     @Override

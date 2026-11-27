@@ -42,6 +42,29 @@ public interface CouponConsumeOutboxMapper {
     List<CouponConsumeOutboxRow> pending();
 
     /**
+     * 原子领取一条待发事件的租约，避免多实例重复外发。
+     *
+     * <p>优惠券 Outbox 的 {@code listOwn} 会把已发送但未被券服务确认（PUBLISHED）的记录再次取出重投，
+     * 因此租约谓词用状态集合而不是 {@code published_at IS NULL}：PENDING 与 PUBLISHED 都可被领取，
+     * 已确认（CONFIRMED）的不再占用。</p>
+     *
+     * <p>UPDATE 自带"租约已到期"谓词，多个实例串行执行时只有第一个能把 {@code next_attempt_at}
+     * 推进到未来并得到 1，其余得到 0 并跳过本次发送；持有者崩溃导致租约自然过期后，其它实例可重领，
+     * 因此仍是至少一次投递，券服务按事件号幂等核销。</p>
+     *
+     * @param eventId 事件号
+     * @param seconds 租约秒数，应大于一次同步发送的最长耗时并留出合理余量
+     * @return 1 表示本实例获得租约；0 表示已被其它实例领取或已确认
+     */
+    @Update("""
+            UPDATE order_coupon_consume_outbox
+            SET next_attempt_at = TIMESTAMPADD(SECOND, #{seconds}, CURRENT_TIMESTAMP)
+            WHERE event_id = #{eventId} AND status IN ('PENDING', 'PUBLISHED')
+              AND next_attempt_at <= CURRENT_TIMESTAMP
+            """)
+    int lease(@Param("eventId") String eventId, @Param("seconds") int seconds);
+
+    /**
      * 记录代理接收并安排消费确认超时后的再次投递；这里只代表已进入 Broker，不能当作业务核销完成。
      *
      * @param eventId 已发布事件号

@@ -33,6 +33,19 @@ public interface OrderTimeoutOutboxService {
     List<OrderTimeoutEvent> pending();
 
     /**
+     * 原子领取一条待发事件的租约，供多实例部署时避免同一事件重复投递。
+     *
+     * <p>实现必须以"未发布且租约已到期"为条件更新 {@code next_attempt_at}；返回 true 的实例才负责
+     * 本次发送，其余实例应直接跳过。租约到期后仍未被标记已发送（例如持有者崩溃）时允许重新领取，
+     * 因此投递语义是至少一次，消费端必须按事件号幂等。</p>
+     *
+     * @param id      事件编号
+     * @param seconds 租约秒数
+     * @return true 表示本实例获得租约；false 表示已被其它实例领取或已发布
+     */
+    boolean lease(String id, int seconds);
+
+    /**
      * 标记事件已被 Broker 确认接收。
      *
      * @param id 事件编号

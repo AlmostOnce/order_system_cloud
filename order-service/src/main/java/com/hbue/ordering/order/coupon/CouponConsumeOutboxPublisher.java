@@ -37,6 +37,12 @@ public class CouponConsumeOutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(CouponConsumeOutboxPublisher.class);
 
     /**
+     * 单条事件的发送租约（秒）。多实例同时扫描到同一行时，只有成功把 {@code next_attempt_at}
+     * 推进到未来的实例负责发送；租约需大于一次同步发送的耗时，到期后仍未被确认才允许重新领取。
+     */
+    private static final int LEASE_SECONDS = 30;
+
+    /**
      * 读取待发记录并在同步发送后标记状态或安排退避重试。
      */
     private final CouponConsumeOutboxMapper outbox;
@@ -75,6 +81,9 @@ public class CouponConsumeOutboxPublisher {
         try {
             for (CouponConsumeOutboxRow row : outbox.pending()) {
                 try {
+                    // 先原子占租约：PENDING/PUBLISHED 都可由单一实例领取发送，其余实例得到 0 后跳过，
+                    // 避免已发布但未确认的事件被多实例在同轮重复投递。
+                    if (outbox.lease(row.getEventId(), LEASE_SECONDS) != 1) continue;
                     OrderCouponConsumeEvent event = json.readValue(row.getPayload(), OrderCouponConsumeEvent.class);
                     if (!event.valid() || !row.getEventId().equals(event.eventId())
                             || !row.getOrderNo().equals(event.orderNo())

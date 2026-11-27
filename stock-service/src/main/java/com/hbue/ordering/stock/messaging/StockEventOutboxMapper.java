@@ -40,6 +40,25 @@ public interface StockEventOutboxMapper {
             """)
     List<StockEventOutboxRow> pending();
 
+    /**
+     * 原子领取一条待发事件的租约，避免多实例重复外发库存事件。
+     *
+     * <p>以"未发布且租约已到期"为 CAS 谓词把 {@code next_attempt_at} 推进到未来。并发实例在同一轮
+     * 扫描到同一行时，InnoDB 行锁使 UPDATE 串行，只有第一个实例得到 1，其余得到 0 后跳过，
+     * 从而保证同一事件不会被同秒投递两次。持有租约的实例若在发送后崩溃，租约到期后其它实例可重领，
+     * 消息仍是至少一次语义，消费端按事件号幂等。</p>
+     *
+     * @param eventId 事件号
+     * @param seconds 租约秒数，应大于一次同步发送的最长耗时
+     * @return 1 表示本实例获得租约；0 表示已被其它实例领取或已发布
+     */
+    @Update("""
+            UPDATE stock_event_outbox
+            SET next_attempt_at = TIMESTAMPADD(SECOND, #{seconds}, CURRENT_TIMESTAMP)
+            WHERE event_id = #{eventId} AND published_at IS NULL AND next_attempt_at <= CURRENT_TIMESTAMP
+            """)
+    int lease(@Param("eventId") String eventId, @Param("seconds") int seconds);
+
     @Update("""
             UPDATE stock_event_outbox
             SET published_at = CURRENT_TIMESTAMP, last_error = NULL

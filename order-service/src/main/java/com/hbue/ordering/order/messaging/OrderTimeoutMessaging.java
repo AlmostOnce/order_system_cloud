@@ -22,6 +22,11 @@ import java.util.function.Consumer;
 @ConditionalOnProperty(name = "order.payment-timeout.enabled", havingValue = "true")
 public class OrderTimeoutMessaging {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrderTimeoutMessaging.class);
+    /**
+     * 单条超时事件的发送租约（秒）。多实例同一轮扫描到同一行时，只有成功推进
+     * {@code next_attempt_at} 的实例负责发送；租约需大于一次同步发送的最长耗时。
+     */
+    private static final int LEASE_SECONDS = 30;
     private final OrderTimeoutOutboxService outbox;
     private final OrderTimeoutService timeouts;
     private final StreamBridge stream;
@@ -67,6 +72,9 @@ public class OrderTimeoutMessaging {
             for (var event : outbox.pending()) {
                 try {
                     if (!event.valid()) throw new IllegalArgumentException("无效待发送事件");
+                    // 先原子占租约：并发实例同一轮读到同一行时只有一方能领取，其余跳过本次发送；
+                    // 领取失败不进入失败退避，避免把另一实例正在发送的记录误标为失败。
+                    if (!outbox.lease(event.eventId(), LEASE_SECONDS)) continue;
                     send(event, Math.max(0, event.expiresAt() - System.currentTimeMillis()));
                     outbox.sent(event.eventId());
                 } catch (Exception error) {

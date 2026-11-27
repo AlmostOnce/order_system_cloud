@@ -20,6 +20,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 @ConditionalOnProperty(name = "ranking.messaging.enabled", havingValue = "true")
 public class SalesOutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(SalesOutboxPublisher.class);
+    /**
+     * 单条事件的发送租约（秒）。多实例部署时同一行可能被同时扫到，只有把 {@code next_attempt_at}
+     * 原子推进到未来的实例才发送；该值必须大于一次同步发送的最长耗时，否则会出现租约到期后
+     * 上一条尚未发完、另一实例又领取的重复外发。
+     */
+    private static final int LEASE_SECONDS = 30;
     private final SalesOutboxMapper outbox;
     private final ObjectMapper json;
     private final StreamBridge stream;
@@ -41,6 +47,9 @@ public class SalesOutboxPublisher {
         try {
             for (var row : outbox.pending()) {
                 try {
+                    // 先原子占租约：并发实例同一轮读到同一行时只有一方能推进 next_attempt_at，
+                    // 其余实例拿到 0 行更新后直接跳过，避免同一销量事件被重复投递。
+                    if (outbox.lease(row.getEventId(), LEASE_SECONDS) != 1) continue;
                     OrderPaidSalesEvent event = json.readValue(row.getPayload(), OrderPaidSalesEvent.class);
                     if (!event.valid() || !event.eventId().equals(row.getEventId()) || !event.orderId().equals(row.getOrderId())) {
                         throw new IllegalArgumentException("本地销量事件不完整");
