@@ -7,10 +7,7 @@ import org.springframework.core.io.DefaultResourceLoader;
 
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 本地文件存储单元测试。
@@ -23,7 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class LocalFileStorageTest {
 
-    /** 临时存储根目录，由 JUnit 注入并在用例结束后清理。 */
+    /**
+     * 临时存储根目录，由 JUnit 注入并在用例结束后清理。
+     */
     @TempDir
     Path tempDir;
 

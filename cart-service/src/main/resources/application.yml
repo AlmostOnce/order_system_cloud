@@ -73,4 +73,4 @@ cart:
 
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}

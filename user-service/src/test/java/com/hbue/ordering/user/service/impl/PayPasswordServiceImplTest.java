@@ -20,10 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 支付密码业务测试：首次设置身份校验、修改校验、失败计数与锁定、
@@ -67,7 +64,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectFirstSetWithoutLoginPassword() {
-        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPayPasswordRecoveryForUpdate(USER_ID)).thenReturn(user(null));
 
         PayPasswordSetRequest request = setRequest(null, null, PAY_PASSWORD);
 
@@ -83,7 +80,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectFirstSetWhenLoginPasswordWrong() {
-        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPayPasswordRecoveryForUpdate(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(false);
 
@@ -100,7 +97,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectPayPasswordSameAsLoginPassword() {
-        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPayPasswordRecoveryForUpdate(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(true);
         when(passwordEncoder.matches(PAY_PASSWORD, LOGIN_HASH))
@@ -119,7 +116,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldSetPayPasswordOnFirstSet() {
-        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user(null));
+        when(userMapper.selectPayPasswordRecoveryForUpdate(USER_ID)).thenReturn(user(null));
         when(passwordEncoder.matches(LOGIN_PASSWORD, LOGIN_HASH))
                 .thenReturn(true);
         when(passwordEncoder.matches(PAY_PASSWORD, LOGIN_HASH))
@@ -131,7 +128,7 @@ class PayPasswordServiceImplTest {
                 setRequest(LOGIN_PASSWORD, null, PAY_PASSWORD)
         );
 
-        verify(userMapper).selectPasswordsById(USER_ID);
+        verify(userMapper).selectPayPasswordRecoveryForUpdate(USER_ID);
         verify(userMapper, never()).selectBalanceById(USER_ID);
         verify(userMapper).updatePayPassword(USER_ID, "encoded-pay");
         // 设置成功后应清空失败计数。
@@ -140,7 +137,7 @@ class PayPasswordServiceImplTest {
 
     @Test
     void shouldRejectModifyWithoutOldPayPassword() {
-        when(userMapper.selectPasswordsById(USER_ID)).thenReturn(user("old-hash"));
+        when(userMapper.selectPayPasswordRecoveryForUpdate(USER_ID)).thenReturn(user("old-hash"));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> payPasswordService.setPayPassword(
@@ -184,8 +181,8 @@ class PayPasswordServiceImplTest {
         when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("pay-hash"));
         when(passwordEncoder.matches(PAY_PASSWORD, "pay-hash"))
                 .thenReturn(false);
-        // 非首次计数：不应重置 TTL。
-        when(redisOperationsService.increment(FAIL_KEY)).thenReturn(2L);
+        // 非首次计数：原子自增不会重置 TTL，也不需要额外的 EXPIRE。
+        when(redisOperationsService.increment(FAIL_KEY, Duration.ofSeconds(900L))).thenReturn(2L);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> payPasswordService.verifyPayPassword(USER_ID, PAY_PASSWORD));
@@ -198,20 +195,45 @@ class PayPasswordServiceImplTest {
         verify(redisOperationsService, never()).expire(anyString(), any());
     }
 
+    /**
+     * 首次失败也必须走"自增并设置 TTL"的原子方法，不能再拆成 increment + expire 两步，
+     * 否则两步之间失败会让计数键永不过期。
+     */
     @Test
-    void shouldSetFailureTtlOnlyOnFirstCount() {
+    void shouldUseAtomicIncrementWithTtlForFailureCounter() {
         when(redisOperationsService.hasKey(LOCK_KEY)).thenReturn(false);
         when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("pay-hash"));
         when(passwordEncoder.matches(PAY_PASSWORD, "pay-hash"))
                 .thenReturn(false);
-        when(redisOperationsService.increment(FAIL_KEY)).thenReturn(1L);
+        when(redisOperationsService.increment(FAIL_KEY, Duration.ofSeconds(900L))).thenReturn(1L);
 
         assertThrows(BusinessException.class,
                 () -> payPasswordService.verifyPayPassword(USER_ID, PAY_PASSWORD));
 
-        verify(redisOperationsService).expire(
-                FAIL_KEY, Duration.ofSeconds(900L)
+        verify(redisOperationsService).increment(FAIL_KEY, Duration.ofSeconds(900L));
+        verify(redisOperationsService, never()).increment(anyString());
+        verify(redisOperationsService, never()).expire(anyString(), any());
+    }
+
+    /**
+     * 自增未返回计数时无法判断是否超限，必须 fail-closed 返回 503 而不是放行。
+     */
+    @Test
+    void shouldFailClosedWhenFailureCounterReturnsNull() {
+        when(redisOperationsService.hasKey(LOCK_KEY)).thenReturn(false);
+        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("pay-hash"));
+        when(passwordEncoder.matches(PAY_PASSWORD, "pay-hash"))
+                .thenReturn(false);
+        when(redisOperationsService.increment(FAIL_KEY, Duration.ofSeconds(900L))).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> payPasswordService.verifyPayPassword(USER_ID, PAY_PASSWORD));
+
+        assertEquals(
+                CommonErrorCode.SERVICE_UNAVAILABLE.code(),
+                exception.getErrorCode().code()
         );
+        verify(redisOperationsService, never()).setValue(anyString(), anyString(), any());
     }
 
     @Test
@@ -220,7 +242,7 @@ class PayPasswordServiceImplTest {
         when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("pay-hash"));
         when(passwordEncoder.matches(PAY_PASSWORD, "pay-hash"))
                 .thenReturn(false);
-        when(redisOperationsService.increment(FAIL_KEY))
+        when(redisOperationsService.increment(FAIL_KEY, Duration.ofSeconds(900L)))
                 .thenReturn((long) MAX_FAILURES);
 
         BusinessException exception = assertThrows(BusinessException.class,

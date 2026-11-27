@@ -11,11 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户余额与支付密码接口。
@@ -34,10 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('CUSTOMER')")
 public class UserBalanceController {
 
-    /** 用户余额业务服务。 */
+    /**
+     * 用户余额业务服务。
+     */
     private final UserBalanceService userBalanceService;
 
-    /** 支付密码业务服务。 */
+    /**
+     * 支付密码业务服务。
+     */
     private final PayPasswordService payPasswordService;
 
     /**
@@ -74,7 +74,7 @@ public class UserBalanceController {
     /**
      * 首次设置或修改支付密码。
      *
-     * @param jwt 当前登录用户 JWT
+     * @param jwt     当前登录用户 JWT
      * @param request 支付密码设置请求
      * @return 无数据的成功响应
      * @throws com.hbue.ordering.common.core.exception.BusinessException 凭据校验失败、账户不可用或防爆破依赖不可用时由统一异常处理转换为响应

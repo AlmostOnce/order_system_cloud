@@ -22,7 +22,7 @@ public interface DataScopeService {
      * 调用方应改用 {@link #loadScopes(Long)} 自行判定并返回 404，
      * 避免通过错误码探测数据是否存在。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      */
     void checkWindowAccess(Long userId, Long windowId);
@@ -32,7 +32,7 @@ public interface DataScopeService {
      *
      * <p>全平台范围视为有权。失败时抛出 403。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      */
     void checkRestaurantAccess(Long userId, Long restaurantId);
@@ -43,7 +43,7 @@ public interface DataScopeService {
      * <p>与 {@link #checkWindowAccess(Long, Long)} 判定口径一致，
      * 供私有数据场景（订单、支付单）自行决定返回 404 使用。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      * @return 有权时返回 true
      */
@@ -52,7 +52,7 @@ public interface DataScopeService {
     /**
      * 判断用户是否有权操作指定餐厅的数据，不抛出异常。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      * @return 有权时返回 true
      */

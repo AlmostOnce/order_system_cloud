@@ -2,6 +2,10 @@ package com.hbue.ordering.product.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hbue.ordering.product.model.ProductDO;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 /**
  * 菜品表的数据访问接口。
@@ -13,4 +17,29 @@ import com.hbue.ordering.product.model.ProductDO;
  * @date 2026-09-28
  */
 public interface ProductMapper extends BaseMapper<ProductDO> {
+    /**
+     * 在规格替换事务中锁住菜品行，避免两个完整替换交错写入；锁随事务提交或回滚释放。
+     */
+    @Select("SELECT * FROM products WHERE product_id = #{productId} FOR UPDATE")
+    ProductDO selectForSpecificationUpdate(@Param("productId") Long productId);
+
+    /**
+     * 一次读取顾客可见菜品的图片，不加载完整菜单或逐项查询。
+     */
+    @Select("""
+            <script>
+            SELECT p.product_id, p.window_id, p.image_file_key
+            FROM products p
+            JOIN dining_windows w ON w.window_id = p.window_id AND w.status = 1
+            JOIN restaurants r ON r.restaurant_id = w.restaurant_id AND r.status = 1
+            LEFT JOIN product_categories c ON c.category_id = p.category_id AND c.window_id = p.window_id
+            WHERE p.sale_status = 1
+              AND (p.category_id IS NULL OR p.category_id = 0 OR c.status = 1)
+              AND p.product_id IN
+              <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            ORDER BY p.product_id
+            </script>
+            """)
+    List<ProductDO> selectPublicImageProducts(@Param("ids") List<Long> ids);
+
 }

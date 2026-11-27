@@ -34,7 +34,7 @@ public class AccessTokenBlacklistService {
      * 创建 Access Token 黑名单服务。
      *
      * @param redisOperationsService Redis 基础操作组件
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      */
     public AccessTokenBlacklistService(
             RedisOperationsService redisOperationsService,
@@ -48,10 +48,10 @@ public class AccessTokenBlacklistService {
     /**
      * 将 Access Token 的唯一 ID 加入黑名单。
      *
-     * @param tokenId JWT 的 jti 声明
+     * @param tokenId   JWT 的 jti 声明
      * @param expiresAt Access Token 的过期时间
      * @throws IllegalArgumentException jti 或过期时间缺失时抛出
-     * @throws RuntimeException Redis 写入失败时传播给调用方
+     * @throws RuntimeException         Redis 写入失败时传播给调用方
      */
     public void blacklist(String tokenId, Instant expiresAt) {
         // 无法确定令牌身份或过期时间时拒绝写入。

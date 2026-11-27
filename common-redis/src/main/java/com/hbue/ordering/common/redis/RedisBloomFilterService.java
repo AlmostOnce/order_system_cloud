@@ -53,9 +53,9 @@ public class RedisBloomFilterService {
      * <p>过滤器已存在时直接复用，不覆盖已有位图，
      * 避免多个实例启动时相互覆盖造成已写入数据丢失。</p>
      *
-     * @param filterName 过滤器名称
+     * @param filterName         过滤器名称
      * @param expectedInsertions 预期元素数量
-     * @param falseProbability 预期误判率
+     * @param falseProbability   预期误判率
      * @return 可用的布隆过滤器
      * @throws IllegalArgumentException 当过滤器名称为空或仅包含空白时抛出
      */
@@ -92,7 +92,7 @@ public class RedisBloomFilterService {
      * 保证故障场景下不会误拦真实存在的数据，最多退化为一次数据库查询。</p>
      *
      * @param filterName 过滤器名称
-     * @param id 数据 ID
+     * @param id         数据 ID
      * @return true 表示"可能存在"，false 表示"一定不存在"
      */
     public boolean mightContain(String filterName, long id) {
@@ -113,7 +113,7 @@ public class RedisBloomFilterService {
      * 将新增数据的 ID 写入布隆过滤器。
      *
      * @param filterName 过滤器名称
-     * @param id 数据 ID
+     * @param id         数据 ID
      * @return true 表示写入成功；过滤器未初始化或 Redis 故障时返回 false
      */
     public boolean add(String filterName, long id) {

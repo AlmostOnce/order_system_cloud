@@ -16,15 +16,10 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 用户账号引导业务测试。
@@ -56,12 +51,14 @@ class UserServiceImplBootstrapTest {
                 userDataScopeService,
                 auditLogger,
                 org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
-        );
+                , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }
 
     @Test
     void shouldCreateSystemAdminWhenAccountAbsent() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("admin")).thenReturn(null);
         when(userMapper.selectByEmail("100000001@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("admin_password_dev_2026"))
@@ -83,6 +80,8 @@ class UserServiceImplBootstrapTest {
         assertEquals(Integer.valueOf(1), captor.getValue().getStatus());
         assertEquals(Integer.valueOf(0), captor.getValue().getVersion());
         assertEquals("$2a$10$encoded-hash", captor.getValue().getPasswordHash());
+        // 引导账号的邮箱来自部署配置，创建时就必须标记已验证，否则认证服务不下发令牌。
+        assertNotNull(captor.getValue().getEmailVerifiedAt());
 
         // 系统管理员不需要业务数据范围。
         verify(userDataScopeService, never()).grantPlatformScope(any());
@@ -90,6 +89,8 @@ class UserServiceImplBootstrapTest {
 
     @Test
     void shouldCreateGeneralManagerAndGrantPlatformScope() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("manager")).thenReturn(null);
         when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(passwordEncoder.encode("manager_password_dev_2026"))
@@ -128,6 +129,42 @@ class UserServiceImplBootstrapTest {
         );
 
         assertFalse(created);
+        verify(userMapper, never()).insert(any(UserDO.class));
+    }
+
+    @Test
+    void shouldBackfillEmailVerificationForExistingBootstrapAccount() {
+        // 历史引导账号可能创建于“引导即标记已验证”的逻辑之前，邮箱验证时间为空。
+        UserDO existingUser = existingUser("admin", "SYSTEM_ADMIN", 1);
+        when(userMapper.selectByUsername("admin")).thenReturn(existingUser);
+
+        boolean created = userService.bootstrapSystemAdmin(
+                "admin",
+                "100000001@qq.com",
+                "admin_password_dev_2026"
+        );
+
+        assertFalse(created);
+        // 必须补写验证时间，否则认证服务持续要求验证邮箱、管理端拿不到令牌。
+        verify(userMapper).markBootstrapEmailVerified(9L);
+        verify(userMapper, never()).insert(any(UserDO.class));
+    }
+
+    @Test
+    void shouldKeepExistingEmailVerificationTime() {
+        // 已有验证时间说明账号已完成验证，引导不能覆盖该时间。
+        UserDO existingUser = existingUser("admin", "SYSTEM_ADMIN", 1);
+        existingUser.setEmailVerifiedAt(java.time.LocalDateTime.of(2026, 11, 1, 10, 0));
+        when(userMapper.selectByUsername("admin")).thenReturn(existingUser);
+
+        boolean created = userService.bootstrapSystemAdmin(
+                "admin",
+                "100000001@qq.com",
+                "admin_password_dev_2026"
+        );
+
+        assertFalse(created);
+        verify(userMapper, never()).markBootstrapEmailVerified(anyLong());
         verify(userMapper, never()).insert(any(UserDO.class));
     }
 
@@ -192,6 +229,8 @@ class UserServiceImplBootstrapTest {
 
     @Test
     void shouldReturnFalseWhenConcurrentCreationConflicts() {
+        // 明确模拟随机用户号未被占用，避免Mock默认Long=0被当成已存在。
+        when(userMapper.selectIdByUserNo(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
         when(userMapper.selectByUsername("manager")).thenReturn(null);
         when(userMapper.selectByEmail("100000002@qq.com")).thenReturn(null);
         when(userMapper.insert(any(UserDO.class)))
@@ -223,7 +262,7 @@ class UserServiceImplBootstrapTest {
      *
      * @param username 用户名
      * @param roleCode 角色编码
-     * @param status 状态
+     * @param status   状态
      * @return 用户持久化对象
      */
     private UserDO existingUser(String username, String roleCode, Integer status) {

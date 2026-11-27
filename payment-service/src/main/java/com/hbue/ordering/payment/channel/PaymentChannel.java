@@ -42,7 +42,7 @@ public interface PaymentChannel {
      * <p>模拟渠道无渠道侧状态机，恒返回 UNKNOWN；
      * 真实渠道的主动查询用于异步通知丢失时的补偿对账。</p>
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo      业务支付单号
      * @param channelTradeNo 渠道交易号
      * @return 渠道侧查询结果
      */
@@ -51,7 +51,7 @@ public interface PaymentChannel {
     /**
      * 验证异步通知签名与时间戳窗口，不解析业务字段。
      *
-     * @param request 渠道通知请求体
+     * @param request   渠道通知请求体
      * @param signature 渠道侧携带的十六进制签名
      * @return 验签通过时返回 true
      */
@@ -77,13 +77,19 @@ public interface PaymentChannel {
     @AllArgsConstructor
     class ChannelPaymentCreation {
 
-        /** 渠道交易号。 */
+        /**
+         * 渠道交易号。
+         */
         private String channelTradeNo;
 
-        /** 收银台页面地址。 */
+        /**
+         * 收银台页面地址。
+         */
         private String checkoutUrl;
 
-        /** 收银台二维码内容（真实渠道为渠道生成的 scheme 或链接）。 */
+        /**
+         * 收银台二维码内容（真实渠道为渠道生成的 scheme 或链接）。
+         */
         private String qrCodeContent;
     }
 
@@ -99,7 +105,9 @@ public interface PaymentChannel {
     @AllArgsConstructor
     class ChannelQueryResult {
 
-        /** 查询结果状态：UNKNOWN/PENDING/SUCCESS/FAILED。 */
+        /**
+         * 查询结果状态：UNKNOWN/PENDING/SUCCESS/FAILED。
+         */
         private String status;
     }
 
@@ -116,16 +124,24 @@ public interface PaymentChannel {
     @AllArgsConstructor
     class ChannelNotifyMessage {
 
-        /** 业务支付单号。 */
+        /**
+         * 业务支付单号。
+         */
         private String paymentNo;
 
-        /** 渠道交易号。 */
+        /**
+         * 渠道交易号。
+         */
         private String channelTradeNo;
 
-        /** 实收金额。 */
+        /**
+         * 实收金额。
+         */
         private BigDecimal paidAmount;
 
-        /** 是否支付成功。 */
+        /**
+         * 是否支付成功。
+         */
         private boolean success;
     }
 }

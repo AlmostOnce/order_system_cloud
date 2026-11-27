@@ -12,13 +12,15 @@ import com.hbue.ordering.product.dto.request.WindowSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.vo.ProductAdminVO;
-import com.hbue.ordering.product.vo.ProductCategoryAdminVO;
 import com.hbue.ordering.product.vo.WindowAdminVO;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,26 +32,23 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.math.BigDecimal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductAdministrationServiceImplTest {
 
-    /** 测试用操作者用户 ID。 */
+    /**
+     * 测试用操作者用户 ID。
+     */
     private static final Long OPERATOR_ID = 99L;
 
     @Mock
     private DiningWindowMapper diningWindowMapper;
+
+    @Mock
+    private RestaurantMapper restaurantMapper;
 
     @Mock
     private ProductCategoryMapper productCategoryMapper;
@@ -65,6 +64,15 @@ class ProductAdministrationServiceImplTest {
 
     @Mock
     private ProductBloomFilterManager bloomFilterManager;
+
+    /**
+     * 大多数用例在启用的餐厅 1 下维护档口；需要验证停用分支的用例会覆盖该默认桩。
+     * 用 lenient 避免与案例无关的测试触发严格桩校验。
+     */
+    @BeforeEach
+    void activeRestaurantByDefault() {
+        lenient().when(restaurantMapper.selectById(1L)).thenReturn(restaurant(1L, 1));
+    }
 
     @Test
     void shouldCreateWindowWithDescriptionAndDefaultSortOrder() {
@@ -315,11 +323,28 @@ class ProductAdministrationServiceImplTest {
         verify(menuCacheService, never()).evictWindowMenu(7L);
     }
 
+    /**
+     * 停用餐厅下不允许新建档口，否则会制造"列表看不到餐厅、却能浏览和下单"的不一致入口。
+     */
+    @Test
+    void shouldRejectCreatingWindowUnderDisabledRestaurant() {
+        when(restaurantMapper.selectById(1L)).thenReturn(restaurant(1L, 0));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service().createWindow(OPERATOR_ID, windowRequest())
+        );
+
+        assertEquals(CommonErrorCode.CONFLICT.code(), exception.getErrorCode().code());
+        verify(diningWindowMapper, never()).insert(any(DiningWindowDO.class));
+    }
+
     private ProductAdministrationService service() {
         var images = org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class);
         org.mockito.Mockito.lenient().when(images.requireImageKey(anyString(), anyLong(), anyString(), anyLong())).thenAnswer(a -> a.getArgument(0));
         return new ProductAdministrationServiceImpl(
                 diningWindowMapper,
+                restaurantMapper,
                 productCategoryMapper,
                 productMapper,
                 dataScopeService,
@@ -328,6 +353,16 @@ class ProductAdministrationServiceImplTest {
                 images,
                 org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class)
         );
+    }
+
+    /**
+     * 构造指定启用状态的餐厅。
+     */
+    private RestaurantDO restaurant(Long id, int status) {
+        RestaurantDO restaurant = new RestaurantDO();
+        restaurant.setRestaurantId(id);
+        restaurant.setStatus(status);
+        return restaurant;
     }
 
     private DiningWindowDO window(Long id, Integer status) {

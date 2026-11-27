@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = "com.hbue.ordering")
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.hbue.ordering.product.api.searchclient")
+@EnableFeignClients(basePackages = {"com.hbue.ordering.product.api.searchclient", "com.hbue.ordering.search.client"})
 @EnableScheduling
 public class SearchServiceApplication {
     public static void main(String[] args) {

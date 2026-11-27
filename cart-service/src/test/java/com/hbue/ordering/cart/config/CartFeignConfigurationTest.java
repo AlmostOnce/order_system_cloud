@@ -17,13 +17,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @date 2026-10-17
  */
 class CartFeignConfigurationTest {
-    /** 清理测试创建的线程请求上下文，避免影响下一条用例。 */
+    /**
+     * 清理测试创建的线程请求上下文，避免影响下一条用例。
+     */
     @AfterEach
     void clearContext() {
         RequestContextHolder.resetRequestAttributes();
     }
 
-    /** 购物车应把当前 Bearer Token 传给商品服务独立验签。 */
+    /**
+     * 购物车应把当前 Bearer Token 传给商品服务独立验签。
+     */
     @Test
     void shouldRelayCurrentAuthorization() {
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -34,7 +38,9 @@ class CartFeignConfigurationTest {
         assertEquals("Bearer customer-token", template.headers().get("Authorization").iterator().next());
     }
 
-    /** 没有同步请求上下文时不应添加任何用户凭据。 */
+    /**
+     * 没有同步请求上下文时不应添加任何用户凭据。
+     */
     @Test
     void shouldNotInventTokenWithoutRequest() {
         RequestContextHolder.resetRequestAttributes();

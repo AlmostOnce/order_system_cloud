@@ -1,7 +1,7 @@
 package com.hbue.ordering.stock.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.stock.security.StockAccessDeniedHandler;
 import com.hbue.ordering.stock.security.StockAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,12 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -46,17 +41,21 @@ import java.util.Objects;
 @EnableMethodSecurity
 public class StockSecurityConfig {
 
-    /** 未认证请求处理器。 */
+    /**
+     * 未认证请求处理器。
+     */
     private final StockAuthenticationEntryPoint authenticationEntryPoint;
 
-    /** 无权限请求处理器。 */
+    /**
+     * 无权限请求处理器。
+     */
     private final StockAccessDeniedHandler accessDeniedHandler;
 
     /**
      * 创建库存服务安全配置。
      *
      * @param authenticationEntryPoint 未认证请求处理器
-     * @param accessDeniedHandler 无权限请求处理器
+     * @param accessDeniedHandler      无权限请求处理器
      */
     public StockSecurityConfig(
             StockAuthenticationEntryPoint authenticationEntryPoint,
@@ -123,11 +122,11 @@ public class StockSecurityConfig {
      *
      * <p>黑名单状态无法从 Redis 确认时按无效令牌处理，避免 Redis 故障期间继续接受已注销令牌。</p>
      *
-     * @param resourceLoader Spring 资源加载器
-     * @param publicKeyLocation RSA 公钥资源位置
-     * @param issuer JWT 签发方
+     * @param resourceLoader         Spring 资源加载器
+     * @param publicKeyLocation      RSA 公钥资源位置
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      */
     @Bean
@@ -164,10 +163,10 @@ public class StockSecurityConfig {
     /**
      * 解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过校验的 JWT
      */
     private Jwt decodeAndCheckBlacklist(

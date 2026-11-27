@@ -13,6 +13,9 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
       # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
       initial-size: 1
       min-idle: 1
@@ -66,6 +69,15 @@ spring:
           commentOrderClient:
             connectTimeout: 3000
             readTimeout: 5000
+          # 消费准入是评论的前置校验，读超时不宜过长：宁可快速返回 503 让用户重试，
+          # 也不要把请求线程长时间挂在订单服务上。
+          commentPurchaseFactClient:
+            connectTimeout: 2000
+            readTimeout: 3000
+          # 通知属于提交后的旁路调用，失败只记日志，同样需要短超时。
+          commentNotificationClient:
+            connectTimeout: 2000
+            readTimeout: 3000
 security:
   jwt:
     issuer: ${JWT_ISSUER:http://localhost:9094}
@@ -73,7 +85,11 @@ security:
     blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
+  order:
+    # 调用 order-service 内部接口的共享密钥，必须与 order-service 的 payment.internal.order-token 一致。
+    # 消费事实与待评价候选都属于订单内部数据，不能复用 scope.token，否则订单服务会返回 401。
+    token: ${INTERNAL_ORDER_TOKEN:internal_order_token_dev_2026}
 identity:
   user-service-base-url: ${USER_SERVICE_BASE_URL:http://localhost:9092}
 file:

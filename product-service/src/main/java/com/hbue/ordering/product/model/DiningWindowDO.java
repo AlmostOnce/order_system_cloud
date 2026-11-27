@@ -45,11 +45,15 @@ public class DiningWindowDO {
     @TableField("window_name")
     private String windowName;
 
-    /** 窗口简介。 */
+    /**
+     * 窗口简介。
+     */
     @TableField("description")
     private String description;
 
-    /** 窗口展示排序：越小越靠前，相同值按窗口 ID 升序。 */
+    /**
+     * 窗口展示排序：越小越靠前，相同值按窗口 ID 升序。
+     */
     @TableField("sort_order")
     private Integer sortOrder;
 
@@ -64,6 +68,12 @@ public class DiningWindowDO {
      */
     @TableField("image_file_key")
     private String imageFileKey;
+
+    /**
+     * 有序图片文件键JSON数组，最多5张；首图与image_file_key同一事务同步，NULL兼容迁移前数据。
+     */
+    @TableField("image_file_keys")
+    private String imageFileKeys;
 
     /**
      * 窗口状态：1 启用，0 停用。

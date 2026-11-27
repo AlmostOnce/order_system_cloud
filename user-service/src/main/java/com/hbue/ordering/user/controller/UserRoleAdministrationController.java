@@ -1,21 +1,15 @@
 package com.hbue.ordering.user.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.user.api.vo.UserBasicVO;
 import com.hbue.ordering.user.dto.request.UserRoleUpdateRequest;
 import com.hbue.ordering.user.service.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 用户角色分配接口。
@@ -34,7 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('SYSTEM_ADMIN')")
 public class UserRoleAdministrationController {
 
-    /** 用户业务服务。 */
+    /**
+     * 用户业务服务。
+     */
     private final UserService userService;
 
     /**
@@ -49,8 +45,8 @@ public class UserRoleAdministrationController {
     /**
      * 修改指定用户的角色编码。
      *
-     * @param jwt 当前登录操作者 JWT
-     * @param userId 目标用户 ID
+     * @param jwt     当前登录操作者 JWT
+     * @param userId  目标用户 ID
      * @param request 目标角色编码
      * @return 变更后的用户基础信息
      * @throws com.hbue.ordering.common.core.exception.BusinessException 目标角色或用户无效、或操作者试图修改自身角色时由统一异常处理转换为响应

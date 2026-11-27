@@ -16,23 +16,79 @@ ALTER TABLE users
 -- biz_type + biz_ref 指向业务单据（如 PAYMENT + payment_no、ORDER + order_no）。
 -- 唯一键 uk_balance_records_biz 让同一业务单据的同一动作只能记一次账，
 -- 重复回调或重试直接冲突失败，保证记账幂等。
-CREATE TABLE IF NOT EXISTS balance_records (
-    record_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT NOT NULL,
-    change_type VARCHAR(20) NOT NULL,
-    amount DECIMAL(10, 2) NOT NULL,
-    balance_after DECIMAL(10, 2) NOT NULL,
-    biz_type VARCHAR(20) NULL,
-    biz_ref VARCHAR(64) NULL,
-    remark VARCHAR(255) NULL,
+CREATE TABLE IF NOT EXISTS balance_records
+(
+    record_id
+    BIGINT
+    UNSIGNED
+    NOT
+    NULL
+    AUTO_INCREMENT,
+    user_id
+    BIGINT
+    NOT
+    NULL,
+    change_type
+    VARCHAR
+(
+    20
+) NOT NULL,
+    amount DECIMAL
+(
+    10,
+    2
+) NOT NULL,
+    balance_after DECIMAL
+(
+    10,
+    2
+) NOT NULL,
+    biz_type VARCHAR
+(
+    20
+) NULL,
+    biz_ref VARCHAR
+(
+    64
+) NULL,
+    remark VARCHAR
+(
+    255
+) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (record_id),
-    UNIQUE KEY uk_balance_records_biz (user_id, biz_type, biz_ref, change_type),
-    KEY idx_balance_records_user_created (user_id, created_at),
+    PRIMARY KEY
+(
+    record_id
+),
+    UNIQUE KEY uk_balance_records_biz
+(
+    user_id,
+    biz_type,
+    biz_ref,
+    change_type
+),
+    KEY idx_balance_records_user_created
+(
+    user_id,
+    created_at
+),
     CONSTRAINT chk_balance_records_change_type
-        CHECK (change_type IN ('RECHARGE', 'PAY', 'REFUND')),
+    CHECK
+(
+    change_type
+    IN
+(
+    'RECHARGE',
+    'PAY',
+    'REFUND'
+)),
     CONSTRAINT chk_balance_records_balance_after
-        CHECK (balance_after >= 0)
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_unicode_ci;
+    CHECK
+(
+    balance_after
+    >=
+    0
+)
+    ) ENGINE=InnoDB
+    DEFAULT CHARSET=utf8mb4
+    COLLATE =utf8mb4_unicode_ci;

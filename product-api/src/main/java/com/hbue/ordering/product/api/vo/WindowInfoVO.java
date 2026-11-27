@@ -26,6 +26,11 @@ public class WindowInfoVO {
     private Long windowId;
 
     /**
+     * 档口名称快照，供工单等业务展示；历史调用方忽略该新增字段即可。
+     */
+    private String windowName;
+
+    /**
      * 所属餐厅 ID。
      */
     private Long restaurantId;

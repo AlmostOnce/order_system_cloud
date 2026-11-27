@@ -18,7 +18,9 @@ import lombok.Data;
 @Data
 public class UserStatusUpdateRequest {
 
-    /** 目标状态：1 启用，0 禁用。 */
+    /**
+     * 目标状态：1 启用，0 禁用。
+     */
     @NotNull
     @Min(0)
     @Max(1)

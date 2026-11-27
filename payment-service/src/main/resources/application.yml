@@ -6,6 +6,9 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
       # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
       initial-size: 1
       min-idle: 1
@@ -94,7 +97,7 @@ payment:
 internal:
   scope:
     # payment-service 调用用户服务余额扣款内部接口的共享密钥，与 user-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 # 接口文档：本地默认开启，生产环境可通过 SWAGGER_ENABLED=false 关闭。
 springdoc:

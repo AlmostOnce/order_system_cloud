@@ -20,36 +20,58 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class RestaurantAdminVO {
 
-    /** 餐厅 ID。 */
+    /**
+     * 餐厅 ID。
+     */
     private Long restaurantId;
 
-    /** 餐厅编码。 */
+    /**
+     * 餐厅编码。
+     */
     private String restaurantCode;
 
-    /** 餐厅名称。 */
+    /**
+     * 餐厅名称。
+     */
     private String restaurantName;
 
-    /** 位置/楼层。 */
+    /**
+     * 位置/楼层。
+     */
     private String location;
 
-    /** 联系电话。 */
+    /**
+     * 联系电话。
+     */
     private String phone;
 
-    /** 门面图地址。 */
+    /**
+     * 门面图地址。
+     */
     private String imageUrl;
 
-    /** 公告/简介。 */
+    /**
+     * 公告/简介。
+     */
     private String notice;
 
-    /** 展示排序：值小的排前面。 */
+    /**
+     * 展示排序：值小的排前面。
+     */
     private Integer sortOrder;
 
-    /** 餐厅状态：1 启用，0 停用。 */
+    /**
+     * 餐厅状态：1 启用，0 停用。
+     */
     private Integer status;
 
-    /** 创建时间。 */
+    /**
+     * 创建时间。
+     */
     private LocalDateTime createdAt;
 
-    /** 修改时间。 */
+    /**
+     * 修改时间。
+     */
     private LocalDateTime updatedAt;
 }

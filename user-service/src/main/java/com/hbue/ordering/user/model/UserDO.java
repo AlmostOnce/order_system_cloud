@@ -1,10 +1,6 @@
 package com.hbue.ordering.user.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -24,16 +20,26 @@ import java.time.LocalDateTime;
 public class UserDO {
 
     /**
+     * 登录凭据版本，密码恢复时递增，使旧会话失效。
+     */
+    @TableField("credential_version")
+    private Long credentialVersion = 0L;
+
+    /**
      * 用户 ID。
      */
     @TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
 
-    /** 永久登录用户号，由系统生成。 */
+    /**
+     * 永久登录用户号，由系统生成。
+     */
     @TableField("user_no")
     private String userNo;
 
-    /** 对外稳定随机 UUID，内部关联仍使用 user_id。 */
+    /**
+     * 对外稳定随机 UUID，内部关联仍使用 user_id。
+     */
     @TableField("user_uuid")
     private String userUuid;
 
@@ -57,6 +63,11 @@ public class UserDO {
      */
     @TableField("email")
     private String email;
+
+    /**
+     * 当前绑定邮箱实际验证成功时间；历史账号为null。
+     */
+    private LocalDateTime emailVerifiedAt;
 
     /**
      * 账户余额。
@@ -116,4 +127,30 @@ public class UserDO {
      */
     @TableField("deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * 账号注销申请提交时间。
+     *
+     * <p>为空表示当前没有待生效的注销申请。提交注销后到生效前，账号仍保留数据，
+     * 但认证服务不再签发正常令牌；撤回或到期匿名化后由对应流程清理或保留用于审计。</p>
+     */
+    @TableField("deletion_requested_at")
+    private LocalDateTime deletionRequestedAt;
+
+    /**
+     * 账号注销生效时间。
+     *
+     * <p>提交时按配置的冷静期计算（默认 72 小时）。到期任务依据该列选出待处理账号，
+     * 并在同一事务内重新核对阻断项后才执行匿名化。</p>
+     */
+    @TableField("deletion_effective_at")
+    private LocalDateTime deletionEffectiveAt;
+
+    /**
+     * 注销生效前提醒邮件的发送时间。
+     *
+     * <p>通过条件更新该列抢占提醒权，避免多实例重复发送；撤回后重置为 null。</p>
+     */
+    @TableField("deletion_reminded_at")
+    private LocalDateTime deletionRemindedAt;
 }

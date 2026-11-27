@@ -4,21 +4,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.HttpClientErrorException;
 
-/** 通过文件服务验证图片归属；不跨库读取文件表，不访问客户端提供的地址。 */
+/**
+ * 通过文件服务验证图片归属；不跨库读取文件表，不访问客户端提供的地址。
+ */
 @Component
 public class ManagedImageClient {
     private final RestClient client;
     private final String internalToken;
 
     public ManagedImageClient(@Value("${file.service-base-url:http://localhost:9102}") String fileServiceBaseUrl,
-            @Value("${internal.scope.token:}") String internalToken) {
+                              @Value("${internal.scope.token:}") String internalToken) {
         this.internalToken = internalToken;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(3000);
@@ -26,7 +27,9 @@ public class ManagedImageClient {
         this.client = RestClient.builder().baseUrl(fileServiceBaseUrl).requestFactory(factory).build();
     }
 
-    /** 省略字段保留旧图，空串清除；未改变的引用不重复要求原上传人权限。 */
+    /**
+     * 省略字段保留旧图，空串清除；未改变的引用不重复要求原上传人权限。
+     */
     public String resolveUpdateKey(String requested, String existing, Long operatorId, String bizType, Long bizRef) {
         if (requested == null) return existing;
         String key = FileReferences.normalize(requested);
@@ -39,7 +42,8 @@ public class ManagedImageClient {
         if (fileKey == null) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "图片文件键格式不正确");
         }
-        if (internalToken == null || internalToken.isBlank()) throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "文件内部调用凭据未配置");
+        if (internalToken == null || internalToken.isBlank())
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "文件内部调用凭据未配置");
         JsonNode response;
         try {
             response = client.get().uri("/internal/files/{key}", fileKey)
@@ -58,7 +62,7 @@ public class ManagedImageClient {
                 || data.path("uploaderId").asLong() != operatorId
                 || !bizType.equals(data.path("bizType").asText())
                 || (bizRef == null ? (!data.path("bizRef").isNull() && !data.path("bizRef").isMissingNode())
-                    : (!data.path("bizRef").isIntegralNumber() || data.path("bizRef").asLong() != bizRef))) {
+                : (!data.path("bizRef").isIntegralNumber() || data.path("bizRef").asLong() != bizRef))) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN, "图片不属于当前上传操作，请重新上传");
         }
         String type = data.path("contentType").asText();

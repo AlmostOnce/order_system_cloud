@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 顾客库存查询入口；沿用商品路由，内部库存接口不对外开放。 */
+/**
+ * 顾客库存查询入口；沿用商品路由，内部库存接口不对外开放。
+ */
 @Validated
 @RestController
 @Tag(name = "商品菜单接口")

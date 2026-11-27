@@ -1,0 +1,50 @@
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    function:
+      definition: orderRecommendationSnapshot;favoriteChanged;productSearchRefresh
+    stream:
+      bindings:
+        orderRecommendationSnapshot-in-0:
+          destination: recommendation-purchase-snapshot-v1
+          group: recommendation-purchase-snapshot-v1
+          content-type: application/json
+          consumer:
+            max-attempts: 1
+        favoriteChanged-in-0:
+          destination: user-favorite-changed-v1
+          group: recommendation-favorite-state-v1
+          content-type: application/json
+          consumer:
+            max-attempts: 1
+        productSearchRefresh-in-0:
+          destination: product-search-refresh-v1
+          group: recommendation-product-refresh-v1
+          content-type: application/json
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          orderRecommendationSnapshot-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
+          favoriteChanged-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
+          productSearchRefresh-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

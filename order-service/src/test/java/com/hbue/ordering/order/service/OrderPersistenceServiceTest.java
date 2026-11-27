@@ -2,36 +2,38 @@ package com.hbue.ordering.order.service;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+import com.hbue.ordering.order.coupon.CouponConsumeOutboxWriter;
 import com.hbue.ordering.order.mapper.OrderItemMapper;
 import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
-import com.hbue.ordering.order.service.impl.OrderPersistenceServiceImpl;
-import com.hbue.ordering.order.ranking.SalesOutboxWriter;
-import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
 import com.hbue.ordering.order.notification.OrderNotificationEvent;
-import org.springframework.test.util.ReflectionTestUtils;
+import com.hbue.ordering.order.notification.OrderNotificationOutboxWriter;
+import com.hbue.ordering.order.ranking.SalesOutboxWriter;
+import com.hbue.ordering.order.service.impl.OrderPersistenceServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class OrderPersistenceServiceTest {
+
+    /**
+     * 支付时间使用支付服务确认的固定值，不从订单更新时间或当前时刻推断。
+     */
+    private static final LocalDateTime PAID_AT = LocalDateTime.of(2026, 11, 13, 9, 30);
 
     @Mock
     private OrderMapper orderMapper;
@@ -41,8 +43,20 @@ class OrderPersistenceServiceTest {
 
     @Mock
     private SalesOutboxWriter salesOutbox;
+
+    /**
+     * 新增推荐写入器仅补齐既有构造依赖，不新增或运行测试场景。
+     */
+    @Mock
+    private RecommendationPurchaseOutboxWriter recommendationOutbox;
     @Mock
     private OrderNotificationOutboxWriter notificationOutbox;
+
+    @Mock
+    private OrderTimeoutOutboxService timeoutOutbox;
+
+    @Mock
+    private CouponConsumeOutboxWriter couponConsumeOutbox;
 
     @Test
     void shouldSaveOrderBeforeAllItemsAndAssignOrderId() {
@@ -54,7 +68,7 @@ class OrderPersistenceServiceTest {
         when(orderItemMapper.insert(any(OrderItemDO.class))).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox
         );
         List<OrderItemDO> items = List.of(new OrderItemDO(), new OrderItemDO());
 
@@ -77,7 +91,7 @@ class OrderPersistenceServiceTest {
         when(orderMapper.insert(any(OrderDO.class))).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox
         );
 
         BusinessException exception = assertThrows(
@@ -105,7 +119,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(1);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -137,7 +151,7 @@ class OrderPersistenceServiceTest {
         )).thenReturn(0);
         OrderPersistenceService persistenceService = new OrderPersistenceServiceImpl(
                 orderMapper,
-                orderItemMapper, salesOutbox
+                orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox
         );
 
         boolean updated = persistenceService.updateStatusIfUnchanged(
@@ -158,35 +172,164 @@ class OrderPersistenceServiceTest {
         assertTrue(OrderPersistenceServiceImpl.class
                 .getMethod("updateStatusIfUnchanged", Long.class, String.class, Integer.class, String.class)
                 .isAnnotationPresent(Transactional.class));
+        assertTrue(OrderPersistenceServiceImpl.class
+                .getMethod("applyCouponSnapshot", OrderDO.class, List.class)
+                .isAnnotationPresent(Transactional.class));
+    }
+
+    /**
+     * 未分到一分钱的行本来就是原价实付快照，应避免触发零变更 SQL 的伪冲突。
+     */
+    @Test
+    void shouldSkipUnchangedZeroDiscountRowsWhenApplyingCouponSnapshot() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        when(orderMapper.applyCouponSnapshot(81L, 7001L, "平台满减券",
+                new BigDecimal("10.00"), new BigDecimal("0.01"), new BigDecimal("9.99"))).thenReturn(1);
+        when(orderItemMapper.applyCouponSnapshot(101L, 81L,
+                new BigDecimal("10.00"), new BigDecimal("0.01"), new BigDecimal("9.99"))).thenReturn(1);
+        OrderDO order = new OrderDO();
+        order.setOrderId(81L);
+        order.setUserCouponId(7001L);
+        order.setCouponTitleSnapshot("平台满减券");
+        order.setTotalAmount(new BigDecimal("10.00"));
+        order.setDiscountAmount(new BigDecimal("0.01"));
+        order.setPayableAmount(new BigDecimal("9.99"));
+        OrderItemDO discounted = new OrderItemDO();
+        discounted.setItemId(101L);
+        discounted.setLineAmount(new BigDecimal("10.00"));
+        discounted.setLineDiscountAmount(new BigDecimal("0.01"));
+        discounted.setLinePayableAmount(new BigDecimal("9.99"));
+        OrderItemDO unchanged = new OrderItemDO();
+        unchanged.setItemId(102L);
+        unchanged.setLineAmount(new BigDecimal("0.00"));
+        unchanged.setLineDiscountAmount(new BigDecimal("0.00"));
+        unchanged.setLinePayableAmount(new BigDecimal("0.00"));
+
+        persistence.applyCouponSnapshot(order, List.of(discounted, unchanged));
+
+        verify(orderItemMapper).applyCouponSnapshot(101L, 81L,
+                new BigDecimal("10.00"), new BigDecimal("0.01"), new BigDecimal("9.99"));
+        verify(orderItemMapper, never()).applyCouponSnapshot(eq(102L), eq(81L), any(), any(), any());
     }
 
     @Test
     void onlyWinningPaidTransitionWritesOutbox() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
-        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1, 0);
-        assertTrue(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
-        assertFalse(persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
-        verify(salesOutbox, times(1)).recordPaid(81L);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1, 0);
+        assertTrue(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+        assertFalse(persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+        verify(salesOutbox, times(1)).recordPaid(81L, PAID_AT);
+        verify(couponConsumeOutbox, times(1)).recordPaid(81L);
     }
 
     @Test
     void outboxFailurePropagatesSoPaymentStateTransactionRollsBack() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
-        when(orderMapper.updateStatusIfVersionMatches(81L, "待支付", 3, "已支付")).thenReturn(1);
-        org.mockito.Mockito.doThrow(new IllegalStateException("write failed")).when(salesOutbox).recordPaid(81L);
-        assertThrows(IllegalStateException.class, () -> persistence.updateStatusIfUnchanged(81L, "待支付", 3, "已支付"));
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed"))
+                .when(salesOutbox).recordPaid(81L, PAID_AT);
+        assertThrows(IllegalStateException.class, () -> persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+    }
+
+    /**
+     * 核销事件不能与支付状态分开提交；本地 Outbox 写入失败必须回滚支付迁移。
+     */
+    @Test
+    void couponConsumeOutboxFailurePropagatesWithPaidTransition() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        when(orderMapper.markPaidIfVersionMatches(81L, 3, PAID_AT)).thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("coupon outbox write failed"))
+                .when(couponConsumeOutbox).recordPaid(81L);
+
+        assertThrows(IllegalStateException.class, () -> persistence.markPaidIfUnchanged(81L, 3, PAID_AT));
+        verify(salesOutbox).recordPaid(81L, PAID_AT);
     }
 
     @Test
     void writesNotificationOnlyForWinningNonCancelTransition() {
-        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox);
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
         ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
         ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
-        var current = new OrderDO(); current.setOrderId(81L); current.setUserId(7L); current.setVersion(4); current.setStatus("制作中");
+        var current = new OrderDO();
+        current.setOrderId(81L);
+        current.setUserId(7L);
+        current.setVersion(4);
+        current.setStatus("制作中");
         when(orderMapper.updateStatusIfVersionMatches(81L, "已支付", 3, "制作中")).thenReturn(1, 0);
         when(orderMapper.selectById(81L)).thenReturn(current);
         assertTrue(persistence.updateStatusIfUnchanged(81L, "已支付", 3, "制作中"));
         assertFalse(persistence.updateStatusIfUnchanged(81L, "已支付", 3, "制作中"));
         verify(notificationOutbox, times(1)).record(OrderNotificationEvent.of(81L, 4, 7L, "制作中"));
     }
+
+    @Test
+    void pickupCompletionConsumesCodeAndNotifiesOnlyWinningTransition() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationOutbox", notificationOutbox);
+        ReflectionTestUtils.setField(persistence, "notificationsEnabled", true);
+        var completed = new OrderDO();
+        completed.setOrderId(81L);
+        completed.setUserId(7L);
+        completed.setVersion(5);
+        completed.setStatus("已完成");
+        when(orderMapper.completeWithPickupCode(81L, 4, "012345")).thenReturn(1, 0);
+        when(orderMapper.selectById(81L)).thenReturn(completed);
+        assertTrue(persistence.completeWithPickupCode(81L, 4, "012345"));
+        assertFalse(persistence.completeWithPickupCode(81L, 4, "012345"));
+        verify(notificationOutbox, times(1)).record(OrderNotificationEvent.of(81L, 5, 7L, "已完成"));
+    }
+
+    @Test
+    void sharedOrderResponsesNeverExposePickupCode() throws Exception {
+        // 详情契约需要真实创建时间才能计算支付期限，安全字段测试也必须提供完整最小订单。
+        var order = new OrderDO();
+        order.setOrderId(81L);
+        order.setPickupCode("012345");
+        order.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 6, 10, 0));
+        // 与Spring Boot实际序列化保持一致，注册Java时间模块。
+        var json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        assertFalse(json.writeValueAsString(order).contains("012345"));
+        assertFalse(json.writeValueAsString(com.hbue.ordering.order.vo.OrderDetailVO.from(order)).contains("012345"));
+        assertFalse(order.toString().contains("012345"));
+    }
+
+    @Test
+    void pickupCodeCollisionRetriesWithoutReplacingAnotherOrdersCode() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        var order = new OrderDO();
+        order.setOrderId(81L);
+        order.setUserId(7L);
+        order.setStatus("待取货");
+        order.setPickupCode("012345");
+        when(orderMapper.assignPickupCodeIfMissing(eq(81L), eq(7L), anyString()))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("collision")).thenReturn(1);
+        when(orderMapper.selectById(81L)).thenReturn(order);
+        var item = new OrderItemDO();
+        item.setQuantity(1);
+        item.setRefundApprovedQuantity(0);
+        when(orderItemMapper.selectByOrderId(81L)).thenReturn(List.of(item));
+        assertEquals("012345", persistence.ensurePickupCode(81L, 7L));
+        verify(orderMapper, times(2)).assignPickupCodeIfMissing(eq(81L), eq(7L), anyString());
+    }
+
+    /**
+     * 全部份数获批退款时，即使旧取餐码仍未清理也不能继续返回。
+     */
+    @Test
+    void approvedRefundHidesPreviouslyIssuedPickupCode() {
+        var persistence = new OrderPersistenceServiceImpl(orderMapper, orderItemMapper, salesOutbox, timeoutOutbox, recommendationOutbox, couponConsumeOutbox);
+        var order = new OrderDO();
+        order.setOrderId(81L);
+        order.setUserId(7L);
+        order.setStatus("待取货");
+        order.setPickupCode("012345");
+        var item = new OrderItemDO();
+        item.setQuantity(1);
+        item.setRefundApprovedQuantity(1);
+        when(orderMapper.selectById(81L)).thenReturn(order);
+        when(orderItemMapper.selectByOrderId(81L)).thenReturn(List.of(item));
+        assertThrows(com.hbue.ordering.common.core.exception.BusinessException.class,
+                () -> persistence.ensurePickupCode(81L, 7L));
+    }
+
 }

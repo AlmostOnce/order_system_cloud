@@ -30,5 +30,9 @@ public class UserRegisterCommand {
      * <p>用户服务接收后必须进行 BCrypt 加密，
      * 禁止明文保存。</p>
      */
+    @lombok.ToString.Exclude
     private String password;
+
+    @lombok.ToString.Exclude
+    private String emailVerificationToken;
 }

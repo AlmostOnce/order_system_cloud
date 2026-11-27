@@ -21,7 +21,9 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.List;
 import java.util.Objects;
 
-/** 搜索接口使用与其它用户服务相同的 RSA JWT 与 Redis 注销黑名单校验。 */
+/**
+ * 搜索接口使用与其它用户服务相同的 RSA JWT 与 Redis 注销黑名单校验。
+ */
 @Configuration
 @EnableMethodSecurity
 public class SearchSecurityConfig {
@@ -54,10 +56,10 @@ public class SearchSecurityConfig {
 
     @Bean
     public JwtDecoder jwtDecoder(ResourceLoader resources,
-                                @Value("${security.jwt.public-key-location}") String keyLocation,
-                                @Value("${security.jwt.issuer}") String issuer,
-                                @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String blacklistPrefix,
-                                RedisOperationsService redis) {
+                                 @Value("${security.jwt.public-key-location}") String keyLocation,
+                                 @Value("${security.jwt.issuer}") String issuer,
+                                 @Value("${security.jwt.blacklist-key-prefix:auth:access-token:blacklist:}") String blacklistPrefix,
+                                 RedisOperationsService redis) {
         try (InputStream input = resources.getResource(keyLocation).getInputStream()) {
             RSAPublicKey key = Objects.requireNonNull(RsaKeyConverters.x509().convert(input), "RSA 公钥不能为空");
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(key).build();
@@ -66,12 +68,18 @@ public class SearchSecurityConfig {
                 Jwt jwt = decoder.decode(token);
                 if (jwt.getId() == null || jwt.getId().isBlank()) throw invalidToken("访问令牌缺少 jti 声明");
                 try {
-                    if (!Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + jwt.getId()))) throw invalidToken("访问令牌已注销或状态无法确认");
-                } catch (JwtException ex) { throw ex; }
-                catch (RuntimeException ex) { throw new JwtException("无法校验访问令牌黑名单", ex); }
+                    if (!Boolean.FALSE.equals(redis.hasKey(blacklistPrefix + jwt.getId())))
+                        throw invalidToken("访问令牌已注销或状态无法确认");
+                } catch (JwtException ex) {
+                    throw ex;
+                } catch (RuntimeException ex) {
+                    throw new JwtException("无法校验访问令牌黑名单", ex);
+                }
                 return jwt;
             };
-        } catch (Exception ex) { throw new IllegalStateException("读取搜索服务 JWT RSA 公钥失败", ex); }
+        } catch (Exception ex) {
+            throw new IllegalStateException("读取搜索服务 JWT RSA 公钥失败", ex);
+        }
     }
 
     private JwtValidationException invalidToken(String description) {

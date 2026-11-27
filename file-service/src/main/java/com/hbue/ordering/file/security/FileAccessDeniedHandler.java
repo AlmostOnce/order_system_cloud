@@ -22,7 +22,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class FileAccessDeniedHandler implements AccessDeniedHandler {
 
-    /** JSON 序列化工具。 */
+    /**
+     * JSON 序列化工具。
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -37,8 +39,8 @@ public class FileAccessDeniedHandler implements AccessDeniedHandler {
     /**
      * 写入统一格式的无权访问响应。
      *
-     * @param request 当前 HTTP 请求
-     * @param response 当前 HTTP 响应
+     * @param request   当前 HTTP 请求
+     * @param response  当前 HTTP 响应
      * @param exception 权限异常
      * @throws IOException 响应写入异常
      */

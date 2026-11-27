@@ -20,23 +20,72 @@ import java.util.Objects;
 @Builder
 public class OrderItemVO {
 
-    /** 商品服务菜品 ID。 */
+    /**
+     * 商品服务菜品 ID。
+     */
     private Long productId;
 
-    /** 下单时的商品编码。 */
+    /**
+     * 明细标识用于精确申请退款，不能用同名菜品或商品ID代替订单项。
+     */
+    private Long itemId;
+    /**
+     * 购买份数减去尚未关闭及成功的申请份数，待审批也占额度。
+     */
+    private Integer refundableQuantity;
+    /**
+     * 购买份数减去已批准含处理中的份数，商家只能履约这部分。
+     */
+    private Integer fulfillableQuantity;
+    /**
+     * 资金及必要库存步骤均完成的份数，不能用批准数量代替。
+     */
+    private Integer refundedQuantity;
+
+    /**
+     * 下单时的商品编码。
+     */
     private String productCode;
 
-    /** 下单时的菜品名称。 */
+    /**
+     * 下单时的菜品名称。
+     */
     private String productName;
 
-    /** 下单时的商品单价。 */
+    /**
+     * 下单时的商品单价。
+     */
     private BigDecimal unitPrice;
 
-    /** 购买数量。 */
+    /**
+     * 下单时规格选项 ID 的组合键，供购物车按原规格核对订单购买事实。
+     */
+    private String selectionKey;
+
+    /**
+     * 下单时选择的规格文字快照；空字符串代表该菜品下单时没有规格。
+     */
+    private String specificationText;
+
+    /**
+     * 购买数量。
+     */
     private Integer quantity;
 
-    /** 下单时的行金额。 */
+    /**
+     * 下单时的行金额。
+     */
     private BigDecimal lineAmount;
+
+    /**
+     * 本明细承担的订单优惠金额。
+     */
+    private BigDecimal lineDiscountAmount;
+
+    /**
+     * 本明细优惠后实付金额，退款计算使用该快照而非原价。
+     */
+    private BigDecimal linePayableAmount;
 
     /**
      * 从订单明细持久化对象构造响应视图。
@@ -49,11 +98,19 @@ public class OrderItemVO {
         OrderItemDO item = Objects.requireNonNull(itemDO, "itemDO must not be null");
         return OrderItemVO.builder()
                 .productId(item.getProductId())
+                .itemId(item.getItemId())
+                .refundableQuantity(item.getQuantity() - (item.getRefundReservedQuantity() == null ? 0 : item.getRefundReservedQuantity()))
+                .fulfillableQuantity(item.getQuantity() - (item.getRefundApprovedQuantity() == null ? 0 : item.getRefundApprovedQuantity()))
+                .refundedQuantity(item.getRefundedQuantity() == null ? 0 : item.getRefundedQuantity())
                 .productCode(item.getProductCodeSnapshot())
                 .productName(item.getProductNameSnapshot())
                 .unitPrice(item.getUnitPriceSnapshot())
+                .selectionKey(item.getSelectionKeySnapshot())
+                .specificationText(item.getSpecificationTextSnapshot())
                 .quantity(item.getQuantity())
                 .lineAmount(item.getLineAmount())
+                .lineDiscountAmount(item.getLineDiscountAmount() == null ? BigDecimal.ZERO : item.getLineDiscountAmount())
+                .linePayableAmount(item.getLinePayableAmount() == null ? item.getLineAmount() : item.getLinePayableAmount())
                 .build();
     }
 }

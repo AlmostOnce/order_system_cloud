@@ -10,11 +10,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -56,7 +52,7 @@ public class CaptchaServiceImpl implements CaptchaService {
      * 去掉容易混淆的 0/O/1/I 等字符，降低用户看错而误判的概率。
      */
     private static final String CHARACTER_POOL =
-            "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+            "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     /**
      * 验证码字符的颜色候选，均为深色以保证在浅色背景上可读。
@@ -106,11 +102,11 @@ public class CaptchaServiceImpl implements CaptchaService {
      * 创建图片验证码服务并校验配置取值范围。
      *
      * @param redisOperationsService Redis 基础操作组件
-     * @param length 验证码字符个数，默认 4
-     * @param timeToLive 验证码有效期，默认 5 分钟
-     * @param width 图片宽度，默认 120 像素
-     * @param height 图片高度，默认 40 像素
-     * @param maxPerMinute 单 IP 每分钟生成上限，默认 20 次
+     * @param length                 验证码字符个数，默认 4
+     * @param timeToLive             验证码有效期，默认 5 分钟
+     * @param width                  图片宽度，默认 120 像素
+     * @param height                 图片高度，默认 40 像素
+     * @param maxPerMinute           单 IP 每分钟生成上限，默认 20 次
      * @throws IllegalArgumentException 任一配置值越界时抛出
      */
     public CaptchaServiceImpl(
@@ -200,7 +196,7 @@ public class CaptchaServiceImpl implements CaptchaService {
     /**
      * 校验验证码，无论成功失败都会消费掉该验证码。
      *
-     * @param captchaId 验证码标识
+     * @param captchaId   验证码标识
      * @param captchaCode 用户输入的验证码字符
      * @return 验证码存在且与答案一致时返回 true
      * @throws BusinessException Redis 不可用、无法确认校验结果时抛出
@@ -406,7 +402,7 @@ public class CaptchaServiceImpl implements CaptchaService {
      * 绘制带随机旋转的验证码字符。
      *
      * @param graphics 绘图上下文
-     * @param answer 验证码答案
+     * @param answer   验证码答案
      */
     private void drawCharacters(Graphics2D graphics, String answer) {
         // 字号随图片高度缩放，保证字符既不溢出也不过于细小。

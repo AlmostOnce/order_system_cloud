@@ -1,6 +1,7 @@
 package com.hbue.ordering.stock.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.model.StockDO;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -11,7 +12,7 @@ import java.util.List;
 /**
  * 库存主表数据访问接口。
  *
- * <p>除基础 CRUD 外，提供按 (档口, 菜品) 定位库存的两条查询语句，以及两条原子更新语句：
+ * <p>除基础 CRUD 外，提供按 (档口, 菜品) 定位、窗口及有界组合批量读取，以及原子更新语句：
  * 扣减按版本号做乐观锁并附带「可售数量足够」条件，回补只做累加。
  * 判断与更新都写在同一条 SQL 中，由数据库保证并发下不会超卖。</p>
  *
@@ -20,14 +21,35 @@ import java.util.List;
  */
 public interface StockMapper extends BaseMapper<StockDO> {
 
-    /** 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。 */
+    /**
+     * 一次SQL精确匹配至多50对窗口与菜品，避免分别IN导致窗口、菜品交叉误配。
+     * 调用方必须先保证非空及数量上限；逻辑删除行不参与，读取不加行锁、不改变订单预留。
+     *
+     * @param items 已校验的唯一组合列表，禁止空列表或无限制条件
+     * @return 现存有效库存，包含当前可售数量为零的行，缺失组合不补造记录
+     */
+    @Select("""
+            <script>
+            SELECT stock_id, window_id, product_id, total_qty, available_qty
+            FROM stock WHERE is_deleted = 0 AND
+            <foreach collection="items" item="item" open="(" separator=" OR " close=")">
+                (window_id = #{item.windowId} AND product_id = #{item.productId})
+            </foreach>
+            ORDER BY window_id, product_id
+            </script>
+            """)
+    List<StockDO> selectByWindowProducts(@Param("items") List<StockBatchQueryRequest.Item> items);
+
+    /**
+     * 单次查询窗口下全部有效库存，避免菜单逐菜品远程查询。
+     */
     @Select("SELECT * FROM stock WHERE window_id = #{windowId} AND is_deleted = 0 ORDER BY product_id")
     List<StockDO> selectByWindow(@Param("windowId") Long windowId);
 
     /**
      * 查询指定档口菜品的库存记录。
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存记录；不存在时返回 null
      */
@@ -45,7 +67,7 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * 串行化在同一库存行上：后到的事务会阻塞到前一个事务提交，
      * 从而能读到最新提交的流水记录，天然实现幂等与不超卖。</p>
      *
-     * @param windowId 档口 ID
+     * @param windowId  档口 ID
      * @param productId 菜品 ID
      * @return 库存记录；不存在时返回 null
      */
@@ -74,8 +96,8 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * 调用方在更新前已对该行加了行锁，因此版本号条件不会产生误判，
      * 它作为最后一道不超卖防线保留。</p>
      *
-     * @param stockId 库存记录 ID
-     * @param version 本事务读到的版本号
+     * @param stockId  库存记录 ID
+     * @param version  本事务读到的版本号
      * @param quantity 扣减数量，必须为正数
      * @return 受影响行数：1 表示扣减成功，0 表示版本冲突或库存不足
      */
@@ -107,7 +129,7 @@ public interface StockMapper extends BaseMapper<StockDO> {
      * <p>回补由 {@code stock_flow} 的 ORDER_RESTORE 流水保证每单每菜品只执行一次，
      * 因此这里直接累加，无需再校验上限。</p>
      *
-     * @param stockId 库存记录 ID
+     * @param stockId  库存记录 ID
      * @param quantity 回补数量，必须为正数
      * @return 受影响行数：1 表示回补成功
      */

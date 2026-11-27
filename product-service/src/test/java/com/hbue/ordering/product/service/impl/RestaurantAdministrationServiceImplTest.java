@@ -7,6 +7,7 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.RestaurantDO;
@@ -21,15 +22,10 @@ import org.springframework.dao.DuplicateKeyException;
 
 import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 餐厅管理服务测试：平台口径与餐厅经理口径的边界。
@@ -37,10 +33,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RestaurantAdministrationServiceImplTest {
 
-    /** 测试用操作者用户 ID。 */
+    /**
+     * 测试用操作者用户 ID。
+     */
     private static final Long OPERATOR_ID = 77L;
 
-    /** 测试用餐厅 ID。 */
+    /**
+     * 测试用餐厅 ID。
+     */
     private static final Long RESTAURANT_ID = 1L;
 
     @Mock
@@ -51,6 +51,9 @@ class RestaurantAdministrationServiceImplTest {
 
     @Mock
     private DataScopeService dataScopeService;
+
+    @Mock
+    private ProductMenuCacheService menuCacheService;
 
     @Test
     void shouldRejectCreateWithoutPlatformScope() {
@@ -226,13 +229,29 @@ class RestaurantAdministrationServiceImplTest {
         );
     }
 
+    /**
+     * 总经理调整餐厅展示排序后必须失效启用窗口列表缓存，否则学生端窗口顺序会延迟几分钟才生效。
+     */
+    @Test
+    void shouldEvictActiveWindowsCacheWhenSortOrderChanges() {
+        when(restaurantMapper.selectById(RESTAURANT_ID))
+                .thenReturn(restaurant(RESTAURANT_ID, "R0001", 10));
+        when(dataScopeService.loadScopes(OPERATOR_ID)).thenReturn(platformScope());
+        when(restaurantMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+
+        service().updateRestaurant(OPERATOR_ID, RESTAURANT_ID, request("R0001", 5));
+
+        verify(menuCacheService).evictActiveWindows();
+    }
+
     private RestaurantAdministrationService service() {
         return new RestaurantAdministrationServiceImpl(
                 restaurantMapper,
                 diningWindowMapper,
                 dataScopeService,
                 org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class),
-                org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class)
+                org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class),
+                menuCacheService
         );
     }
 

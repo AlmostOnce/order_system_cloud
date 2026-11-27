@@ -2,6 +2,7 @@ package com.hbue.ordering.cart.service.impl;
 
 import com.hbue.ordering.cart.dto.request.CartCleanupRequest;
 import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
+import com.hbue.ordering.cart.model.CartSelectionKey;
 import com.hbue.ordering.cart.repository.CartRedisRepository;
 import com.hbue.ordering.cart.service.CartCleanupService;
 import com.hbue.ordering.cart.vo.CartCleanupVO;
@@ -28,14 +29,19 @@ import java.util.Set;
  */
 @Service
 public class CartCleanupServiceImpl implements CartCleanupService {
-    /** 用当前顾客凭据读取订单，服务端继续检查订单归属。 */
+    /**
+     * 用当前顾客凭据读取订单，服务端继续检查订单归属。
+     */
     private final OrderServiceClient orders;
-    /** 只负责本用户 Hash 内的版本比较与原子删除。 */
+    /**
+     * 只负责本用户 Hash 内的版本比较与原子删除。
+     */
     private final CartRedisRepository repository;
 
     /**
      * 注入订单读取和购物车存储边界，不依赖其它服务的实现类。
-     * @param orders 订单读取客户端
+     *
+     * @param orders     订单读取客户端
      * @param repository 购物车 Redis 访问层
      */
     public CartCleanupServiceImpl(OrderServiceClient orders, CartRedisRepository repository) {
@@ -45,7 +51,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 按提交快照清理，当前状态已变化的条目交由 Redis 脚本保留。
-     * @param userId 已认证顾客 ID
+     *
+     * @param userId  已认证顾客 ID
      * @param orderId 已成功创建的订单 ID
      * @param request 下单前保存、重试时保持不变的快照
      * @return 实际删除与跳过的条目数
@@ -67,12 +74,14 @@ public class CartCleanupServiceImpl implements CartCleanupService {
             throw mismatch();
         }
 
-        Map<Long, Integer> purchased = new HashMap<>();
+        Map<String, Integer> purchased = new HashMap<>();
         for (OrderPurchasedItemVO item : order.items()) {
             // 损坏的明细不能被当成合法购买证明；先验证整份订单，之后才允许访问 Redis。
             if (item == null || item.productId() == null || item.productId() < 1
                     || item.quantity() == null || item.quantity() < 1
-                    || purchased.putIfAbsent(item.productId(), item.quantity()) != null) {
+                    || !CartSelectionKey.isValid(item.selectionKey())
+                    || purchased.putIfAbsent(CartSelectionKey.identity(item.productId(), item.selectionKey()),
+                    item.quantity()) != null) {
                 throw unavailable();
             }
         }
@@ -80,7 +89,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
             throw mismatch();
         }
         for (CartSubmittedItemRequest item : request.items()) {
-            if (!item.quantity().equals(purchased.get(item.productId()))) {
+            String identity = CartSelectionKey.identity(item.productId(), item.selectionKey());
+            if (!item.quantity().equals(purchased.get(identity))) {
                 throw mismatch();
             }
         }
@@ -92,7 +102,8 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 在远程调用之前检查身份、容量、版本与重复商品；Service 独立调用也不能绕过校验。
-     * @param userId 当前顾客 ID
+     *
+     * @param userId  当前顾客 ID
      * @param orderId 已创建订单 ID
      * @param request 原始提交快照
      */
@@ -105,19 +116,21 @@ public class CartCleanupServiceImpl implements CartCleanupService {
                 || request.items().size() > 100) {
             throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单和提交快照不能为空或超出限制");
         }
-        Set<Long> ids = new HashSet<>();
+        Set<String> identities = new HashSet<>();
         for (CartSubmittedItemRequest item : request.items()) {
             if (item == null || item.productId() == null || item.productId() < 1
                     || item.quantity() == null || item.quantity() < 1
                     || item.revision() == null || item.revision().isBlank() || item.revision().length() > 128
-                    || !ids.add(item.productId())) {
-                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "商品、数量、版本无效或商品重复");
+                    || !CartSelectionKey.isValid(item.selectionKey())
+                    || !identities.add(CartSelectionKey.identity(item.productId(), item.selectionKey()))) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "商品、规格、数量、版本无效或商品规格组合重复");
             }
         }
     }
 
     /**
      * 读取已有订单并保留 401/403/404，网络错误与降级统一返回 503。
+     *
      * @param orderId 已有订单 ID
      * @return 当前用户订单的购买事实
      */
@@ -149,6 +162,7 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 创建快照不一致错误，提醒调用方不要用新查询的购物车替换原始下单快照。
+     *
      * @return HTTP 409 对应业务异常
      */
     private BusinessException mismatch() {
@@ -157,6 +171,7 @@ public class CartCleanupServiceImpl implements CartCleanupService {
 
     /**
      * 创建依赖不可用错误，明确订单不需要重建，只需稍后重试清理。
+     *
      * @return HTTP 503 对应业务异常
      */
     private BusinessException unavailable() {

@@ -1,0 +1,86 @@
+server:
+  port: ${RECOMMENDATION_SERVER_PORT:9112}
+
+spring:
+  application:
+    name: recommendation-service
+  profiles:
+    include: recommendation-mq
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    url: ${RECOMMENDATION_DB_URL:jdbc:mysql://127.0.0.1:9095/recommendation_db?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai}
+    username: ${RECOMMENDATION_DB_USERNAME:recommendation_service}
+    password: ${RECOMMENDATION_DB_PASSWORD:recommendation_password_dev_2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
+      initial-size: 1
+      min-idle: 1
+      max-active: 10
+      max-wait: 3000
+      validation-query: SELECT 1
+      validation-query-timeout: 2
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:9096}
+      password: ${REDIS_PASSWORD:order_redis_dev_2026}
+      database: 0
+      connect-timeout: 2s
+      timeout: 2s
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:root}
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 3000
+  jackson:
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:http://localhost:9094}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:/home/user/.config/order-system/keys/jwt-public.pem}
+    blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
+
+internal:
+  scope:
+    token: ${INTERNAL_SCOPE_TOKEN}
+  order:
+    token: ${INTERNAL_ORDER_TOKEN:internal_order_token_dev_2026}
+
+recommendation:
+  backfill:
+    initial-delay-ms: ${RECOMMENDATION_BACKFILL_INITIAL_DELAY_MS:15000}
+    delay-ms: ${RECOMMENDATION_BACKFILL_DELAY_MS:60000}
+  catalog:
+    refresh-delay-ms: ${RECOMMENDATION_CATALOG_REFRESH_DELAY_MS:300000}
+    request-timeout-ms: ${RECOMMENDATION_CATALOG_TIMEOUT_MS:3000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+  service-title: 首页推荐服务接口文档
+  service-description: 基于当前顾客行为与有效商品目录生成菜品推荐。

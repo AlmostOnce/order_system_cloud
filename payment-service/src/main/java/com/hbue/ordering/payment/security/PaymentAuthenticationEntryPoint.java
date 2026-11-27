@@ -25,7 +25,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class PaymentAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-    /** JSON 序列化工具。 */
+    /**
+     * JSON 序列化工具。
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -40,8 +42,8 @@ public class PaymentAuthenticationEntryPoint implements AuthenticationEntryPoint
     /**
      * 写入统一格式的未认证响应。
      *
-     * @param request 当前 HTTP 请求
-     * @param response 当前 HTTP 响应
+     * @param request   当前 HTTP 请求
+     * @param response  当前 HTTP 响应
      * @param exception 认证异常
      * @throws IOException 响应写入异常
      */

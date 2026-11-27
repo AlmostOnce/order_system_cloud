@@ -15,24 +15,32 @@ import java.util.Set;
  */
 public final class UserScopeSnapshot {
 
-    /** 用户 ID。 */
+    /**
+     * 用户 ID。
+     */
     private final Long userId;
 
-    /** 是否拥有全平台范围。 */
+    /**
+     * 是否拥有全平台范围。
+     */
     private final boolean platformScope;
 
-    /** 持有的档口范围。 */
+    /**
+     * 持有的档口范围。
+     */
     private final Set<Long> windowIds;
 
-    /** 持有的餐厅范围。 */
+    /**
+     * 持有的餐厅范围。
+     */
     private final Set<Long> restaurantIds;
 
     /**
      * 创建用户数据范围快照。
      *
-     * @param userId 用户 ID
+     * @param userId        用户 ID
      * @param platformScope 是否拥有全平台范围
-     * @param windowIds 档口范围
+     * @param windowIds     档口范围
      * @param restaurantIds 餐厅范围
      */
     public UserScopeSnapshot(

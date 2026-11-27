@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 public interface OrderServiceClient {
     /**
      * 读取当前用户自己订单的购买事实；不存在或越权由服务端统一返回 404。
+     *
      * @param orderId 已创建的订单 ID
      * @return 订单详情中用于清理的字段
      */

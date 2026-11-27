@@ -1,25 +1,32 @@
-# 只在已部署 RocketMQ 时激活 ranking-mq profile；普通启动仍持久化 outbox。
+# 本地默认激活 ranking-mq；销量和订单通知共用已部署的 RocketMQ。
 ranking:
   messaging:
     enabled: true
+# 推荐仅复用现有Broker，不复用销量契约；关停派发时本地Outbox仍持续记录，恢复后补发。
+recommendation:
+  messaging:
+    enabled: ${RECOMMENDATION_MESSAGING_ENABLED:true}
 notification:
   order-events:
-    enabled: ${NOTIFICATION_ORDER_EVENTS_ENABLED:false}
+    enabled: ${NOTIFICATION_ORDER_EVENTS_ENABLED:true}
   cancel-tcc:
-    enabled: ${NOTIFICATION_CANCEL_TCC_ENABLED:false}
+    enabled: ${NOTIFICATION_CANCEL_TCC_ENABLED:true}
 spring:
   task:
     scheduling:
       pool:
         size: 2
   cloud:
-    function:
-      definition: salesRankingPaid
     stream:
-      output-bindings: salesPaid-out-0
+      output-bindings: salesPaid-out-0;recommendationPurchase-out-0
       bindings:
+        recommendationPurchase-out-0:
+          destination: recommendation-purchase-snapshot-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
         salesPaid-out-0:
-          destination: order-paid-sales-v1
+          destination: order-paid-sales-v2
           content-type: application/json
           producer:
             error-channel-enabled: false
@@ -28,17 +35,15 @@ spring:
           content-type: application/json
           producer:
             error-channel-enabled: false
-        salesRankingPaid-in-0:
-          destination: order-paid-sales-v1
-          group: sales-ranking-v1
-          content-type: application/json
-          error-handler-definition: salesRankingRetryError
-          consumer:
-            max-attempts: 1
       rocketmq:
         binder:
           name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
         bindings:
+          recommendationPurchase-out-0:
+            producer:
+              group: order-recommendation-purchase-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000
           salesPaid-out-0:
             producer:
               group: order-sales-outbox-v1
@@ -49,9 +54,3 @@ spring:
               group: order-notification-outbox-v1
               send-type: Sync
               send-msg-timeout: 3000
-          salesRankingPaid-in-0:
-            consumer:
-              consume-from-where: CONSUME_FROM_FIRST_OFFSET
-              push:
-                orderly: false
-                max-reconsume-times: 16

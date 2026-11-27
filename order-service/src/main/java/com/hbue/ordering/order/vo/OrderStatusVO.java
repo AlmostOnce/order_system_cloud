@@ -15,9 +15,13 @@ import lombok.ToString;
 @ToString
 public class OrderStatusVO {
 
-    /** 已变更状态的订单 ID。 */
+    /**
+     * 已变更状态的订单 ID。
+     */
     private Long orderId;
 
-    /** 变更后的订单状态中文名称。 */
+    /**
+     * 变更后的订单状态中文名称。
+     */
     private String status;
 }

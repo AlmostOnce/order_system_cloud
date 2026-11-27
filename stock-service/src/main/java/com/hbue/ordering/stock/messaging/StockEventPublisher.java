@@ -12,11 +12,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.function.Consumer;
 
-/** 可靠发布已提交库存变更事件；Broker 故障时保留 outbox 并退避重试。 */
+/**
+ * 可靠发布已提交库存变更事件；Broker 故障时保留 outbox 并退避重试。
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "stock.messaging.enabled", havingValue = "true")
 public class StockEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(StockEventPublisher.class);
+
+    /**
+     * 单条事件的发送租约（秒）。多实例部署时同一行会被同时扫到，只有把 {@code next_attempt_at}
+     * 原子推进到未来的实例才发送；该值需大于一次同步发送的最长耗时。
+     */
+    private static final int LEASE_SECONDS = 30;
 
     private final StockEventOutboxMapper outbox;
     private final StreamBridge stream;
@@ -30,6 +38,9 @@ public class StockEventPublisher {
     public void publishPending() {
         for (StockEventOutboxRow row : outbox.pending()) {
             try {
+                // 先原子占租约：并发实例中只有一个能把 next_attempt_at 推进到未来并得到 1，
+                // 其余实例拿到 0 后跳过，保证同一库存事件不会被重复外发。
+                if (outbox.lease(row.getEventId(), LEASE_SECONDS) != 1) continue;
                 StockChangedEvent event = StockChangedEvent.of(row);
                 if (!event.valid()) {
                     throw new IllegalArgumentException("库存事件数据不完整");

@@ -1,5 +1,13 @@
 server:
   port: 9107
+notification:
+  chat:
+    # 开发库已执行V2聊天迁移；可设为false关闭聊天，保留消息数据及原订单通知。
+    enabled: ${NOTIFICATION_CHAT_ENABLED:true}
+  websocket:
+    # 网关放行后握手仍核对来源；Android原生Socket实测Origin为http://localhost（无端口）。
+    # 保留局域网和Web开发来源，不取消一次性票据鉴权。
+    allowed-origins: ${NOTIFICATION_WEBSOCKET_ALLOWED_ORIGINS:http://localhost:8088,http://127.0.0.1:8088,http://localhost:5173,http://127.0.0.1:5173,http://192.168.0.14:8088,http://localhost}
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -14,6 +22,10 @@ spring:
     password: ${NOTIFICATION_DB_PASSWORD:notification_password_dev_2026}
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
@@ -23,6 +35,12 @@ spring:
       connect-timeout: 2s
       timeout: 2s
   cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 2000
+            readTimeout: 3000
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:9097}
@@ -35,4 +53,4 @@ security:
     blacklist-key-prefix: ${JWT_BLACKLIST_KEY_PREFIX:auth:access-token:blacklist:}
 internal:
   scope:
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    token: ${INTERNAL_SCOPE_TOKEN}

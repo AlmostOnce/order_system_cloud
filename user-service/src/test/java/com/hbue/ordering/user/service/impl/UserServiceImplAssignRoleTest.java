@@ -19,9 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 用户角色分配业务测试。
@@ -59,7 +57,7 @@ class UserServiceImplAssignRoleTest {
                 userDataScopeService,
                 auditLogger,
                 org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailVerification.class)
-        );
+                , org.mockito.Mockito.mock(com.hbue.ordering.user.service.EmailOwnershipService.class));
         ReflectionTestUtils.setField(userService, "baseMapper", userMapper);
     }
 
@@ -142,7 +140,10 @@ class UserServiceImplAssignRoleTest {
 
         assertEquals(TARGET_USER_ID, result.getUserId());
         assertEquals("STALL_MANAGER", result.getRoleCode());
-        verify(userMapper).update(eq(null), any());
+        // 变更角色必须同时递增 credential_version，否则旧 Access Token 会继续携带原角色直到过期。
+        verify(userMapper).update(eq(null), argThat(wrapper ->
+                wrapper instanceof com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<?> update
+                        && update.getSqlSet().contains("credential_version = credential_version + 1")));
         verify(auditLogger).record(
                 eq(OPERATOR_ID),
                 eq("USER_ROLE_ASSIGN"),

@@ -1,6 +1,7 @@
 package com.hbue.ordering.product.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hbue.ordering.common.redis.DistributedLockService;
 import com.hbue.ordering.common.redis.RedisOperationsService;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
@@ -22,6 +23,9 @@ import java.util.concurrent.ThreadLocalRandom;
  * 写入、删除和空值标记操作的运行时异常只记录日志。普通读取命令的 Redis 连接异常
  * 沿当前调用链向上抛出，不在本类内伪装成缓存未命中。</p>
  *
+ * <p>窗口菜单重建与窗口菜单失效共用窗口锁；管理事务提交后的失效会等待正在回源的菜单完成，
+ * 防止旧数据在失效之后重新进入 Redis。锁不可用时仍尝试删除，但不能声称完全串行。</p>
+ *
  * <p>过期时间在基础 TTL 上叠加随机抖动，使同一批写入的 Key 不会同时失效，
  * 避免缓存集中过期引发雪崩。</p>
  *
@@ -31,37 +35,57 @@ import java.util.concurrent.ThreadLocalRandom;
 @Component
 public class ProductMenuCacheService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(ProductMenuCacheService.class);
 
-    /** 缓存基础有效期，单位为秒。 */
+    /**
+     * 缓存基础有效期，单位为秒。
+     */
     private static final long BASE_TTL_SECONDS = 300L;
 
-    /** TTL 随机抖动上限，单位为秒。 */
+    /**
+     * TTL 随机抖动上限，单位为秒。
+     */
     private static final long TTL_JITTER_SECONDS = 120L;
 
-    /** 空值标记固定有效期，单位为秒。 */
+    /**
+     * 空值标记固定有效期，单位为秒。
+     */
     private static final long NULL_TTL_SECONDS = 60L;
 
-    /** Redis 基础操作组件。 */
+    /**
+     * Redis 基础操作组件。
+     */
     private final RedisOperationsService redisOperationsService;
 
-    /** JSON 序列化器，使用 Spring Boot 自动装配的实例。 */
+    /**
+     * 与菜单回源共用同一把锁，串行化缓存失效和缓存重建。
+     */
+    private final DistributedLockService distributedLockService;
+
+    /**
+     * JSON 序列化器，使用 Spring Boot 自动装配的实例。
+     */
     private final ObjectMapper objectMapper;
 
     /**
      * 创建商品菜单缓存组件。
      *
      * @param redisOperationsService Redis 基础操作组件
-     * @param objectMapper JSON 序列化器
+     * @param objectMapper           JSON 序列化器
+     * @param distributedLockService 与菜单重建共用的窗口级互斥锁
      */
     public ProductMenuCacheService(
             RedisOperationsService redisOperationsService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            DistributedLockService distributedLockService
     ) {
         this.redisOperationsService = redisOperationsService;
         this.objectMapper = objectMapper;
+        this.distributedLockService = distributedLockService;
     }
 
     /**
@@ -170,7 +194,7 @@ public class ProductMenuCacheService {
      * 保存窗口菜单缓存。
      *
      * @param windowId 窗口 ID
-     * @param menu 窗口菜单
+     * @param menu     窗口菜单
      */
     public void saveWindowMenu(Long windowId, WindowMenuVO menu) {
         if (menu == null) {
@@ -214,12 +238,18 @@ public class ProductMenuCacheService {
     }
 
     /**
-     * 失效窗口菜单缓存及其空值标记。
+     * 失效窗口菜单缓存及其空值标记，并与回源重建互斥。
      *
      * @param windowId 窗口 ID
      */
     public void evictWindowMenu(Long windowId) {
-        try {
+        // 菜单回源在同一把锁内读取数据库并写缓存；先取得这把锁，避免旧快照在失效后重新写入。
+        try (DistributedLockService.LockHandle lock = distributedLockService.tryAcquire(
+                ProductCacheKeys.windowMenuLock(windowId), 35L, 35L)) {
+            if (lock == null) {
+                // Redis 锁不可用时仍尝试删除；缓存故障不能阻止已提交的商品修改。
+                log.warn("窗口菜单缓存失效未取得互斥锁，执行尽力删除，窗口 ID={}", windowId);
+            }
             redisOperationsService.delete(
                     ProductCacheKeys.windowMenu(windowId)
             );

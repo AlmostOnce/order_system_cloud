@@ -1,15 +1,13 @@
 package com.hbue.ordering.product.mapper;
 
 import com.hbue.ordering.product.messaging.ProductSearchOutboxRow;
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Delete;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
+import org.apache.ibatis.annotations.*;
+
 import java.util.List;
 
-/** 商品目录搜索索引刷新事件 outbox。 */
+/**
+ * 商品目录搜索索引刷新事件 outbox。
+ */
 @Mapper
 public interface ProductSearchOutboxMapper {
     @Insert("INSERT INTO product_search_outbox(event_id, window_id, product_id) VALUES(#{eventId}, #{windowId}, #{productId,jdbcType=BIGINT})")

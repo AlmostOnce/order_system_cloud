@@ -25,9 +25,9 @@ public interface CartService {
     /**
      * 添加菜品，同窗口同菜品已存在时原子累加数量。
      *
-     * @param userId 当前用户 ID
+     * @param userId   当前用户 ID
      * @param windowId 窗口 ID
-     * @param request 菜品 ID 与本次增加的数量
+     * @param request  菜品 ID 与本次增加的数量
      * @throws com.hbue.ordering.common.core.exception.BusinessException 参数错误、不可售或容量超限时抛出
      */
     void addItem(Long userId, Long windowId, CartItemAddRequest request);
@@ -35,38 +35,53 @@ public interface CartService {
     /**
      * 设置已有菜品的目标数量，不依赖商品服务，失效项也允许用户调整或随后删除。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
-     * @param quantity 目标数量，必须大于零且不超配置上限
+     * @param quantity  目标数量，必须大于零且不超配置上限
      * @throws com.hbue.ordering.common.core.exception.BusinessException 条目不存在或数量非法时抛出
      */
     void updateQuantity(Long userId, Long windowId, Long productId, Integer quantity);
 
     /**
+     * 更新指定规格组合数量；缺省规格键的旧接口固定指向 base 行。
+     */
+    void updateQuantity(Long userId, Long windowId, Long productId, String selectionKey, Integer quantity);
+
+    /**
      * 更新已有条目的勾选状态，false 为取消勾选。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
-     * @param checked 目标勾选状态
+     * @param checked   目标勾选状态
      * @throws com.hbue.ordering.common.core.exception.BusinessException 参数缺失或条目不存在时抛出
      */
     void updateChecked(Long userId, Long windowId, Long productId, Boolean checked);
 
     /**
+     * 更新指定规格组合勾选状态；缺省规格键的旧接口固定指向 base 行。
+     */
+    void updateChecked(Long userId, Long windowId, Long productId, String selectionKey, Boolean checked);
+
+    /**
      * 幂等删除当前用户指定菜品。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
      */
     void removeItem(Long userId, Long windowId, Long productId);
 
     /**
+     * 删除指定规格组合；旧接口只会删除 base 行，不影响规格菜品。
+     */
+    void removeItem(Long userId, Long windowId, Long productId, String selectionKey);
+
+    /**
      * 幂等清空指定窗口，保留其它窗口。
      *
-     * @param userId 当前用户 ID
+     * @param userId   当前用户 ID
      * @param windowId 窗口 ID
      */
     void clearWindow(Long userId, Long windowId);

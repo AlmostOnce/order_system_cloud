@@ -8,16 +8,17 @@ import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
-import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-/** 验证单菜品快照的上下架与关联状态，防止错误保留搜索结果。 */
+/**
+ * 验证单菜品快照的上下架与关联状态，防止错误保留搜索结果。
+ */
 class ProductSearchSourceServiceImplTest {
     private final DiningWindowMapper windows = mock(DiningWindowMapper.class);
     private final ProductMapper products = mock(ProductMapper.class);

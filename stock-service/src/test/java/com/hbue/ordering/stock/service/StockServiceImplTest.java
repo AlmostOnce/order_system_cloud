@@ -7,9 +7,9 @@ import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import com.hbue.ordering.stock.mapper.StockFlowMapper;
 import com.hbue.ordering.stock.mapper.StockMapper;
+import com.hbue.ordering.stock.messaging.StockEventOutboxWriter;
 import com.hbue.ordering.stock.model.StockDO;
 import com.hbue.ordering.stock.model.StockFlowDO;
-import com.hbue.ordering.stock.messaging.StockEventOutboxWriter;
 import com.hbue.ordering.stock.service.impl.StockServiceImpl;
 import com.hbue.ordering.stock.support.StockFlowTypes;
 import com.hbue.ordering.stock.support.StockRedisScript;
@@ -24,18 +24,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * 库存扣减与回补的业务规则单元测试。
@@ -49,35 +40,53 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class StockServiceImplTest {
 
-    /** 档口 ID。 */
+    /**
+     * 档口 ID。
+     */
     private static final Long WINDOW_ID = 1001L;
 
-    /** 菜品 ID。 */
+    /**
+     * 菜品 ID。
+     */
     private static final Long PRODUCT_ID = 2001L;
 
-    /** 库存记录 ID。 */
+    /**
+     * 库存记录 ID。
+     */
     private static final Long STOCK_ID = 3001L;
 
-    /** 订单号。 */
+    /**
+     * 订单号。
+     */
     private static final String ORDER_NO = "ORD20261019001";
 
-    /** 库存主表数据访问接口。 */
+    /**
+     * 库存主表数据访问接口。
+     */
     @Mock
     private StockMapper stockMapper;
 
-    /** 库存流水数据访问接口。 */
+    /**
+     * 库存流水数据访问接口。
+     */
     @Mock
     private StockFlowMapper stockFlowMapper;
 
-    /** 库存快照 Redis 原子操作组件。 */
+    /**
+     * 库存快照 Redis 原子操作组件。
+     */
     @Mock
     private StockRedisScript stockRedisScript;
 
-    /** 库存事件 outbox 写入器。 */
+    /**
+     * 库存事件 outbox 写入器。
+     */
     @Mock
     private StockEventOutboxWriter stockEventOutboxWriter;
 
-    /** 被测业务实现。 */
+    /**
+     * 被测业务实现。
+     */
     private StockServiceImpl stockService;
 
     /**
@@ -275,6 +284,8 @@ class StockServiceImplTest {
                 .thenReturn(0);
         when(stockFlowMapper.countByBiz(eq(StockFlowTypes.ORDER_DEDUCT), anyString(), anyLong()))
                 .thenReturn(1);
+        // 部分退款后旧整单回补也必须遵守原扣减的剩余额度。
+        when(stockFlowMapper.refundableQuantity(STOCK_ID, ORDER_NO)).thenReturn(2);
         when(stockMapper.restoreQuantity(STOCK_ID, 2)).thenReturn(1);
 
         stockService.restore(buildRestoreRequest(2));
@@ -309,7 +320,9 @@ class StockServiceImplTest {
         assertTrue(stockVO.getWindowId().equals(WINDOW_ID));
     }
 
-    /** 按窗口一次性读取有效库存，避免逐个菜品查询。 */
+    /**
+     * 按窗口一次性读取有效库存，避免逐个菜品查询。
+     */
     @Test
     void shouldQueryWindowStockInOneDatabaseCall() {
         when(stockMapper.selectByWindow(WINDOW_ID)).thenReturn(List.of(buildStock(7, 3)));
@@ -321,7 +334,9 @@ class StockServiceImplTest {
         verify(stockMapper, never()).selectByWindowProduct(anyLong(), anyLong());
     }
 
-    /** 构造指定可售数量及版本号的库存记录。 */
+    /**
+     * 构造指定可售数量及版本号的库存记录。
+     */
     private StockDO buildStock(int availableQty, int version) {
         StockDO stock = new StockDO();
         stock.setStockId(STOCK_ID);

@@ -11,10 +11,10 @@ import java.time.Duration;
  * <p>限制购物车最多 100 类菜品，使单窗口批量核价不超过现有商品契约的上限。
  * Key 前缀用于隔离购物车与其它 Redis 业务；计时单位统一转为毫秒传给 Lua。</p>
  *
- * @param maxItems 每个用户允许保存的最大菜品种类数，范围 1~100
+ * @param maxItems    每个用户允许保存的最大菜品种类数，范围 1~100
  * @param maxQuantity 每项菜品的最大购买数量
- * @param timeToLive 最后一次修改后的保留时长，读取不会续期
- * @param keyPrefix 用户购物车 Hash 的命名空间前缀
+ * @param timeToLive  最后一次修改后的保留时长，读取不会续期
+ * @param keyPrefix   用户购物车 Hash 的命名空间前缀
  * @author order-system
  * @date 2026-10-17
  */

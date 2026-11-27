@@ -9,7 +9,9 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-/** 通过已配置的 QQ 邮箱 SMTP 发送验证码。 */
+/**
+ * 通过已配置的 QQ 邮箱 SMTP 发送验证码。
+ */
 @Service
 public class SmtpEmailCodeSender implements EmailCodeSender {
     private final JavaMailSender mail;
@@ -25,14 +27,62 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
 
     @Override
     public void send(String email, String code) {
+        sendMessage(email, code, "邮箱验证");
+    }
+
+    @Override
+    public void sendPasswordReset(String email, String code) {
+        sendMessage(email, code, "找回登录密码");
+    }
+
+    @Override
+    public void sendPayPasswordReset(String email, String code) {
+        sendMessage(email, code, "找回支付密码");
+    }
+
+    @Override
+    public void sendOwnershipVerification(String email, String code) {
+        sendMessage(email, code, "验证邮箱所有权");
+    }
+
+    @Override
+    public void sendAccountDeletion(String email, String code) {
+        sendMessage(email, code, "注销账号");
+    }
+
+    /**
+     * 发送注销状态通知。
+     *
+     * <p>通知是单向告知，不承载验证码或令牌；SMTP 失败时抛出业务异常，
+     * 由调用方在事务提交后捕获并记录，不回滚业务状态。</p>
+     */
+    @Override
+    public void sendNotice(String email, String subject, String text) {
         if (username.isBlank() || password.isBlank()) {
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");
         }
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(username);
         message.setTo(email);
-        message.setSubject("校园食堂邮箱验证码");
-        message.setText("您的邮箱验证码是：" + code + "。验证码 10 分钟内有效，请勿向他人透露。");
+        message.setSubject("校园食堂" + subject);
+        message.setText(text);
+        try {
+            mail.send(message);
+        } catch (MailException exception) {
+            // 不记录 SMTP 异常内容，避免泄露邮箱地址或凭据。
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "通知邮件发送失败");
+        }
+    }
+
+    private void sendMessage(String email, String code, String purpose) {
+        if (username.isBlank() || password.isBlank()) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "邮件服务尚未配置");
+        }
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(username);
+        message.setTo(email);
+        message.setSubject("校园食堂" + purpose);
+        message.setText(("您正在" + purpose + "，验证码是：") + code + "。验证码10分钟内有效，请勿向他人透露。如非本人操作，请忽略此邮件。");
         try {
             mail.send(message);
         } catch (MailException exception) {

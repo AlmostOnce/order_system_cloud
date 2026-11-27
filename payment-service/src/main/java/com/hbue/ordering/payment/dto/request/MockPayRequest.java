@@ -16,11 +16,15 @@ import lombok.Data;
 @Data
 public class MockPayRequest {
 
-    /** 期望结果：SUCCESS 或 FAILED，缺省 SUCCESS。 */
+    /**
+     * 期望结果：SUCCESS 或 FAILED，缺省 SUCCESS。
+     */
     @Pattern(regexp = "SUCCESS|FAILED", message = "结果仅支持 SUCCESS 或 FAILED")
     private String outcome;
 
-    /** 实收金额原串，缺省为支付单应付金额。 */
+    /**
+     * 实收金额原串，缺省为支付单应付金额。
+     */
     @Size(max = 16, message = "金额长度超限")
     private String paidAmount;
 }

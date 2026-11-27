@@ -1,8 +1,8 @@
 package com.hbue.ordering.auth.controller;
 
 import com.hbue.ordering.auth.dto.request.LoginRequest;
-import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
+import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.service.AuthService;
 import com.hbue.ordering.auth.service.CaptchaService;
 import com.hbue.ordering.auth.vo.CaptchaVO;
@@ -14,11 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 认证控制器。
@@ -45,7 +41,7 @@ public class AuthController {
     /**
      * 创建认证控制器。
      *
-     * @param authService 认证业务服务
+     * @param authService    认证业务服务
      * @param captchaService 图片验证码服务
      */
     public AuthController(
@@ -72,7 +68,7 @@ public class AuthController {
     ) {
         // 生成验证码时以来源 IP 做分钟级限流。
         CaptchaVO captchaVO = captchaService.generate(
-                resolveClientIp(httpRequest)
+                com.hbue.ordering.auth.util.ClientIpResolver.resolve(httpRequest)
         );
 
         // 返回验证码图片与标识。
@@ -118,7 +114,7 @@ public class AuthController {
     /**
      * 用户注销。
      *
-     * @param request 注销请求，包含需要撤销的 Refresh Token
+     * @param request     注销请求，包含需要撤销的 Refresh Token
      * @param accessToken 当前已认证的访问令牌
      * @return 注销结果
      * @throws com.hbue.ordering.common.core.exception.BusinessException Token 无效、Token 归属不匹配或撤销失败时由统一异常处理转换为响应
@@ -155,31 +151,4 @@ public class AuthController {
         return ApiResponse.success(com.hbue.ordering.user.api.vo.UserPublicVO.from(userBasicVO));
     }
 
-    /**
-     * 解析请求来源 IP，用于验证码生成限流。
-     *
-     * <p>请求经网关转发后 RemoteAddr 是网关地址，因此优先读取
-     * X-Forwarded-For 的第一段；该头缺失时退回 X-Real-IP，最后使用
-     * RemoteAddr。取值只用于限流计数，不参与任何授权判断。</p>
-     *
-     * @param httpRequest 当前 HTTP 请求
-     * @return 来源 IP，无法获取时返回空串
-     */
-    private String resolveClientIp(HttpServletRequest httpRequest) {
-        // 代理链上第一个地址是客户端真实来源。
-        String forwardedFor = httpRequest.getHeader("X-Forwarded-For");
-        if (forwardedFor != null && !forwardedFor.isBlank()) {
-            // 多级代理时按逗号分隔，取第一段。
-            return forwardedFor.split(",")[0].strip();
-        }
-
-        // 部分代理只设置 X-Real-IP。
-        String realIp = httpRequest.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.strip();
-        }
-
-        // 直连场景下使用连接地址。
-        return httpRequest.getRemoteAddr();
-    }
 }

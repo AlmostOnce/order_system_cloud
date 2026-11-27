@@ -42,6 +42,20 @@ public class RedisOperationsService {
             );
 
     /**
+     * 仅当 Key 的当前值等于期望值时删除的 Lua 脚本。
+     *
+     * <p>用于释放带租约的互斥锁：锁可能在业务执行超时后已被其它实例重新获取，
+     * 直接 DEL 会误删别人的锁，因此必须比较持有者标识后再删除。</p>
+     */
+    private static final DefaultRedisScript<Long> DELETE_IF_EQUALS_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('GET', KEYS[1]) == ARGV[1] then "
+                            + "return redis.call('DEL', KEYS[1]) "
+                            + "else return 0 end",
+                    Long.class
+            );
+
+    /**
      * Spring Data Redis 字符串操作模板。
      */
     private final StringRedisTemplate stringRedisTemplate;
@@ -60,7 +74,7 @@ public class RedisOperationsService {
     /**
      * 保存字符串值。
      *
-     * @param key Redis Key
+     * @param key   Redis Key
      * @param value 字符串值
      */
     public void setValue(String key, String value) {
@@ -71,8 +85,8 @@ public class RedisOperationsService {
     /**
      * 保存带过期时间的字符串值。
      *
-     * @param key Redis Key
-     * @param value 字符串值
+     * @param key        Redis Key
+     * @param value      字符串值
      * @param timeToLive 有效时长
      */
     public void setValue(
@@ -117,7 +131,7 @@ public class RedisOperationsService {
     /**
      * 保存 Hash 中的多个字段和值。
      *
-     * @param key Redis Key
+     * @param key    Redis Key
      * @param values Hash 字段和值
      */
     public void putHashValues(
@@ -143,8 +157,8 @@ public class RedisOperationsService {
      * 执行调用方提供的 Redis 脚本，按原样传递 Key 和参数。
      *
      * @param script 已配置结果类型的脚本
-     * @param keys 脚本使用的 Redis Key
-     * @param args 脚本参数
+     * @param keys   脚本使用的 Redis Key
+     * @param args   脚本参数
      * @return Redis 返回的脚本结果，可能为 null
      */
     public <T> T executeScript(RedisScript<T> script, List<String> keys, Object... args) {
@@ -173,7 +187,7 @@ public class RedisOperationsService {
      * <p>适用于登录失败次数等固定时间窗口计数。后续自增不会刷新 TTL，避免持续失败
      * 不断延长计数窗口；自增和首次设置 TTL 由一段 Lua 脚本原子完成。</p>
      *
-     * @param key Redis 计数 Key
+     * @param key        Redis 计数 Key
      * @param timeToLive 首次计数后的有效时长，至少为 1 毫秒
      * @return 自增后的计数；Redis 未返回结果时为 null
      * @throws IllegalArgumentException Key 为空或有效时长不足 1 毫秒时抛出
@@ -201,9 +215,54 @@ public class RedisOperationsService {
     }
 
     /**
+     * 仅当 Key 不存在时写入并设置过期时间。
+     *
+     * <p>底层是 Redis 的 SET NX EX，用于定时任务的互斥租约：同一任务在多实例部署时
+     * 只有抢到 Key 的实例执行，其余实例跳过本轮。租约到期自动释放，避免实例崩溃后任务永久停摆。</p>
+     *
+     * @param key        Redis Key
+     * @param value      持有者标识，释放时需要匹配
+     * @param timeToLive 租约时长，必须为正
+     * @return 是否抢到租约；Redis 无法确认时可能返回 null
+     * @throws IllegalArgumentException Key、标识为空或租约时长非法时抛出
+     */
+    public Boolean setIfAbsent(String key, String value, Duration timeToLive) {
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new IllegalArgumentException("互斥租约的 Key 与持有者标识不能为空");
+        }
+        if (timeToLive == null || timeToLive.isNegative() || timeToLive.isZero()) {
+            throw new IllegalArgumentException("互斥租约时长必须为正数");
+        }
+        // SET NX EX 由 Redis 原子完成"不存在才写入 + 过期时间"，不需要额外的 EXPIRE 调用。
+        return stringRedisTemplate.opsForValue().setIfAbsent(key, value, timeToLive);
+    }
+
+    /**
+     * 仅当 Key 的当前值等于期望值时删除 Key。
+     *
+     * <p>用于安全释放互斥租约：如果租约已过期并被其它实例重新持有，比较失败后不会误删。</p>
+     *
+     * @param key            Redis Key
+     * @param expectedValue  期望的当前值（持有者标识）
+     * @return 是否由本次调用删除；Key 不存在、值不匹配或无法确认时返回 false
+     */
+    public Boolean deleteIfEquals(String key, String expectedValue) {
+        if (key == null || key.isBlank() || expectedValue == null) {
+            return false;
+        }
+        // 比较与删除由一段 Lua 原子完成，避免 GET 与 DEL 之间被其它实例插入。
+        Long removed = stringRedisTemplate.execute(
+                DELETE_IF_EQUALS_SCRIPT,
+                List.of(key),
+                expectedValue
+        );
+        return removed != null && removed > 0L;
+    }
+
+    /**
      * 设置 Redis Key 的过期时间。
      *
-     * @param key Redis Key
+     * @param key        Redis Key
      * @param timeToLive 有效时长
      * @return Redis 是否确认设置成功；无法确认时可能返回 null
      */
@@ -232,5 +291,69 @@ public class RedisOperationsService {
     public Boolean delete(String key) {
         // 返回 Redis 对 Key 删除操作的结果。
         return stringRedisTemplate.delete(key);
+    }
+
+    /**
+     * 向有序集合写入成员，并按分数升序维护成员顺序。
+     *
+     * <p>用于需要按时间淘汰旧成员的场景，例如限制同一用户同时有效的会话数量。
+     * 成员已存在时会用新分数覆盖旧分数。</p>
+     *
+     * @param key   Redis 有序集合 Key
+     * @param value 成员值
+     * @param score 排序分数，通常为毫秒时间戳
+     * @return Redis 是否确认写入；无法确认时可能返回 null
+     */
+    public Boolean addToSortedSet(String key, String value, double score) {
+        // 返回 Redis 对 ZADD 的确认结果。
+        return stringRedisTemplate.opsForZSet().add(key, value, score);
+    }
+
+    /**
+     * 统计有序集合的成员数量。
+     *
+     * @param key Redis 有序集合 Key
+     * @return 成员数量；无法确认时可能返回 null
+     */
+    public Long sortedSetSize(String key) {
+        // 返回 Redis 对 ZCARD 的结果。
+        return stringRedisTemplate.opsForZSet().zCard(key);
+    }
+
+    /**
+     * 按分数升序读取指定下标区间的成员。
+     *
+     * @param key   Redis 有序集合 Key
+     * @param start 起始下标，从 0 开始
+     * @param end   结束下标，包含该位置
+     * @return 区间内的成员列表；Key 不存在或无法确认时返回空列表
+     */
+    public List<String> sortedSetRange(String key, long start, long end) {
+        // 使用 ZRANGE 按分数升序读取成员，避免一次取回整份集合。
+        java.util.Set<String> members = stringRedisTemplate.opsForZSet().range(key, start, end);
+        return members == null ? List.of() : List.copyOf(members);
+    }
+
+    /**
+     * 从有序集合中删除一个或多个成员。
+     *
+     * @param key    Redis 有序集合 Key
+     * @param values 待删除的成员
+     * @return 实际删除的成员数量；无法确认时可能返回 null
+     */
+    public Long removeFromSortedSet(String key, String... values) {
+        // ZREM 对不存在的成员幂等，便于重复清理时安全调用。
+        return stringRedisTemplate.opsForZSet().remove(key, (Object[]) values);
+    }
+
+    /**
+     * 发布可补查的在线变更提示，统一封装Redis Pub/Sub入口；不用于持久化消息正文。
+     *
+     * @param channel 服务端固定主题，业务不能直接采用客户端指定的任意主题
+     * @param payload 轻量资源引用或接收人标识，不包含访问令牌与聊天正文
+     * @return Redis接收到的在线订阅者数量，不代表客户端已收到或已阅读；离线恢复依赖业务数据库
+     */
+    public Long publish(String channel, String payload) {
+        return stringRedisTemplate.convertAndSend(channel, payload);
     }
 }

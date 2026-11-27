@@ -15,14 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -43,7 +36,9 @@ import java.util.List;
 @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')")
 public class ProductAdministrationController {
 
-    /** 目录管理服务。 */
+    /**
+     * 目录管理服务。
+     */
     private final ProductAdministrationService productAdministrationService;
 
     /**
@@ -75,7 +70,7 @@ public class ProductAdministrationController {
     /**
      * 在操作者范围内的餐厅创建窗口。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt     当前登录操作者 JWT
      * @param request 窗口字段
      * @return 新建窗口
      */
@@ -95,9 +90,9 @@ public class ProductAdministrationController {
     /**
      * 全量更新窗口。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
-     * @param request 窗口字段
+     * @param request  窗口字段
      * @return 更新后的窗口
      */
     @PutMapping("/windows/{windowId}")
@@ -118,7 +113,7 @@ public class ProductAdministrationController {
     /**
      * 停用窗口。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
      * @return 空成功响应
      */
@@ -134,7 +129,7 @@ public class ProductAdministrationController {
     /**
      * 查询窗口下所有分类，包括已停用分类。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
      * @return 分类列表
      */
@@ -154,9 +149,9 @@ public class ProductAdministrationController {
     /**
      * 在窗口下创建分类。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
-     * @param request 分类字段
+     * @param request  分类字段
      * @return 新建分类
      */
     @PostMapping("/windows/{windowId}/categories")
@@ -177,9 +172,9 @@ public class ProductAdministrationController {
     /**
      * 全量更新分类。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt        当前登录操作者 JWT
      * @param categoryId 分类 ID
-     * @param request 分类字段
+     * @param request    分类字段
      * @return 更新后的分类
      */
     @PutMapping("/categories/{categoryId}")
@@ -200,7 +195,7 @@ public class ProductAdministrationController {
     /**
      * 停用分类。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt        当前登录操作者 JWT
      * @param categoryId 分类 ID
      * @return 空成功响应
      */
@@ -219,7 +214,7 @@ public class ProductAdministrationController {
     /**
      * 查询窗口下所有菜品，包括已下架菜品。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
      * @return 菜品列表
      */
@@ -239,9 +234,9 @@ public class ProductAdministrationController {
     /**
      * 在窗口下创建菜品。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt      当前登录操作者 JWT
      * @param windowId 窗口 ID
-     * @param request 菜品字段
+     * @param request  菜品字段
      * @return 新建菜品
      */
     @PostMapping("/windows/{windowId}/products")
@@ -262,7 +257,7 @@ public class ProductAdministrationController {
     /**
      * 查询菜品详情。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt       当前登录操作者 JWT
      * @param productId 菜品 ID
      * @return 菜品详情
      */
@@ -282,9 +277,9 @@ public class ProductAdministrationController {
     /**
      * 全量更新菜品。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt       当前登录操作者 JWT
      * @param productId 菜品 ID
-     * @param request 菜品字段
+     * @param request   菜品字段
      * @return 更新后的菜品
      */
     @PutMapping("/products/{productId}")
@@ -305,7 +300,7 @@ public class ProductAdministrationController {
     /**
      * 下架菜品。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt       当前登录操作者 JWT
      * @param productId 菜品 ID
      * @return 空成功响应
      */

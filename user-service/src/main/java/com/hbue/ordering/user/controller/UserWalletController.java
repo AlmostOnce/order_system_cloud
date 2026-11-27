@@ -11,15 +11,11 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-/** 本人账户接口；用户归属仅取已认证 JWT，不接收客户端指定用户 ID。 */
+/**
+ * 本人账户接口；用户归属仅取已认证 JWT，不接收客户端指定用户 ID。
+ */
 @RestController
 @Tag(name = "账户中心与充值")
 @RequestMapping("/users/me")
@@ -39,17 +35,17 @@ public class UserWalletController {
     @PostMapping("/recharges")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<BalanceRecordVO> recharge(@AuthenticationPrincipal Jwt jwt,
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @Valid @RequestBody RechargeRequest request) {
+                                                 @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                                 @Valid @RequestBody RechargeRequest request) {
         return ApiResponse.success(walletService.recharge(Long.valueOf(jwt.getSubject()), idempotencyKey, request));
     }
 
     @GetMapping("/balance/records")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResponse<BalanceRecordPageVO> records(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "type", required = false) String type,
-            @RequestParam(name = "beforeId", required = false) Long beforeId,
-            @RequestParam(name = "limit", defaultValue = "20") int limit) {
+                                                    @RequestParam(name = "type", required = false) String type,
+                                                    @RequestParam(name = "beforeId", required = false) Long beforeId,
+                                                    @RequestParam(name = "limit", defaultValue = "20") int limit) {
         return ApiResponse.success(walletService.listRecords(Long.valueOf(jwt.getSubject()), type, beforeId, limit));
     }
 }

@@ -15,28 +15,38 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileTypeValidator {
 
-    /** JPEG 文件头魔数。 */
+    /**
+     * JPEG 文件头魔数。
+     */
     private static final byte[] MAGIC_JPEG = {
             (byte) 0xFF, (byte) 0xD8, (byte) 0xFF
     };
 
-    /** PNG 文件头魔数。 */
+    /**
+     * PNG 文件头魔数。
+     */
     private static final byte[] MAGIC_PNG = {
             (byte) 0x89, (byte) 0x50, (byte) 0x4E, (byte) 0x47,
             (byte) 0x0D, (byte) 0x0A, (byte) 0x1A, (byte) 0x0A
     };
 
-    /** GIF 文件头魔数（GIF8）。 */
+    /**
+     * GIF 文件头魔数（GIF8）。
+     */
     private static final byte[] MAGIC_GIF = {
             (byte) 0x47, (byte) 0x49, (byte) 0x46, (byte) 0x38
     };
 
-    /** WEBP 容器 RIFF 头魔数。 */
+    /**
+     * WEBP 容器 RIFF 头魔数。
+     */
     private static final byte[] MAGIC_RIFF = {
             (byte) 0x52, (byte) 0x49, (byte) 0x46, (byte) 0x46
     };
 
-    /** WEBP 格式标识。 */
+    /**
+     * WEBP 格式标识。
+     */
     private static final byte[] MAGIC_WEBP = {
             (byte) 0x57, (byte) 0x45, (byte) 0x42, (byte) 0x50
     };
@@ -108,8 +118,8 @@ public class FileTypeValidator {
      * 在指定偏移处比较字节前缀是否与魔数一致。
      *
      * @param content 待比较内容
-     * @param magic 目标魔数
-     * @param offset 比较起始偏移
+     * @param magic   目标魔数
+     * @param offset  比较起始偏移
      * @return 完全一致返回 true，否则返回 false
      */
     private boolean startsWith(byte[] content, byte[] magic, int offset) {

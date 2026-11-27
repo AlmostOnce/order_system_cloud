@@ -1,0 +1,40 @@
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 2
+  cloud:
+    function:
+      definition: salesStatisticsPaid;legacySalesStatisticsPaid
+    stream:
+      bindings:
+        salesStatisticsPaid-in-0:
+          destination: order-paid-sales-v2
+          group: statistics-sales-v2
+          content-type: application/json
+          error-handler-definition: salesStatisticsRetryError
+          consumer:
+            max-attempts: 1
+        legacySalesStatisticsPaid-in-0:
+          destination: order-paid-sales-v1
+          group: statistics-sales-v1
+          content-type: application/json
+          error-handler-definition: salesStatisticsRetryError
+          consumer:
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          salesStatisticsPaid-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16
+          legacySalesStatisticsPaid-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

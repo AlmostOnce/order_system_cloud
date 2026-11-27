@@ -213,14 +213,16 @@ def main():
             if '=' in line and not line.lstrip().startswith('#'):
                 key, value = line.split('=', 1)
                 values[key.strip()] = value.strip().strip('\"\'')
-        config = (ROOT / 'user-service/src/main/resources/application.yml').read_text()
-        default_token = re.search(r'\$\{INTERNAL_SCOPE_TOKEN:([^}]*)\}', config).group(1)
+        token = values.get('INTERNAL_SCOPE_TOKEN')
+        # 内部接口不再提供仓库内默认令牌，未配置时直接终止，避免用公开默认串静默通过。
+        if not token:
+            raise SystemExit('缺少 INTERNAL_SCOPE_TOKEN：请在根目录 .env 中配置后重试')
         for account in new_accounts:
             for login in (account['user_no'], account['email']):
                 payload = json.dumps({'account': login, 'password': account['password']}).encode()
                 request = urllib.request.Request('http://127.0.0.1:9092/users/authenticate', data=payload,
                           headers={'Content-Type': 'application/json',
-                                   'X-Internal-Token': values.get('INTERNAL_SCOPE_TOKEN', default_token)})
+                                   'X-Internal-Token': token})
                 with urllib.request.urlopen(request, timeout=10) as response:
                     result = json.load(response)
                 assert result['code'] == 'COMMON_000' and result['data']['roleCode'] == account['role_code']

@@ -35,7 +35,9 @@ public class UserDataScopeServiceImpl
         extends ServiceImpl<UserDataScopeMapper, UserDataScopeDO>
         implements UserDataScopeService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(UserDataScopeServiceImpl.class);
 
@@ -44,7 +46,9 @@ public class UserDataScopeServiceImpl
      */
     private static final long PLATFORM_SCOPE_REF = 0L;
 
-    /** Redis 基础操作服务，用于失效数据范围缓存。 */
+    /**
+     * Redis 基础操作服务，用于失效数据范围缓存。
+     */
     private final RedisOperationsService redisOperationsService;
 
     /**
@@ -135,7 +139,7 @@ public class UserDataScopeServiceImpl
     /**
      * 撤销指定用户的单条数据范围。
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param scopeId 范围记录 ID
      * @implNote 删除条件同时包含用户 ID 和范围记录 ID，避免跨用户撤销
      */

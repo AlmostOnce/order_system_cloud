@@ -5,7 +5,9 @@ import com.hbue.ordering.common.redis.RedissonInfrastructureConfig;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import static org.junit.jupiter.api.Assertions.*;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
 class OrderRankingInfrastructureTest {

@@ -2,7 +2,9 @@ package com.hbue.ordering.product.api.dto;
 
 import java.math.BigDecimal;
 
-/** 商品服务提供给搜索服务的当前可检索菜品快照。 */
+/**
+ * 商品服务提供给搜索服务的当前可检索菜品快照。
+ */
 public record ProductSearchDocument(
         Long productId,
         Long categoryId,
@@ -17,4 +19,5 @@ public record ProductSearchDocument(
         String imageUrl,
         BigDecimal price,
         Integer sortOrder
-) {}
+) {
+}

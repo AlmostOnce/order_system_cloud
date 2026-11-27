@@ -1,6 +1,8 @@
 package com.hbue.ordering.stock.messaging;
 
-/** 已提交的单条库存变动通知，不用于覆盖库存事实数据。 */
+/**
+ * 已提交的单条库存变动通知，不用于覆盖库存事实数据。
+ */
 public record StockChangedEvent(
         int eventVersion,
         String eventId,

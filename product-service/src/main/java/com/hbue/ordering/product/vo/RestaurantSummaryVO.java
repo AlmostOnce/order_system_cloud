@@ -18,15 +18,33 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RestaurantSummaryVO {
 
-    /** 餐厅 ID。 */
+    /**
+     * 餐厅 ID。
+     */
     private Long restaurantId;
 
-    /** 餐厅编码。 */
+    /**
+     * 餐厅编码。
+     */
     private String restaurantCode;
 
-    /** 餐厅名称。 */
+    /**
+     * 餐厅名称。
+     */
     private String restaurantName;
 
-    /** 餐厅位置。 */
+    /**
+     * 餐厅位置。
+     */
     private String location;
+
+    /**
+     * 餐厅公告/简介，由管理端维护；学生端在选择餐厅时展示，避免内容只在后台可见。
+     */
+    private String notice;
+
+    /**
+     * 餐厅联系电话，供学生找不到窗口或需要咨询时使用；未配置时为空。
+     */
+    private String phone;
 }

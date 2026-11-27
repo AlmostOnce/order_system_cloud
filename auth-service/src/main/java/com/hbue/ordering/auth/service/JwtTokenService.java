@@ -1,10 +1,5 @@
 package com.hbue.ordering.auth.service;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import com.hbue.ordering.auth.service.JwtTokenService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -12,6 +7,10 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * JWT Token 服务。
@@ -50,8 +49,8 @@ public class JwtTokenService {
      * 创建 JWT Token 服务。
      *
      * @param jwtEncoder JWT 编码器
-     * @param issuer JWT 签发方
-     * @param keyId RSA 密钥编号
+     * @param issuer     JWT 签发方
+     * @param keyId      RSA 密钥编号
      */
     public JwtTokenService(
             JwtEncoder jwtEncoder,
@@ -77,6 +76,11 @@ public class JwtTokenService {
             String username,
             String roleCode
     ) {
+        return createAccessToken(userUuid, username, roleCode, 0);
+    }
+
+    public String createAccessToken(String userUuid, String username, String roleCode, long credentialVersion) {
+        if (credentialVersion < 0) throw new IllegalArgumentException("凭据版本无效");
         if (userUuid == null || !userUuid.matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")) {
             throw new IllegalArgumentException("用户 UUID 不合法，拒绝签发令牌");
         }
@@ -97,6 +101,7 @@ public class JwtTokenService {
                 .claim("username", username)
                 .claim("roles", List.of(roleCode))
                 .claim("token_type", "access")
+                .claim("credential_version", credentialVersion)
                 .issuedAt(issuedAt)
                 .expiresAt(
                         issuedAt.plusSeconds(ACCESS_TOKEN_TTL_SECONDS)

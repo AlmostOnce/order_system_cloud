@@ -5,6 +5,7 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -12,6 +13,7 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
     ports:
       - "9095:3306"
     volumes:
@@ -41,7 +43,7 @@ services:
       - order-system-cloud-nacos-logs:/home/nacos/logs
 
   mongo:
-    profiles: [comment]
+    profiles: [ comment ]
     image: mongo:7.0
     restart: unless-stopped
     environment:
@@ -69,13 +71,13 @@ services:
     volumes:
       - order-system-cloud-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
   elasticsearch:
-    profiles: [search]
+    profiles: [ search ]
     image: docker.elastic.co/elasticsearch/elasticsearch:8.19.4
     restart: unless-stopped
     environment:
@@ -87,7 +89,7 @@ services:
     volumes:
       - order-system-cloud-elasticsearch-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health >/dev/null" ]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -120,10 +122,10 @@ services:
       - "9108:7091"
 
   rocketmq-permissions:
-    profiles: [mq]
+    profiles: [ mq ]
     image: apache/rocketmq:5.3.2
     user: "0:0"
-    entrypoint: ["/bin/sh", "-ec"]
+    entrypoint: [ "/bin/sh", "-ec" ]
     command:
       - chown -R 3000:3000 /mq-namesrv-logs /mq-broker-logs /mq-store
     volumes:
@@ -132,7 +134,7 @@ services:
       - order-system-cloud-rocketmq-store:/mq-store
 
   rocketmq-namesrv:
-    profiles: [mq]
+    profiles: [ mq ]
     image: apache/rocketmq:5.3.2
     restart: unless-stopped
     command: sh mqnamesrv
@@ -147,7 +149,7 @@ services:
       - order-system-cloud-rocketmq-namesrv-logs:/home/rocketmq/logs
 
   rocketmq-broker:
-    profiles: [mq]
+    profiles: [ mq ]
     image: apache/rocketmq:5.3.2
     restart: unless-stopped
     command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/broker.conf
@@ -168,15 +170,15 @@ services:
       - order-system-cloud-rocketmq-broker-logs:/home/rocketmq/logs
 
   rocketmq-init:
-    profiles: [mq]
+    profiles: [ mq ]
     image: apache/rocketmq:5.3.2
     depends_on:
       rocketmq-broker:
         condition: service_started
-    entrypoint: ["/bin/sh", "-c"]
+    entrypoint: [ "/bin/sh", "-c" ]
     command:
       - |
-        for topic in order-paid-sales-v1 product-rating-changed-v1 stock-changed-v1 product-search-refresh-v1 order-status-notification-v1; do
+        for topic in order-paid-sales-v1 order-paid-sales-v2 product-rating-changed-v1 stock-changed-v1 product-search-refresh-v1 order-status-notification-v1 order-payment-timeout-v1 '%DLQ%order-payment-timeout-v1'; do
           attempts=0
           while true; do
             result=$$(sh /home/rocketmq/rocketmq-5.3.2/bin/mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:10911 -t "$$topic" -r 4 -w 4 2>&1)
@@ -191,7 +193,7 @@ services:
         done
 
   nginx:
-    profiles: [edge]
+    profiles: [ edge ]
     image: nginx:1.27-alpine
     restart: unless-stopped
     environment:
@@ -218,6 +220,9 @@ services:
       NACOS_PASSWORD: ${NACOS_PASSWORD}
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JAVA_OPTS: "-javaagent:/opt/skywalking-agent/skywalking-agent.jar"
+      SW_AGENT_NAME: gateway-service
+      SW_AGENT_COLLECTOR_BACKEND_SERVICES: skywalking-oap:11800
     depends_on:
       nacos:
         condition: service_started
@@ -225,6 +230,59 @@ services:
         condition: service_healthy
     ports:
       - "9090:9090"
+    volumes:
+      - ./.local/skywalking-agent/agent:/opt/skywalking-agent:ro
+
+  skywalking-banyandb:
+    profiles: [ skywalking ]
+    image: apache/skywalking-banyandb:0.11.2
+    restart: unless-stopped
+    command: [ "standalone" ]
+    volumes:
+      - order-system-cloud-skywalking-banyandb-data:/tmp
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "nc -nz 127.0.0.1 17912" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  skywalking-oap:
+    profiles: [ skywalking ]
+    image: apache/skywalking-oap-server:11.1.0-java21
+    restart: unless-stopped
+    environment:
+      SW_STORAGE: banyandb
+      SW_STORAGE_BANYANDB_TARGETS: skywalking-banyandb:17912
+    depends_on:
+      skywalking-banyandb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:11800:11800"
+      - "127.0.0.1:12800:12800"
+      - "127.0.0.1:17128:17128"
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/12800 && cat < /dev/null > /dev/tcp/127.0.0.1/17128" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  skywalking-ui:
+    profiles: [ skywalking ]
+    image: apache/skywalking-ui:horizon-1.1.0
+    restart: unless-stopped
+    environment:
+      HORIZON_OAP_QUERY_URL: http://skywalking-oap:12800
+      HORIZON_OAP_ADMIN_URL: http://skywalking-oap:17128
+      HORIZON_AUTH_LOCAL_USERS: "${SKYWALKING_HORIZON_LOCAL_USERS:-[]}"
+    depends_on:
+      skywalking-oap:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:8081"
+    volumes:
+      - order-system-cloud-skywalking-ui-data:/data
 
 volumes:
   order-system-cloud-mysql-data:
@@ -238,3 +296,5 @@ volumes:
   order-system-cloud-rocketmq-store:
   order-system-cloud-rocketmq-broker-logs:
   order-system-cloud-elasticsearch-data:
+  order-system-cloud-skywalking-banyandb-data:
+  order-system-cloud-skywalking-ui-data:

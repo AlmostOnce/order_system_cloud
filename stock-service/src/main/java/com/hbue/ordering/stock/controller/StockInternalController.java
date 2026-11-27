@@ -3,29 +3,23 @@ package com.hbue.ordering.stock.controller;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.security.InternalScopeTokenVerifier;
+import com.hbue.ordering.stock.api.dto.StockBatchQueryRequest;
 import com.hbue.ordering.stock.api.dto.StockDeductRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.stock.api.vo.StockVO;
 import com.hbue.ordering.stock.service.StockService;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.validation.annotation.Validated;
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * 库存内部接口。
  *
- * <p>仅供 order-service 在下单与取消订单时调用：扣减库存、回补库存、查询库存。
+ * <p>供订单服务扣减与回补、商品服务读取菜单库存，以及推荐服务有界复核展示候选。
  * 这些接口不配置网关路由，外部无法访问；调用方仍需携带共享密钥
  * {@code X-Internal-Token}，防止内网被横向调用。</p>
  *
@@ -44,16 +38,20 @@ import java.util.List;
 @RequestMapping("/internal/stocks")
 public class StockInternalController {
 
-    /** 库存业务服务。 */
+    /**
+     * 库存业务服务。
+     */
     private final StockService stockService;
 
-    /** 内部调用共享密钥校验器。 */
+    /**
+     * 内部调用共享密钥校验器。
+     */
     private final InternalScopeTokenVerifier internalScopeTokenVerifier;
 
     /**
      * 创建库存内部接口。
      *
-     * @param stockService 库存业务服务
+     * @param stockService               库存业务服务
      * @param internalScopeTokenVerifier 内部调用共享密钥校验器
      */
     public StockInternalController(
@@ -64,7 +62,26 @@ public class StockInternalController {
         this.internalScopeTokenVerifier = internalScopeTokenVerifier;
     }
 
-    /** 仅供商品服务聚合菜单库存，内部令牌验证与单品查询一致。 */
+    /**
+     * 推荐服务一次复核最多50个候选的数据库库存，读取不会预留份数或保证后续下单成功。
+     * 必须先通过内部共享密钥校验；不添加网关路由，也不接受终端直接调用。
+     *
+     * @param request       经Bean Validation及服务层双重校验的窗口菜品组合
+     * @param internalToken 服务间共享密钥；缺失或错误由统一校验器拒绝
+     * @return 现存有效库存事实；缺行不返回，零库存行如实返回，查询故障不得转换为成功空列表
+     */
+    @PostMapping("/recommendations/batch")
+    public ApiResponse<List<StockVO>> getBatchStocks(
+            @Valid @RequestBody StockBatchQueryRequest request,
+            @RequestHeader(value = "X-Internal-Token", required = false) String internalToken
+    ) {
+        internalScopeTokenVerifier.verify(internalToken);
+        return ApiResponse.success(stockService.getBatchStocks(request));
+    }
+
+    /**
+     * 仅供商品服务聚合菜单库存，内部令牌验证与单品查询一致。
+     */
     @GetMapping("/windows/{windowId}")
     public ApiResponse<List<StockVO>> getWindowStocks(
             @PathVariable("windowId") @Positive Long windowId,
@@ -77,7 +94,7 @@ public class StockInternalController {
     /**
      * 扣减库存。
      *
-     * @param request 扣减请求，包含订单号、档口与菜品明细
+     * @param request       扣减请求，包含订单号、档口与菜品明细
      * @param internalToken 服务间共享密钥
      * @return 统一成功响应；库存不足时由异常处理返回业务失败响应
      */
@@ -102,7 +119,7 @@ public class StockInternalController {
     /**
      * 回补库存（取消订单、退款等场景）。
      *
-     * @param request 回补请求，包含订单号、档口与菜品明细
+     * @param request       回补请求，包含订单号、档口与菜品明细
      * @param internalToken 服务间共享密钥
      * @return 统一成功响应
      */
@@ -127,8 +144,8 @@ public class StockInternalController {
     /**
      * 查询指定档口菜品的库存。
      *
-     * @param windowId 档口 ID
-     * @param productId 菜品 ID
+     * @param windowId      档口 ID
+     * @param productId     菜品 ID
      * @param internalToken 服务间共享密钥
      * @return 库存信息；无库存记录时 data 为 null
      */

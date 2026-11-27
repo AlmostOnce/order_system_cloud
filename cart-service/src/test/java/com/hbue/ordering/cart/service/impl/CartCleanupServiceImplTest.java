@@ -19,7 +19,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 /**
@@ -27,14 +28,22 @@ import static org.mockito.Mockito.*;
  * 外部订单 HTTP 与 Redis 使用替身；原子删除行为由真实 Redis 集成测试覆盖。
  */
 class CartCleanupServiceImplTest {
-    /** 外部订单服务替身。 */
+    /**
+     * 外部订单服务替身。
+     */
     private OrderServiceClient orders;
-    /** Redis 边界替身。 */
+    /**
+     * Redis 边界替身。
+     */
     private CartRedisRepository repository;
-    /** 被测清理实现。 */
+    /**
+     * 被测清理实现。
+     */
     private CartCleanupServiceImpl service;
 
-    /** 各用例使用独立依赖，避免上个请求的订单证明被复用。 */
+    /**
+     * 各用例使用独立依赖，避免上个请求的订单证明被复用。
+     */
     @BeforeEach
     void setUp() {
         orders = mock(OrderServiceClient.class);
@@ -42,7 +51,9 @@ class CartCleanupServiceImplTest {
         service = new CartCleanupServiceImpl(orders, repository);
     }
 
-    /** 公开订单响应不含内部 userId；解码后仍能按已验证的购买事实安全清理。 */
+    /**
+     * 公开订单响应不含内部 userId；解码后仍能按已验证的购买事实安全清理。
+     */
     @Test
     void shouldCleanOnlyAfterVerifiedOrder() throws Exception {
         OrderCartSnapshotVO snapshot = new com.fasterxml.jackson.databind.ObjectMapper().readValue("""
@@ -58,14 +69,18 @@ class CartCleanupServiceImplTest {
         assertEquals(0, result.skippedCount());
     }
 
-    /** 已删除条目可以再次提交，不能把重复清理误认为订单失败。 */
+    /**
+     * 已删除条目可以再次提交，不能把重复清理误认为订单失败。
+     */
     @Test
     void shouldAllowIdempotentCleanupRetry() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 1L, 2)));
         assertEquals(1, service.cleanup(5L, 123L, request(2)).skippedCount());
     }
 
-    /** 远程归属由用户凭据校验，本地仍拒绝返回了错误订单号的响应。 */
+    /**
+     * 远程归属由用户凭据校验，本地仍拒绝返回了错误订单号的响应。
+     */
     @Test
     void shouldRejectMismatchedOrderId() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(999L, 1L, 2)));
@@ -73,7 +88,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 不允许用窗口一的订单清理另一个窗口。 */
+    /**
+     * 不允许用窗口一的订单清理另一个窗口。
+     */
     @Test
     void shouldRejectDifferentWindow() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 10L, 2)));
@@ -81,7 +98,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 请求数量必须与已保存的订单明细一致，不能把未购买的数量整项清除。 */
+    /**
+     * 请求数量必须与已保存的订单明细一致，不能把未购买的数量整项清除。
+     */
     @Test
     void shouldRejectDifferentPurchasedQuantity() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(order(123L, 1L, 1)));
@@ -89,7 +108,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 成功包装但缺少订单明细属于上游契约异常，不能退化成无条件删除。 */
+    /**
+     * 成功包装但缺少订单明细属于上游契约异常，不能退化成无条件删除。
+     */
     @Test
     void shouldRejectMalformedOrderResponse() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(
@@ -98,7 +119,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 远程订单不存在或不属于当前用户统一返回 404。 */
+    /**
+     * 远程订单不存在或不属于当前用户统一返回 404。
+     */
     @Test
     void shouldPreserveRemoteNotFound() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.failure(CommonErrorCode.NOT_FOUND));
@@ -106,7 +129,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 订单服务不可用时保留购物车，允许订单成功后单独重试清理。 */
+    /**
+     * 订单服务不可用时保留购物车，允许订单成功后单独重试清理。
+     */
     @Test
     void shouldNotDeleteOnOrderServiceFailure() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.failure(CommonErrorCode.SERVICE_UNAVAILABLE));
@@ -114,7 +139,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 重复商品 ID 和缺少版本必须在任何远程调用之前拒绝。 */
+    /**
+     * 重复商品 ID 和缺少版本必须在任何远程调用之前拒绝。
+     */
     @Test
     void shouldRejectInvalidSnapshotBeforeDependencies() {
         CartSubmittedItemRequest item = new CartSubmittedItemRequest(11L, 2, "revision-original");
@@ -125,7 +152,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(orders, repository);
     }
 
-    /** 直接 HTTP 失败和 Sentinel 降级返回错误码时保持相同的身份、归属和故障语义。 */
+    /**
+     * 直接 HTTP 失败和 Sentinel 降级返回错误码时保持相同的身份、归属和故障语义。
+     */
     @Test
     void shouldTranslateHttpFailuresWithoutDeleting() {
         for (int status : new int[]{401, 403, 404, 500}) {
@@ -145,7 +174,9 @@ class CartCleanupServiceImplTest {
         verifyNoInteractions(repository);
     }
 
-    /** 商品集合必须完整相同，数量相同但商品不同也不能被误判为一次合法清理。 */
+    /**
+     * 商品集合必须完整相同，数量相同但商品不同也不能被误判为一次合法清理。
+     */
     @Test
     void shouldRejectDifferentOrIncompletePurchasedItems() {
         when(orders.getOrder(123L)).thenReturn(ApiResponse.success(new OrderCartSnapshotVO(123L, 1L,
@@ -159,6 +190,7 @@ class CartCleanupServiceImplTest {
 
     /**
      * 构造原始提交快照；重试时必须沿用此内容，不能用新查询结果替换版本。
+     *
      * @param quantity 下单数量
      * @return 单窗口提交请求
      */
@@ -169,7 +201,8 @@ class CartCleanupServiceImplTest {
 
     /**
      * 构造订单服务保存的购买事实。
-     * @param orderId 订单编号
+     *
+     * @param orderId  订单编号
      * @param windowId 订单窗口
      * @param quantity 实际购买数量
      * @return 订单详情所需字段投影
@@ -181,8 +214,9 @@ class CartCleanupServiceImplTest {
 
     /**
      * 验证失败对调用者呈现为正确业务错误，而非空指针或错误成功响应。
+     *
      * @param expected 预期业务码
-     * @param request 清理快照
+     * @param request  清理快照
      */
     private void assertError(CommonErrorCode expected, CartCleanupRequest request) {
         assertEquals(expected, assertThrows(BusinessException.class,

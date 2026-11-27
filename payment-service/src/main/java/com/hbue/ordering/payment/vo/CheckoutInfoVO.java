@@ -15,15 +15,23 @@ import java.math.BigDecimal;
 @Builder
 public class CheckoutInfoVO {
 
-    /** 业务支付单号。 */
+    /**
+     * 业务支付单号。
+     */
     private String paymentNo;
 
-    /** 订单号快照。 */
+    /**
+     * 订单号快照。
+     */
     private String orderNo;
 
-    /** 应付金额。 */
+    /**
+     * 应付金额。
+     */
     private BigDecimal amount;
 
-    /** 支付单状态。 */
+    /**
+     * 支付单状态。
+     */
     private String status;
 }

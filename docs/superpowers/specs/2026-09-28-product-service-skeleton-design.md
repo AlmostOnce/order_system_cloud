@@ -2,7 +2,8 @@
 
 ## 目标
 
-在 `order-system-cloud` Maven 多模块工程中新增 `product-service` 基础模块，接入已创建的 `product_db`，建立窗口、分类和菜品的持久化映射，并注册到 Nacos。本阶段不实现业务流程或 HTTP API。
+在 `order-system-cloud` Maven 多模块工程中新增 `product-service` 基础模块，接入已创建的 `product_db`
+，建立窗口、分类和菜品的持久化映射，并注册到 Nacos。本阶段不实现业务流程或 HTTP API。
 
 ## 当前背景
 

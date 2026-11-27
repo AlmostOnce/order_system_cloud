@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 
@@ -30,46 +31,66 @@ import java.time.Duration;
 @Service
 public class PayPasswordServiceImpl implements PayPasswordService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(PayPasswordServiceImpl.class);
 
-    /** 失败计数键前缀。 */
+    /**
+     * 失败计数键前缀。
+     */
     private static final String FAIL_KEY_PREFIX = "user:pay-password:fail:";
 
-    /** 锁定标记键前缀。 */
+    /**
+     * 锁定标记键前缀。
+     */
     private static final String LOCK_KEY_PREFIX = "user:pay-password:lock:";
 
-    /** 用户启用状态。 */
+    /**
+     * 用户启用状态。
+     */
     private static final Integer USER_STATUS_ENABLED = 1;
 
-    /** 用户数据访问接口。 */
+    /**
+     * 用户数据访问接口。
+     */
     private final UserMapper userMapper;
 
-    /** 密码加密器。 */
+    /**
+     * 密码加密器。
+     */
     private final PasswordEncoder passwordEncoder;
 
-    /** Redis 基础操作服务。 */
+    /**
+     * Redis 基础操作服务。
+     */
     private final RedisOperationsService redisOperationsService;
 
-    /** 允许的连续失败次数上限。 */
+    /**
+     * 允许的连续失败次数上限。
+     */
     private final int maxFailures;
 
-    /** 失败计数保留时长。 */
+    /**
+     * 失败计数保留时长。
+     */
     private final Duration failureTtl;
 
-    /** 触发上限后的锁定时长。 */
+    /**
+     * 触发上限后的锁定时长。
+     */
     private final Duration lockTtl;
 
     /**
      * 创建支付密码业务服务。
      *
-     * @param userMapper 用户数据访问接口
-     * @param passwordEncoder 密码加密器
+     * @param userMapper             用户数据访问接口
+     * @param passwordEncoder        密码加密器
      * @param redisOperationsService Redis 基础操作服务
-     * @param maxFailures 允许的连续失败次数上限
-     * @param failureTtlSeconds 失败计数保留秒数
-     * @param lockTtlSeconds 锁定时长秒数
+     * @param maxFailures            允许的连续失败次数上限
+     * @param failureTtlSeconds      失败计数保留秒数
+     * @param lockTtlSeconds         锁定时长秒数
      */
     public PayPasswordServiceImpl(
             UserMapper userMapper,
@@ -96,11 +117,12 @@ public class PayPasswordServiceImpl implements PayPasswordService {
      * <p>首次设置用登录密码确认身份；修改时通过统一的支付密码校验路径验证
      * 原密码，因此修改操作同样受 Redis 失败计数和锁定策略保护。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param request 支付密码设置请求
      * @throws BusinessException 身份凭据错误、账户不可用或密码不满足业务约束时抛出
      */
     @Override
+    @Transactional
     public void setPayPassword(Long userId, PayPasswordSetRequest request) {
         if (userId == null) {
             throw new BusinessException(
@@ -116,7 +138,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
             );
         }
 
-        UserDO user = requireEnabledUser(userMapper.selectPasswordsById(userId));
+        UserDO user = requireEnabledUser(userMapper.selectPayPasswordRecoveryForUpdate(userId));
         String newPayPassword = request.getNewPayPassword();
         String existingHash = user.getPayPasswordHash();
 
@@ -172,7 +194,7 @@ public class PayPasswordServiceImpl implements PayPasswordService {
     /**
      * 校验支付密码，失败时累计计数并在超过阈值后锁定。
      *
-     * @param userId 用户 ID
+     * @param userId      用户 ID
      * @param payPassword 支付密码明文
      * @throws BusinessException 密码为空、账户不可用、支付密码未设置、校验失败达到限制或 Redis 不可用时抛出
      */
@@ -291,19 +313,26 @@ public class PayPasswordServiceImpl implements PayPasswordService {
     /**
      * 累计一次支付密码校验失败。
      *
+     * <p>使用"自增并首次设置过期时间"的原子操作，而不是先 {@code increment} 再单独 {@code expire}：
+     * 两步之间进程退出或 EXPIRE 失败会让计数键永不过期，锁定到期后一次错误就再次锁死用户，
+     * 只能人工删 Key。原子写法保证计数键一定带有 TTL，且后续失败不会刷新窗口。</p>
+     *
      * @param userId 用户 ID
      * @return 累计后的失败次数
      */
     private long incrementFailures(Long userId) {
         try {
-            String key = failKey(userId);
-            Long failures = redisOperationsService.increment(key);
-            long current = failures == null ? 0L : failures;
-            if (current == 1L) {
-                // 只在首次计数时设置 TTL，避免每次失败都重置过期时间。
-                redisOperationsService.expire(key, failureTtl);
+            Long failures = redisOperationsService.increment(failKey(userId), failureTtl);
+            if (failures == null) {
+                // 未拿到计数就无法判断是否超限，按不可用处理而不是放行。
+                throw new BusinessException(
+                        CommonErrorCode.SERVICE_UNAVAILABLE,
+                        "支付密码校验暂时不可用，请稍后重试"
+                );
             }
-            return current;
+            return failures;
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             log.error("累计支付密码失败次数失败：userId={}", userId, exception);
             throw new BusinessException(

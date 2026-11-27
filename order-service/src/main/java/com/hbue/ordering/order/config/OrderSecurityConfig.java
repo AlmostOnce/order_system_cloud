@@ -1,7 +1,7 @@
 package com.hbue.ordering.order.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.order.security.OrderAccessDeniedHandler;
 import com.hbue.ordering.order.security.OrderAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,12 +14,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -61,7 +56,7 @@ public class OrderSecurityConfig {
      * 创建订单服务安全配置。
      *
      * @param authenticationEntryPoint 未认证请求处理器
-     * @param accessDeniedHandler 无权限请求处理器
+     * @param accessDeniedHandler      无权限请求处理器
      */
     public OrderSecurityConfig(
             OrderAuthenticationEntryPoint authenticationEntryPoint,
@@ -128,6 +123,11 @@ public class OrderSecurityConfig {
                         .requestMatchers("/internal/orders/**")
                         .permitAll()
 
+                        // 账号注销阻断查询同属服务间调用，由共享内部令牌校验，
+                        // 不依赖用户 JWT（用户此时可能已进入注销冷静期）。
+                        .requestMatchers("/internal/users/**")
+                        .permitAll()
+
                         // 其他接口必须携带有效 JWT。
                         .anyRequest()
                         .authenticated()
@@ -173,10 +173,10 @@ public class OrderSecurityConfig {
     /**
      * 创建 JWT 解码器。
      *
-     * @param publicKeyResource RSA 公钥资源
-     * @param issuer JWT 签发方
+     * @param publicKeyResource      RSA 公钥资源
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作组件
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      * @throws IllegalStateException 读取 RSA 公钥资源发生 I/O 错误时抛出，避免服务以无验证状态启动
      */
@@ -233,10 +233,10 @@ public class OrderSecurityConfig {
     /**
      * 解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作组件
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过校验的 JWT
      * @throws JwtException JWT 无效、已注销或黑名单状态无法确认时抛出
      */

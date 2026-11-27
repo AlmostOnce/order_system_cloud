@@ -16,7 +16,9 @@ import lombok.Data;
 @Data
 public class OrderStatusUpdateRequest {
 
-    /** 希望推进到的目标状态，使用 OrderStatus 枚举名称。 */
+    /**
+     * 希望推进到的目标状态，使用 OrderStatus 枚举名称。
+     */
     @NotNull(message = "订单目标状态不能为空")
     private OrderStatus status;
 }

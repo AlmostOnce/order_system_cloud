@@ -15,6 +15,11 @@ import com.hbue.ordering.user.vo.UserBalanceVO;
  * @date 2026-10-14
  */
 public interface UserBalanceService {
+    /**
+     * 与扣款同一持久屏障互斥；返回 PAID 或 CLOSED，异常不能当作未扣款。
+     */
+    String closeSettlement(Long userId, com.hbue.ordering.user.api.dto.BalanceCloseCommand command);
+
 
     /**
      * 查询本人余额与支付密码设置状态。
@@ -31,7 +36,7 @@ public interface UserBalanceService {
      * <p>幂等由三重机制保证：调用前的流水存在性检查、{@code balance_records}
      * 唯一键冲突、以及条件扣款的受影响行数。同一业务单据重复提交只扣一次。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param command 余额扣款命令
      * @return 扣款结果
      * @throws com.hbue.ordering.common.core.exception.BusinessException 参数无效、支付密码错误、账户不可用或余额不足时抛出

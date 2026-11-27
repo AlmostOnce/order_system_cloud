@@ -22,17 +22,9 @@ import org.springframework.dao.DuplicateKeyException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * 余额扣款业务测试：正常扣款记账、业务单据幂等重放、
@@ -55,6 +47,8 @@ class UserBalanceServiceImplTest {
     @Mock
     private PayPasswordService payPasswordService;
 
+    @Mock
+    private com.hbue.ordering.user.mapper.BalanceSettlementGuardMapper settlementGuard;
     private UserBalanceService userBalanceService;
 
     @BeforeEach
@@ -62,8 +56,12 @@ class UserBalanceServiceImplTest {
         userBalanceService = new UserBalanceServiceImpl(
                 userMapper,
                 balanceRecordMapper,
-                payPasswordService
+                payPasswordService, settlementGuard
         );
+        var guard = new com.hbue.ordering.user.model.BalanceSettlementGuardDO();
+        guard.setAmount(AMOUNT);
+        guard.setClosed(0);
+        org.mockito.Mockito.lenient().when(settlementGuard.lock(USER_ID, BIZ_TYPE, BIZ_REF)).thenReturn(guard);
     }
 
     // ---------- 扣款 ----------
@@ -75,7 +73,7 @@ class UserBalanceServiceImplTest {
         when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
                 .thenReturn(1);
         when(userMapper.deductBalance(USER_ID, AMOUNT)).thenReturn(1);
-        when(userMapper.selectBalanceById(USER_ID)).thenReturn(user("81.50"));
+        when(userMapper.selectBalanceForUpdate(USER_ID)).thenReturn(user("81.50"));
 
         UserBalanceDeductResultVO result =
                 userBalanceService.deduct(USER_ID, command(AMOUNT));
@@ -86,6 +84,8 @@ class UserBalanceServiceImplTest {
         assertFalse(result.getIdempotent());
         verify(payPasswordService).verifyPayPassword(USER_ID, "pay-pass-123456");
         verify(balanceRecordMapper).insert(any(BalanceRecordDO.class));
+        // 扣后余额必须用加锁当前读取，避免并发下写出偏高的 balance_after。
+        verify(userMapper).selectBalanceForUpdate(USER_ID);
         verify(balanceRecordMapper).updateBalanceAfter(
                 any(), eq(new BigDecimal("81.50"))
         );
@@ -111,17 +111,41 @@ class UserBalanceServiceImplTest {
     @Test
     void shouldTreatDuplicateKeyAsIdempotentReplay() {
         when(balanceRecordMapper.selectOne(any(Wrapper.class)))
-                .thenReturn(null)
-                .thenReturn(record("81.50"));
+                .thenReturn(null);
         when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
                 .thenThrow(new DuplicateKeyException(
                         "uk_balance_records_user_biz"
                 ));
+        // 冲突后按加锁当前读回查：真实 MySQL 下快照读看不到对端已提交的流水。
+        when(balanceRecordMapper.selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF))
+                .thenReturn(record("81.50"));
 
         UserBalanceDeductResultVO result =
                 userBalanceService.deduct(USER_ID, command(AMOUNT));
 
         assertTrue(result.getIdempotent());
+        verify(userMapper, never()).deductBalance(any(), any());
+        // 冲突后的回查必须走加锁当前读：真实 MySQL 的普通快照读看不到对端在本事务快照之后提交的流水。
+        verify(balanceRecordMapper).selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF);
+    }
+
+    /**
+     * 唯一键冲突后当前读仍查不到业务流水，说明不是同号重放（例如主键等其它约束冲突），
+     * 必须把原始异常抛出触发回滚，不能伪装成幂等成功。
+     */
+    @Test
+    void shouldRethrowDuplicateKeyWhenCurrentReadStillMissing() {
+        when(balanceRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
+                .thenThrow(new DuplicateKeyException(
+                        "uk_balance_records_user_biz"
+                ));
+        when(balanceRecordMapper.selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF))
+                .thenReturn(null);
+
+        assertThrows(DuplicateKeyException.class,
+                () -> userBalanceService.deduct(USER_ID, command(AMOUNT)));
+
         verify(userMapper, never()).deductBalance(any(), any());
     }
 
@@ -239,5 +263,35 @@ class UserBalanceServiceImplTest {
         record.setBizRef(BIZ_REF);
         record.setCreatedAt(LocalDateTime.now());
         return record;
+    }
+
+    @Test
+    void closedSettlementRejectsLateDeductionWithoutBalanceWrite() {
+        var guard = new com.hbue.ordering.user.model.BalanceSettlementGuardDO();
+        guard.setAmount(AMOUNT);
+        guard.setClosed(1);
+        when(settlementGuard.lock(USER_ID, BIZ_TYPE, BIZ_REF)).thenReturn(guard);
+        assertThrows(BusinessException.class, () -> userBalanceService.deduct(USER_ID, command(AMOUNT)));
+        verify(userMapper, never()).deductBalance(anyLong(), any());
+        verify(balanceRecordMapper, never()).insert(any(BalanceRecordDO.class));
+    }
+
+    @Test
+    void closeWithoutLedgerPreventsFutureDeduction() {
+        when(balanceRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        assertEquals("CLOSED", userBalanceService.closeSettlement(USER_ID,
+                new com.hbue.ordering.user.api.dto.BalanceCloseCommand(BIZ_TYPE, BIZ_REF, AMOUNT)));
+        verify(settlementGuard).close(USER_ID, BIZ_TYPE, BIZ_REF);
+        verify(userMapper, never()).deductBalance(anyLong(), any());
+    }
+
+    @Test
+    void closePreservesAlreadyCommittedPaymentFact() {
+        var record = new BalanceRecordDO();
+        record.setAmount(AMOUNT);
+        when(balanceRecordMapper.selectOne(any(Wrapper.class))).thenReturn(record);
+        assertEquals("PAID", userBalanceService.closeSettlement(USER_ID,
+                new com.hbue.ordering.user.api.dto.BalanceCloseCommand(BIZ_TYPE, BIZ_REF, AMOUNT)));
+        verify(settlementGuard, never()).close(anyLong(), anyString(), anyString());
     }
 }

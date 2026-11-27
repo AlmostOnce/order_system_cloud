@@ -72,7 +72,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      * 创建登录接口 IP 限流过滤器。
      *
      * @param redisRateLimiter Redis 令牌桶限流器
-     * @param objectMapper JSON 序列化工具
+     * @param objectMapper     JSON 序列化工具
      */
     public LoginRateLimitGlobalFilter(
             RedisRateLimiter redisRateLimiter,
@@ -86,7 +86,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      * 对登录接口执行 Redis 令牌桶限流。
      *
      * @param exchange 当前请求和响应交换对象
-     * @param chain Gateway 过滤器链
+     * @param chain    Gateway 过滤器链
      * @return 当前请求的响应式处理结果；限流通过后继续过滤器链，拒绝或依赖不可用时写入错误响应
      */
     @Override
@@ -146,8 +146,8 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
         // 限流只作用于精确登录路径的 POST 请求。
         return HttpMethod.POST.equals(exchange.getRequest().getMethod())
                 && LOGIN_PATH.equals(
-                        exchange.getRequest().getURI().getRawPath()
-                );
+                exchange.getRequest().getURI().getRawPath()
+        );
     }
 
     /**
@@ -174,8 +174,8 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
     /**
      * 根据 Redis 令牌桶判定结果继续转发或返回 HTTP 429。
      *
-     * @param exchange 当前请求和响应交换对象
-     * @param chain Gateway 过滤器链
+     * @param exchange          当前请求和响应交换对象
+     * @param chain             Gateway 过滤器链
      * @param rateLimitResponse Redis 限流判定结果
      * @return 当前请求的响应式处理结果
      */
@@ -208,8 +208,8 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      * 在进入下游 Gateway 链之前处理限流结果、异常和空结果。
      *
      * @param exchange 当前请求和响应交换对象
-     * @param chain Gateway 过滤器链
-     * @param signal Redis 限流结果信号
+     * @param chain    Gateway 过滤器链
+     * @param signal   Redis 限流结果信号
      * @return 当前请求的响应式处理结果
      */
     private Mono<Void> handleRateLimitSignal(
@@ -248,7 +248,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
      * 将 Redis 限流器返回的响应头复制到 Gateway 响应。
      *
      * @param response Gateway HTTP 响应
-     * @param headers Redis 限流器响应头
+     * @param headers  Redis 限流器响应头
      */
     private void copyRateLimitHeaders(
             ServerHttpResponse response,
@@ -263,7 +263,7 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
     /**
      * 记录 Redis 限流异常并以 HTTP 503 拒绝登录请求。
      *
-     * @param exchange 当前请求和响应交换对象
+     * @param exchange  当前请求和响应交换对象
      * @param exception Redis 限流异常
      * @return 统一服务不可用响应
      */
@@ -284,10 +284,10 @@ public class LoginRateLimitGlobalFilter implements GlobalFilter, Ordered {
     /**
      * 写入项目统一格式的失败响应。
      *
-     * @param exchange 当前请求和响应交换对象
-     * @param status HTTP 状态码
+     * @param exchange  当前请求和响应交换对象
+     * @param status    HTTP 状态码
      * @param errorCode 项目错误码
-     * @param message 面向调用方的提示信息
+     * @param message   面向调用方的提示信息
      * @return 响应写入完成信号；JSON 序列化失败时返回错误信号
      */
     private Mono<Void> writeFailure(

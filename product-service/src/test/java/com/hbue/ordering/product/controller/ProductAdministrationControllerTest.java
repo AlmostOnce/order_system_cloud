@@ -14,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 class ProductAdministrationControllerTest {
 
-    /** 管理接口必须整体限制为档口负责人与餐厅经理角色。 */
+    /**
+     * 管理接口必须整体限制为档口负责人与餐厅经理角色。
+     */
     @Test
     void shouldRestrictAllAdministrationEndpointsToBusinessRoles() {
         PreAuthorize authorization = ProductAdministrationController.class

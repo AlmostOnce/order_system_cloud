@@ -14,6 +14,7 @@ import org.springframework.cloud.openfeign.FallbackFactory;
 public class OrderServiceClientFallbackFactory implements FallbackFactory<OrderServiceClient> {
     /**
      * 根据本次调用失败创建安全的只读降级响应。
+     *
      * @param cause 网络、HTTP 或 Sentinel 阻断异常
      * @return 每次读取均返回明确失败状态的客户端
      */

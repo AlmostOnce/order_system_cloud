@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 
 WORKDIR /workspace
 
@@ -11,7 +11,7 @@ COPY gateway-service/src ./gateway-service/src
 
 RUN mvn -B -ntp -f gateway-service/pom.xml clean package -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 

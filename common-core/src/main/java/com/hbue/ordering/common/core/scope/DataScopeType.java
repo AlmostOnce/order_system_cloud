@@ -11,16 +11,24 @@ package com.hbue.ordering.common.core.scope;
  */
 public enum DataScopeType {
 
-    /** 档口范围，scope_ref 为 window_id。 */
+    /**
+     * 档口范围，scope_ref 为 window_id。
+     */
     WINDOW("WINDOW"),
 
-    /** 餐厅范围，scope_ref 为 restaurant_id。 */
+    /**
+     * 餐厅范围，scope_ref 为 restaurant_id。
+     */
     RESTAURANT("RESTAURANT"),
 
-    /** 全平台范围，scope_ref 固定为 0。 */
+    /**
+     * 全平台范围，scope_ref 固定为 0。
+     */
     PLATFORM("PLATFORM");
 
-    /** 数据库中保存的范围类型编码。 */
+    /**
+     * 数据库中保存的范围类型编码。
+     */
     private final String code;
 
     /**

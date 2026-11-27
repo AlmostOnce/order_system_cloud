@@ -24,45 +24,97 @@ import java.util.Objects;
  * @date 2026-09-28
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @ToString
 public class OrderDetailVO {
 
-    /** 订单主键。 */
+    /**
+     * 服务端毫秒时间戳；客户端仅用于显示，支付许可由服务端判定。
+     */
+    private Long paymentExpiresAt;
+    private Long serverTime;
+
+    /**
+     * 订单主键。
+     */
     private Long orderId;
 
-    /** 订单编号。 */
+    /**
+     * 订单编号。
+     */
     private String orderNo;
 
-    /** 用户 ID。 */
+    /**
+     * 用户 ID。
+     */
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Long userId;
 
-    /** 用户名。 */
+    /**
+     * 用户名。
+     */
     private String username;
 
-    /** 窗口 ID。 */
+    /**
+     * 窗口 ID。
+     */
     private Long windowId;
 
-    /** 服务端计算的订单总金额。 */
+    /**
+     * 商品服务提供的店铺名称；历史订单也可展示停用店铺。
+     */
+    private String windowName;
+
+    /**
+     * 服务端计算的订单总金额。
+     */
     private BigDecimal totalAmount;
 
-    /** 订单状态。 */
+    /**
+     * 下单时保存的优惠券名称；无券订单为空。
+     */
+    private String couponTitle;
+
+    /**
+     * 订单优惠总额快照；旧订单或无券订单为零。
+     */
+    private BigDecimal discountAmount;
+
+    /**
+     * 用户实际应付金额；支付端以该快照为准。
+     */
+    private BigDecimal payableAmount;
+
+    /**
+     * 订单状态。
+     */
     private String status;
 
-    /** 订单备注。 */
+    /**
+     * 订单备注。
+     */
     private String remark;
 
-    /** 取餐码。 */
+    /**
+     * 取餐码。
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @lombok.ToString.Exclude
     private String pickupCode;
 
-    /** 订单创建时间。 */
+    /**
+     * 订单创建时间。
+     */
     private LocalDateTime createdAt;
 
-    /** 订单更新时间。 */
+    /**
+     * 订单更新时间。
+     */
     private LocalDateTime updatedAt;
 
-    /** 下单时保存的菜品明细快照；列表摘要不查询此字段。 */
+    /**
+     * 下单时保存的菜品明细快照；列表摘要不查询此字段。
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<OrderItemVO> items;
 
@@ -80,7 +132,7 @@ public class OrderDetailVO {
     /**
      * 从订单对象和明细快照构造详情视图。
      *
-     * @param orderDO 订单持久化对象
+     * @param orderDO    订单持久化对象
      * @param orderItems 订单明细快照
      * @return 订单详情视图
      * @throws NullPointerException {@code orderDO} 为 null 时抛出
@@ -95,7 +147,7 @@ public class OrderDetailVO {
     /**
      * 从订单对象和用户信息构造订单视图。
      *
-     * @param orderDO 订单持久化对象
+     * @param orderDO     订单持久化对象
      * @param userBasicVO 用户基础信息
      * @return 订单视图
      * @throws NullPointerException {@code orderDO} 为 null 时抛出
@@ -110,9 +162,9 @@ public class OrderDetailVO {
     /**
      * 从订单、用户和明细数据构造完整详情视图。
      *
-     * @param orderDO 订单持久化对象
+     * @param orderDO     订单持久化对象
      * @param userBasicVO 用户基础信息
-     * @param orderItems 订单明细快照
+     * @param orderItems  订单明细快照
      * @return 订单详情视图
      * @throws NullPointerException {@code orderDO} 为 null 时抛出
      */
@@ -132,14 +184,18 @@ public class OrderDetailVO {
 
         return OrderDetailVO.builder()
                 .orderId(order.getOrderId())
+                .paymentExpiresAt(com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(order))
+                .serverTime(System.currentTimeMillis())
                 .orderNo(order.getOrderNo())
                 .userId(order.getUserId())
                 .username(userBasicVO == null ? null : userBasicVO.getUsername())
                 .windowId(order.getWindowId())
                 .totalAmount(order.getTotalAmount())
+                .couponTitle(order.getCouponTitleSnapshot())
+                .discountAmount(order.getDiscountAmount() == null ? BigDecimal.ZERO : order.getDiscountAmount())
+                .payableAmount(order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount())
                 .status(order.getStatus())
                 .remark(order.getRemark())
-                .pickupCode(order.getPickupCode())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .items(items)

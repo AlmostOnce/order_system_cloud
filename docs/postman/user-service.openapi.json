@@ -463,6 +463,56 @@
           }
         }
       }
+    },
+    "/internal/users/{userId}/balance/refund": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "refundUserBalance",
+        "description": "服务身份、真实扣款及累计金额校验后幂等退款。",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-Internal-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseString"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceRefundCommand"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -769,6 +819,28 @@
               "type": "integer",
               "format": "int64"
             }
+          }
+        }
+      },
+      "BalanceRefundCommand": {
+        "type": "object",
+        "required": [
+          "paymentNo",
+          "refundNo",
+          "amount"
+        ],
+        "properties": {
+          "refundNo": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "paymentNo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
           }
         }
       }

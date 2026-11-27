@@ -9,12 +9,12 @@ const context = vm.createContext({});
 vm.runInContext(script, context);
 const key = '0123456789abcdef0123456789abcdef';
 const convert = document => Array.from(context.keys(document));
-assert.deepEqual(convert({ images: ['/api/files/' + key.toUpperCase() + '/content'] }), [key]);
-assert.deepEqual(convert({ images: ['http://localhost:9090/api/files/' + key + '/content'] }), [key]);
-assert.deepEqual(convert({ imageFileKeys: [key] }), [key]);
-assert.deepEqual(convert({ images: [], imageFileKeys: [] }), []);
-for (const document of [{ images: null }, {}, { images: ['https://example.test/photo.jpg'] },
-    { imageFileKeys: ['invalid'] }, { images: [], imageFileKeys: [key] }]) {
+assert.deepEqual(convert({images: ['/api/files/' + key.toUpperCase() + '/content']}), [key]);
+assert.deepEqual(convert({images: ['http://localhost:9090/api/files/' + key + '/content']}), [key]);
+assert.deepEqual(convert({imageFileKeys: [key]}), [key]);
+assert.deepEqual(convert({images: [], imageFileKeys: []}), []);
+for (const document of [{images: null}, {}, {images: ['https://example.test/photo.jpg']},
+    {imageFileKeys: ['invalid']}, {images: [], imageFileKeys: [key]}]) {
     assert.throws(() => convert(document));
 }
 console.log('Mongo image migration conversion passed: managed URLs, normalized keys, reruns, conflicts and unknown URL rejection.');

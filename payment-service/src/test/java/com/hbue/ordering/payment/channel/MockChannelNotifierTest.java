@@ -17,13 +17,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class MockChannelNotifierTest {
 
-    /** 记录每次发送的签名，用于断言每次重试独立签名。 */
+    /**
+     * 记录每次发送的签名，用于断言每次重试独立签名。
+     */
     private final List<String> postedSignatures = new ArrayList<>();
 
-    /** 记录发送次数。 */
+    /**
+     * 记录发送次数。
+     */
     private int postCount;
 
-    /** 桩响应：按次数依次返回。 */
+    /**
+     * 桩响应：按次数依次返回。
+     */
     private final List<MockChannelNotifier.NotifyHttpResponse> responses =
             new ArrayList<>();
 
@@ -103,7 +109,9 @@ class MockChannelNotifierTest {
      */
     private class StubChannelNotifier extends MockChannelNotifier {
 
-        /** 最近一次发送的请求。 */
+        /**
+         * 最近一次发送的请求。
+         */
         private ChannelNotifyRequest lastRequest;
 
         StubChannelNotifier(

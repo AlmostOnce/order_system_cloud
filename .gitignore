@@ -2,6 +2,7 @@ target/
 .env
 .env.*
 !.env.example
+.local/skywalking-agent/
 user-service/email-local.properties
 docker-compose.override.yml
 *.log

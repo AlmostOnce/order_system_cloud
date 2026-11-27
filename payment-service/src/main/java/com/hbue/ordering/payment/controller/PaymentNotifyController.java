@@ -5,11 +5,7 @@ import com.hbue.ordering.payment.dto.request.ChannelNotifyRequest;
 import com.hbue.ordering.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 支付渠道异步通知入口。
@@ -27,10 +23,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/payments")
 public class PaymentNotifyController {
 
-    /** 渠道签名请求头名称。 */
+    /**
+     * 渠道签名请求头名称。
+     */
     private static final String SIGNATURE_HEADER = "X-Channel-Signature";
 
-    /** 支付业务服务。 */
+    /**
+     * 支付业务服务。
+     */
     private final PaymentService paymentService;
 
     /**
@@ -45,7 +45,7 @@ public class PaymentNotifyController {
     /**
      * 接收渠道异步支付结果通知。
      *
-     * @param request 渠道通知请求体
+     * @param request   渠道通知请求体
      * @param signature 渠道侧签名
      * @return 统一响应；COMMON_000 表示已受理，渠道可停止重试
      */

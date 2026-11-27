@@ -24,7 +24,9 @@ import java.security.MessageDigest;
 @Component
 public class InternalScopeTokenVerifier {
 
-    /** 服务间共享密钥。 */
+    /**
+     * 服务间共享密钥。
+     */
     private final String expectedToken;
 
     /**

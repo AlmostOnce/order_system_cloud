@@ -33,37 +33,53 @@ import java.util.concurrent.Executors;
 @Component
 public class MockChannelNotifier {
 
-    /** 日志记录器。 */
+    /**
+     * 日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(
             MockChannelNotifier.class
     );
 
-    /** 渠道侧最大重试次数（与真实渠道的异步通知重试语义一致）。 */
+    /**
+     * 渠道侧最大重试次数（与真实渠道的异步通知重试语义一致）。
+     */
     private static final int MAX_RETRY_COUNT = 3;
 
-    /** 重试间隔毫秒数（固定退避即可）。 */
+    /**
+     * 重试间隔毫秒数（固定退避即可）。
+     */
     private static final long RETRY_INTERVAL_MS = 1_000L;
 
-    /** 渠道通知响应的成功状态码（与 ApiResponse 统一码一致）。 */
+    /**
+     * 渠道通知响应的成功状态码（与 ApiResponse 统一码一致）。
+     */
     private static final String SUCCESS_CODE = "COMMON_000";
 
-    /** JSON 序列化工具。 */
+    /**
+     * JSON 序列化工具。
+     */
     private final ObjectMapper objectMapper;
 
-    /** 渠道配置属性。 */
+    /**
+     * 渠道配置属性。
+     */
     private final PaymentChannelProperties properties;
 
-    /** HTTP 客户端（模拟第三方渠道发起的请求）。 */
+    /**
+     * HTTP 客户端（模拟第三方渠道发起的请求）。
+     */
     private final HttpClient httpClient;
 
-    /** 异步任务执行器（虚拟线程）。 */
+    /**
+     * 异步任务执行器（虚拟线程）。
+     */
     private final ExecutorService notifyExecutor;
 
     /**
      * 创建模拟渠道通知发送器。
      *
      * @param objectMapper JSON 序列化工具
-     * @param properties 渠道配置属性
+     * @param properties   渠道配置属性
      */
     public MockChannelNotifier(
             ObjectMapper objectMapper,
@@ -80,10 +96,10 @@ public class MockChannelNotifier {
     /**
      * 异步发送模拟支付结果通知。
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo      业务支付单号
      * @param channelTradeNo 渠道交易号
-     * @param paidAmount 实收金额原串
-     * @param status 通知结果：SUCCESS 或 FAILED
+     * @param paidAmount     实收金额原串
+     * @param status         通知结果：SUCCESS 或 FAILED
      */
     public void notifyAsync(
             String paymentNo,
@@ -102,10 +118,10 @@ public class MockChannelNotifier {
     /**
      * 同步发送通知并在未收到业务成功确认时固定间隔重试。
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo      业务支付单号
      * @param channelTradeNo 渠道交易号
-     * @param paidAmount 实收金额原串
-     * @param status 通知结果：SUCCESS 或 FAILED
+     * @param paidAmount     实收金额原串
+     * @param status         通知结果：SUCCESS 或 FAILED
      */
     void notifyWithRetry(
             String paymentNo,
@@ -150,7 +166,7 @@ public class MockChannelNotifier {
      *
      * <p>protected 便于单测覆写以模拟渠道侧响应。</p>
      *
-     * @param request 渠道通知请求体
+     * @param request   渠道通知请求体
      * @param signature 请求签名
      * @return 渠道侧响应摘要
      */
@@ -206,7 +222,7 @@ public class MockChannelNotifier {
      * 渠道侧 HTTP 响应摘要，用于判断回调是否已被支付服务业务受理。
      *
      * @param httpStatus HTTP 状态码；发送异常时为 -1
-     * @param code 响应体中的业务状态码；无法解析时为 null
+     * @param code       响应体中的业务状态码；无法解析时为 null
      */
     protected record NotifyHttpResponse(int httpStatus, String code) {
 

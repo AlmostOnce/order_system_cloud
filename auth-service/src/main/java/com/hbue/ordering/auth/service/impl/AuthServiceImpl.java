@@ -1,16 +1,10 @@
 package com.hbue.ordering.auth.service.impl;
 
 import com.hbue.ordering.auth.dto.request.LoginRequest;
-import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.dto.request.RefreshTokenRequest;
+import com.hbue.ordering.auth.dto.request.RegisterRequest;
 import com.hbue.ordering.auth.model.RefreshTokenInfo;
-import com.hbue.ordering.auth.service.AuthService;
-import com.hbue.ordering.auth.service.AccessTokenBlacklistService;
-import com.hbue.ordering.auth.service.CaptchaService;
-import com.hbue.ordering.auth.service.LoginAttemptService;
-import com.hbue.ordering.auth.service.JwtTokenService;
-import com.hbue.ordering.auth.service.RefreshTokenService;
-import com.hbue.ordering.auth.service.RefreshTokenLockService;
+import com.hbue.ordering.auth.service.*;
 import com.hbue.ordering.auth.vo.LoginVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
@@ -18,6 +12,7 @@ import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.dto.UserPasswordVerifyCommand;
 import com.hbue.ordering.user.api.dto.UserRegisterCommand;
+import com.hbue.ordering.user.api.vo.AccountDeletionCancelTokenVO;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +31,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AuthServiceImpl implements AuthService {
+
+    private final com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership;
 
     /**
      * 当前类的日志对象。
@@ -81,13 +78,13 @@ public class AuthServiceImpl implements AuthService {
     /**
      * 创建认证业务服务。
      *
-     * @param userServiceClient 用户服务远程调用客户端
-     * @param loginAttemptService 登录失败计数与账号临时锁定服务
-     * @param captchaService 图片验证码服务
-     * @param jwtTokenService JWT Token 服务
-     * @param refreshTokenService Refresh Token 服务
+     * @param userServiceClient           用户服务远程调用客户端
+     * @param loginAttemptService         登录失败计数与账号临时锁定服务
+     * @param captchaService              图片验证码服务
+     * @param jwtTokenService             JWT Token 服务
+     * @param refreshTokenService         Refresh Token 服务
      * @param accessTokenBlacklistService Access Token 黑名单服务
-     * @param refreshTokenLockService Refresh Token 轮换分布式锁服务
+     * @param refreshTokenLockService     Refresh Token 轮换分布式锁服务
      */
     public AuthServiceImpl(
             UserServiceClient userServiceClient,
@@ -96,8 +93,10 @@ public class AuthServiceImpl implements AuthService {
             JwtTokenService jwtTokenService,
             RefreshTokenService refreshTokenService,
             AccessTokenBlacklistService accessTokenBlacklistService,
-            RefreshTokenLockService refreshTokenLockService
+            RefreshTokenLockService refreshTokenLockService,
+            com.hbue.ordering.auth.service.EmailOwnershipService emailOwnership
     ) {
+        this.emailOwnership = emailOwnership;
         this.userServiceClient = userServiceClient;
         this.loginAttemptService = loginAttemptService;
         this.captchaService = captchaService;
@@ -186,18 +185,33 @@ public class AuthServiceImpl implements AuthService {
         // 凭据校验成功后清除历史失败和锁定状态，新的失败窗口从零开始。
         loginAttemptService.recordSuccess(request.getAccount().trim().toLowerCase(java.util.Locale.ROOT));
 
+        if (!userBasicVO.isEmailVerified()) {
+            var challenge = emailOwnership.challenge(userBasicVO);
+            return LoginVO.builder().emailVerificationRequired(true)
+                    .emailVerificationToken(challenge.authorizationToken()).emailVerificationExpiresIn(challenge.expiresIn())
+                    .roleCode(challenge.roleCode()).build();
+        }
+
+        // 注销冷静期内不签发任何正常令牌，只返回生效时间和一次性撤回令牌。
+        // 撤回令牌由用户服务签发，签发失败时直接报错，不能退化为正常登录。
+        if (userBasicVO.isDeletionPending()) {
+            return buildDeletionPendingLogin(userBasicVO);
+        }
+
         // 使用 RSA 私钥签发包含角色信息的 JWT。
         String accessToken = jwtTokenService.createAccessToken(
                 userBasicVO.getUserUuid(),
                 userBasicVO.getUsername(),
-                userBasicVO.getRoleCode()
+                userBasicVO.getRoleCode(),
+                userBasicVO.getCredentialVersion()
         );
 
         // 将 Refresh Token 保存到 Redis，供后续换取新的访问 Token。
         String refreshToken = refreshTokenService.createRefreshToken(
                 userBasicVO.getUserId(),
                 userBasicVO.getUsername(),
-                userBasicVO.getRoleCode()
+                userBasicVO.getRoleCode(),
+                userBasicVO.getCredentialVersion()
         );
 
         // 返回登录 Token。
@@ -211,6 +225,38 @@ public class AuthServiceImpl implements AuthService {
                 .refreshExpiresIn(
                         refreshTokenService.getRefreshTokenTtlSeconds()
                 )
+                .build();
+    }
+
+    /**
+     * 构造注销冷静期的登录响应。
+     *
+     * <p>只返回待注销状态、生效时间和一次性撤回令牌，绝不签发访问令牌或刷新令牌。
+     * 无法获取撤回入口时抛出服务不可用，避免客户端误以为可以正常使用账号；
+     * 冷静期已过但尚未完成注销时允许撤回令牌为空。</p>
+     *
+     * @param userBasicVO 已完成密码校验的用户身份
+     * @return 待注销登录响应
+     */
+    private LoginVO buildDeletionPendingLogin(UserBasicVO userBasicVO) {
+        ApiResponse<AccountDeletionCancelTokenVO> cancelResponse =
+                userServiceClient.issueDeletionCancelToken(userBasicVO.getUserId());
+        if (cancelResponse == null || !CommonErrorCode.SUCCESS.code().equals(cancelResponse.getCode())
+                || cancelResponse.getData() == null) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法获取注销撤回入口，请稍后重试");
+        }
+        AccountDeletionCancelTokenVO cancelToken = cancelResponse.getData();
+        // 冷静期已过但到期任务尚未处理时，用户服务返回空令牌；此时仍然返回待注销状态，
+        // 客户端只展示进度而不提供撤回按钮，不能因为无法撤回就拒绝登录。
+        boolean cancelable = cancelToken.getCancelToken() != null
+                && !cancelToken.getCancelToken().isBlank();
+        return LoginVO.builder()
+                .deletionPending(true)
+                .deletionEffectiveAt(userBasicVO.getDeletionEffectiveAt() == null
+                        ? null : userBasicVO.getDeletionEffectiveAt().toString())
+                .deletionCancelToken(cancelable ? cancelToken.getCancelToken() : null)
+                .deletionCancelExpiresIn(cancelable ? cancelToken.getExpiresIn() : 0L)
+                .roleCode(userBasicVO.getRoleCode())
                 .build();
     }
 
@@ -267,18 +313,46 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "用户身份不可用，请重新登录");
         }
         UserBasicVO currentIdentity = identityResponse.getData();
+        if (!currentIdentity.isEmailVerified()) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "邮箱尚未验证，请重新登录完成邮箱验证");
+        }
+        if (currentIdentity.isDeletionPending()) {
+            // 注销冷静期内旧刷新令牌一律失效，用户只能重新登录获取撤回入口。
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "账号已申请注销，请重新登录处理");
+        }
+        if (refreshTokenInfo.getCredentialVersion() != currentIdentity.getCredentialVersion()) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录密码已重置，请重新登录");
+        }
+
+        // 本次轮换必须沿用会话首次签发时间；旧版本令牌没有该字段时按当前时间起算，避免升级即失效。
+        long now = System.currentTimeMillis();
+        long sessionStartMillis = refreshTokenInfo.getIssuedAtMillis() > 0
+                ? refreshTokenInfo.getIssuedAtMillis() : now;
+        long maxLifetimeSeconds = refreshTokenService.getRefreshTokenMaxLifetimeSeconds();
+        // 超过绝对会话期限必须重新登录：即使单枚令牌尚未到期，也不能让轮换无限延长登录状态。
+        if (now - sessionStartMillis >= maxLifetimeSeconds * 1000L) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录状态已超过最长有效期，请重新登录");
+        }
+
         // 使用用户信息签发新的访问 Token。
         String accessToken = jwtTokenService.createAccessToken(
                 currentIdentity.getUserUuid(),
                 currentIdentity.getUsername(),
-                currentIdentity.getRoleCode()
+                currentIdentity.getRoleCode(),
+                currentIdentity.getCredentialVersion()
         );
 
-        // 创建新的 Refresh Token，实行刷新令牌轮换。
+        // 创建新的 Refresh Token，实行刷新令牌轮换，并继承会话首次签发时间以受绝对期限约束。
         String newRefreshToken = refreshTokenService.createRefreshToken(
                 refreshTokenInfo.getUserId(),
                 currentIdentity.getUsername(),
-                currentIdentity.getRoleCode()
+                currentIdentity.getRoleCode(),
+                currentIdentity.getCredentialVersion(),
+                sessionStartMillis
         );
 
         try {
@@ -310,9 +384,25 @@ public class AuthServiceImpl implements AuthService {
                         jwtTokenService.getAccessTokenTtlSeconds()
                 )
                 .refreshExpiresIn(
-                        refreshTokenService.getRefreshTokenTtlSeconds()
+                        minimalRefreshLifetimeSeconds(sessionStartMillis, maxLifetimeSeconds)
                 )
                 .build();
+    }
+
+    /**
+     * 计算本次刷新后 Refresh Token 的剩余有效秒数。
+     *
+     * <p>轮换不能让会话超过绝对期限，因此取"单次有效期"与"会话剩余时间"的较小值；
+     * 客户端据此决定何时提示用户重新登录，避免把绝对到期误报成完整 30 天。</p>
+     *
+     * @param sessionStartMillis 会话首次签发时间
+     * @param maxLifetimeSeconds 会话绝对有效期
+     * @return 至少为 1 的剩余秒数
+     */
+    private long minimalRefreshLifetimeSeconds(long sessionStartMillis, long maxLifetimeSeconds) {
+        long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - sessionStartMillis) / 1000L);
+        long absoluteRemaining = maxLifetimeSeconds - elapsedSeconds;
+        return Math.max(1L, Math.min(refreshTokenService.getRefreshTokenTtlSeconds(), absoluteRemaining));
     }
 
     /**
@@ -333,7 +423,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * 用户注销。
      *
-     * @param request 注销请求，包含需要撤销的 Refresh Token
+     * @param request     注销请求，包含需要撤销的 Refresh Token
      * @param accessToken 当前已通过认证的 Access Token
      * @throws BusinessException Access Token 不完整、Refresh Token 属于其他用户或 Redis 撤销失败时抛出
      */
@@ -400,6 +490,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 设置注册密码。
         command.setPassword(request.getPassword());
+        command.setEmailVerificationToken(request.getEmailVerificationToken());
 
         // 调用用户服务完成注册。
         ApiResponse<UserBasicVO> response =

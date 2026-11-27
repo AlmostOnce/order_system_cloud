@@ -14,6 +14,7 @@ import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
+import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,19 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ProductMenuServiceImplTest {
@@ -51,6 +42,12 @@ class ProductMenuServiceImplTest {
 
     @Mock
     private ProductCategoryMapper productCategoryMapper;
+
+    /**
+     * 规格服务独立mock，原有菜单和核价用例默认无规格配置。
+     */
+    @Mock
+    private ProductSpecificationService specifications;
 
     @Mock
     private ProductMapper productMapper;
@@ -249,7 +246,8 @@ class ProductMenuServiceImplTest {
     void shouldMarkAbsentWhenLockAcquiredAndWindowMissing() {
         DistributedLockService.LockHandle lockHandle =
                 mock(DistributedLockService.LockHandle.class);
-        when(distributedLockService.tryAcquire(anyString())).thenReturn(lockHandle);
+        // 测试真实菜单回源分支时模拟服务使用的窗口锁及其等待/租约参数。
+        when(distributedLockService.tryAcquire(anyString(), anyLong(), anyLong())).thenReturn(lockHandle);
         when(diningWindowMapper.selectById(3L)).thenReturn(null);
 
         BusinessException exception = assertThrows(
@@ -261,6 +259,29 @@ class ProductMenuServiceImplTest {
         verify(menuCacheService).saveWindowMenuAbsent(3L);
     }
 
+    @Test
+    void shouldRejectInvalidImageBatchBeforeQuery() {
+        var service = service();
+        assertThrows(BusinessException.class, () -> service.getProductImages(null));
+        assertThrows(BusinessException.class, () -> service.getProductImages(List.of()));
+        assertThrows(BusinessException.class, () -> service.getProductImages(List.of(0L)));
+        assertThrows(BusinessException.class, () -> service.getProductImages(java.util.Collections.nCopies(51, 1L)));
+        verify(productMapper, never()).selectPublicImageProducts(any());
+    }
+
+    @Test
+    void shouldReadImageBatchOnceAndDeduplicateIds() {
+        var product = new ProductDO();
+        product.setProductId(7L);
+        product.setWindowId(2L);
+        when(productMapper.selectPublicImageProducts(List.of(7L))).thenReturn(List.of(product));
+        var images = service().getProductImages(List.of(7L, 7L));
+        assertEquals(1, images.size());
+        assertEquals(7L, images.getFirst().productId());
+        assertEquals(2L, images.getFirst().windowId());
+        verify(productMapper).selectPublicImageProducts(List.of(7L));
+    }
+
     private ProductMenuServiceImpl service() {
         return new ProductMenuServiceImpl(
                 diningWindowMapper,
@@ -269,7 +290,8 @@ class ProductMenuServiceImplTest {
                 productMapper,
                 menuCacheService,
                 bloomFilterManager,
-                distributedLockService
+                distributedLockService,
+                specifications
         );
     }
 

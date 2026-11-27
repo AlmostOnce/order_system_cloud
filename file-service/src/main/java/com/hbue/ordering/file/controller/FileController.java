@@ -1,7 +1,7 @@
 package com.hbue.ordering.file.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
-import com.hbue.ordering.file.service.FileContent;
+import com.hbue.ordering.file.model.FileContent;
 import com.hbue.ordering.file.service.FileStorageService;
 import com.hbue.ordering.file.vo.FileMetaVO;
 import com.hbue.ordering.file.vo.FileUploadVO;
@@ -11,13 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -37,13 +31,19 @@ import java.util.List;
 @RequestMapping("/files")
 public class FileController {
 
-    /** 系统管理员角色编码。 */
+    /**
+     * 系统管理员角色编码。
+     */
     private static final String ROLE_SYSTEM_ADMIN = "SYSTEM_ADMIN";
 
-    /** 内容响应缓存时长（秒）。 */
+    /**
+     * 内容响应缓存时长（秒）。
+     */
     private static final long CONTENT_CACHE_SECONDS = 3600L;
 
-    /** 文件存储服务。 */
+    /**
+     * 文件存储服务。
+     */
     private final FileStorageService fileStorageService;
 
     /**
@@ -58,10 +58,10 @@ public class FileController {
     /**
      * 上传文件并登记元数据。
      *
-     * @param jwt 当前登录用户 JWT
-     * @param file 上传的文件
+     * @param jwt     当前登录用户 JWT
+     * @param file    上传的文件
      * @param bizType 业务类型，可选
-     * @param bizRef 关联业务主键，可选
+     * @param bizRef  关联业务主键，可选
      * @return 上传结果
      */
     @PostMapping("/upload")
@@ -132,7 +132,7 @@ public class FileController {
     /**
      * 逻辑删除文件记录。
      *
-     * @param jwt 当前登录用户 JWT
+     * @param jwt     当前登录用户 JWT
      * @param fileKey 对外文件键
      * @return 空成功响应
      */

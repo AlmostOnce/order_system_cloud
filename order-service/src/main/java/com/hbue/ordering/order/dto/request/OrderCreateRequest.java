@@ -12,8 +12,8 @@ import java.util.List;
 /**
  * 创建订单请求对象。
  *
- * <p>调用方只提交档口、商品 ID、购买数量和备注，不得指定价格或订单总金额；
- * 订单服务会向商品服务取得当前可售状态与价格后自行计算金额。</p>
+ * <p>调用方只提交档口、菜品 ID、规格选项 ID、购买数量和备注，不得指定价格或订单总金额；
+ * 订单服务会向商品服务取得当前可售状态与最终规格价格后自行计算金额。</p>
  *
  * @author order-system
  * @date 2026-09-28
@@ -21,21 +21,35 @@ import java.util.List;
 @Data
 public class OrderCreateRequest {
 
-    /** 每个订单允许提交的最大菜品行数。 */
+    /**
+     * 每个订单允许提交的最大菜品行数。
+     */
     public static final int MAX_ITEM_COUNT = 100;
 
-    /** 订单所属窗口 ID。 */
+    /**
+     * 订单所属窗口 ID。
+     */
     @NotNull(message = "窗口 ID 不能为空")
     @Positive(message = "窗口 ID 必须大于 0")
     private Long windowId;
 
-    /** 订单菜品清单，菜品 ID 不可重复。 */
+    /**
+     * 顾客主动选择的本人持券记录；订单服务只接受券 ID，优惠金额必须由服务端校验计算。
+     */
+    @Positive(message = "用户优惠券 ID 必须大于 0")
+    private Long userCouponId;
+
+    /**
+     * 订单菜品清单；相同菜品可以不同规格分行，相同规格必须合并数量。
+     */
     @NotEmpty(message = "订单至少需要一个菜品")
     @Size(max = MAX_ITEM_COUNT, message = "订单菜品不能超过 100 项")
     @Valid
     private List<OrderItemCreateRequest> items;
 
-    /** 订单备注。 */
+    /**
+     * 订单备注。
+     */
     @Size(max = 255, message = "订单备注不能超过 255 个字符")
     private String remark;
 }

@@ -45,8 +45,8 @@ public class OrderAuthenticationEntryPoint
     /**
      * 处理未认证请求。
      *
-     * @param request HTTP 请求
-     * @param response HTTP 响应
+     * @param request   HTTP 请求
+     * @param response  HTTP 响应
      * @param exception 认证异常
      * @throws IOException 响应写入异常
      */

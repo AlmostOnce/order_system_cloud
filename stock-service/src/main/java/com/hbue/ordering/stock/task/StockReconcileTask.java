@@ -38,23 +38,31 @@ import java.util.List;
 )
 public class StockReconcileTask {
 
-    /** 日志记录器。 */
+    /**
+     * 日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(StockReconcileTask.class);
 
-    /** 库存主表数据访问接口。 */
+    /**
+     * 库存主表数据访问接口。
+     */
     private final StockMapper stockMapper;
 
-    /** 库存流水数据访问接口。 */
+    /**
+     * 库存流水数据访问接口。
+     */
     private final StockFlowMapper stockFlowMapper;
 
-    /** 库存快照 Redis 原子操作组件。 */
+    /**
+     * 库存快照 Redis 原子操作组件。
+     */
     private final StockRedisScript stockRedisScript;
 
     /**
      * 创建库存定时对账任务。
      *
-     * @param stockMapper 库存主表数据访问接口
-     * @param stockFlowMapper 库存流水数据访问接口
+     * @param stockMapper      库存主表数据访问接口
+     * @param stockFlowMapper  库存流水数据访问接口
      * @param stockRedisScript 库存快照 Redis 原子操作组件
      */
     public StockReconcileTask(

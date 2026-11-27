@@ -20,7 +20,7 @@ public interface PayPasswordService {
      * <p>尚未设置时用登录密码做二次确认；已设置时必须提供并校验原支付密码。
      * 支付密码不得与登录密码或原支付密码相同。</p>
      *
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @param request 支付密码设置请求
      * @throws com.hbue.ordering.common.core.exception.BusinessException 登录身份确认失败、原密码错误或新旧密码不符合约束时抛出
      */
@@ -29,7 +29,7 @@ public interface PayPasswordService {
     /**
      * 校验支付密码，失败时累计计数并在超过阈值后锁定。
      *
-     * @param userId 用户 ID
+     * @param userId      用户 ID
      * @param payPassword 支付密码明文
      * @throws com.hbue.ordering.common.core.exception.BusinessException 密码错误、账户锁定、未设置支付密码或 Redis 校验依赖不可用时抛出
      */

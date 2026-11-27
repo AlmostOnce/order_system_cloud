@@ -2,10 +2,12 @@
 # Nacos v3 初始化：创建 nacos/root 管理员 + 发布网关路由配置
 set -e
 NACOS=http://127.0.0.1:9097/nacos
+# Nacos 3.x 将 Console API 放在 8080 端口，状态探测要走宿主机映射的 9098，且不带旧版 /nacos 前缀。
+NACOS_CONSOLE=http://127.0.0.1:9098
 
 echo "== 0. 等待 Nacos 就绪 =="
 for i in $(seq 1 60); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' "$NACOS/v3/console/server/state" || true)
+  code=$(curl -s -o /dev/null -w '%{http_code}' "$NACOS_CONSOLE/v3/console/server/state" || true)
   [ "$code" = "200" ] && break
   sleep 5
 done

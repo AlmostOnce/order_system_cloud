@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 public class FileTypeValidatorTest {
 
-    /** 被测校验器。 */
+    /**
+     * 被测校验器。
+     */
     private final FileTypeValidator validator = new FileTypeValidator();
 
     /**

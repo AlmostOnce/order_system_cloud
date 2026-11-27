@@ -1,7 +1,7 @@
 package com.hbue.ordering.payment.config;
 
-import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.common.redis.RedisOperationsService;
+import com.hbue.ordering.common.web.security.JwtUserIdentity;
 import com.hbue.ordering.payment.security.PaymentAccessDeniedHandler;
 import com.hbue.ordering.payment.security.PaymentAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,12 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.converter.RsaKeyConverters;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwtValidationException;
-import org.springframework.security.oauth2.jwt.JwtValidators;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -46,17 +41,21 @@ import java.util.Objects;
 @EnableMethodSecurity
 public class PaymentSecurityConfig {
 
-    /** 未认证请求处理器。 */
+    /**
+     * 未认证请求处理器。
+     */
     private final PaymentAuthenticationEntryPoint authenticationEntryPoint;
 
-    /** 无权限请求处理器。 */
+    /**
+     * 无权限请求处理器。
+     */
     private final PaymentAccessDeniedHandler accessDeniedHandler;
 
     /**
      * 创建支付服务安全配置。
      *
      * @param authenticationEntryPoint 未认证请求处理器
-     * @param accessDeniedHandler 无权限请求处理器
+     * @param accessDeniedHandler      无权限请求处理器
      */
     public PaymentSecurityConfig(
             PaymentAuthenticationEntryPoint authenticationEntryPoint,
@@ -95,6 +94,10 @@ public class PaymentSecurityConfig {
                         ).permitAll()
                         // 渠道回调入口无用户 JWT，安全由 HMAC 验签保证。
                         .requestMatchers("/internal/payments/notify").permitAll()
+                        .requestMatchers("/internal/payments/orders/*/refund-fact", "/internal/payments/orders/*/refund").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/internal/payments/orders/*/close").permitAll()
+                        // 订单取消失败时撤销关闭意图，与关单一样由内部共享令牌鉴权，不经 Gateway 暴露。
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/internal/payments/orders/*/reopen").permitAll()
                         // 模拟收银台仅 dev 环境启用且不经 Gateway 暴露。
                         .requestMatchers("/mock/**").permitAll()
                         .anyRequest().authenticated())
@@ -125,11 +128,11 @@ public class PaymentSecurityConfig {
      *
      * <p>黑名单状态无法从 Redis 确认时按无效令牌处理，避免 Redis 故障期间继续接受已注销令牌。</p>
      *
-     * @param resourceLoader Spring 资源加载器
-     * @param publicKeyLocation RSA 公钥资源位置
-     * @param issuer JWT 签发方
+     * @param resourceLoader         Spring 资源加载器
+     * @param publicKeyLocation      RSA 公钥资源位置
+     * @param issuer                 JWT 签发方
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix Access Token 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     Access Token 黑名单 Key 前缀
      * @return JWT 解码器
      */
     @Bean
@@ -166,10 +169,10 @@ public class PaymentSecurityConfig {
     /**
      * 解码 JWT 并检查访问令牌黑名单。
      *
-     * @param decoder RSA JWT 解码器
-     * @param token 原始 JWT
+     * @param decoder                RSA JWT 解码器
+     * @param token                  原始 JWT
      * @param redisOperationsService Redis 基础操作服务
-     * @param blacklistKeyPrefix 黑名单 Key 前缀
+     * @param blacklistKeyPrefix     黑名单 Key 前缀
      * @return 已通过校验的 JWT
      */
     private Jwt decodeAndCheckBlacklist(

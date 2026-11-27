@@ -65,9 +65,9 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
      * 创建登录失败保护服务并读取可调整的策略配置。
      *
      * @param redisOperationsService Redis 基础操作组件
-     * @param maxFailures 失败次数阈值，默认 5 次
-     * @param failureWindow 失败次数累计窗口，默认 15 分钟
-     * @param lockDuration 达到阈值后的锁定时长，默认 15 分钟
+     * @param maxFailures            失败次数阈值，默认 5 次
+     * @param failureWindow          失败次数累计窗口，默认 15 分钟
+     * @param lockDuration           达到阈值后的锁定时长，默认 15 分钟
      * @throws IllegalArgumentException 阈值或时长配置不合法时抛出
      */
     public LoginAttemptServiceImpl(
@@ -99,8 +99,7 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
      *
      * @param username 登录用户名
      * @return Redis 中存在有效锁定 Key 时返回 true
-     * @throws BusinessException
-     *         Redis 不可用或无法确认锁定状态时返回服务暂不可用
+     * @throws BusinessException Redis 不可用或无法确认锁定状态时返回服务暂不可用
      */
     @Override
     public boolean isLocked(String username) {
@@ -125,8 +124,7 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
      *
      * @param username 登录用户名
      * @return 本次失败是否达到阈值并触发锁定
-     * @throws BusinessException
-     *         Redis 不可用或无法确认计数结果时返回服务暂不可用
+     * @throws BusinessException Redis 不可用或无法确认计数结果时返回服务暂不可用
      */
     @Override
     public boolean recordFailure(String username) {
@@ -170,8 +168,7 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
      * 登录凭据验证成功后清除此前的失败计数与锁定标记。
      *
      * @param username 登录用户名
-     * @throws BusinessException
-     *         Redis 不可用时返回服务暂不可用
+     * @throws BusinessException Redis 不可用时返回服务暂不可用
      */
     @Override
     public void recordSuccess(String username) {
@@ -191,7 +188,7 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
     /**
      * 校验时长配置必须是至少 1 毫秒的正数。
      *
-     * @param duration 待校验时长
+     * @param duration    待校验时长
      * @param settingName 配置项中文名称
      * @throws IllegalArgumentException 时长为空、为零或为负数时抛出
      */
@@ -211,9 +208,9 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
      * 生成不暴露原始用户名的 Redis Key。
      *
      * @param keyPrefix 计数或锁定状态对应的 Key 前缀
-     * @param username 原始登录用户名
+     * @param username  原始登录用户名
      * @return 前缀加规范化用户名 SHA-256 摘要组成的 Key
-     * @throws BusinessException 用户名为空时返回参数错误
+     * @throws BusinessException     用户名为空时返回参数错误
      * @throws IllegalStateException 当前 JDK 不支持 SHA-256 时抛出
      */
     private String buildKey(String keyPrefix, String username) {

@@ -734,6 +734,50 @@
           }
         }
       }
+    },
+    "/products/admin/windows/{windowId}/images": {
+      "put": {
+        "tags": [
+          "商品图片管理接口"
+        ],
+        "summary": "完整替换店铺最多5张有序图片",
+        "description": "经营范围校验；新文件须由当前操作者上传，bizType=WINDOW_IMAGE且bizRef=windowId。第一张为封面；空数组清空。保留已绑定图片及重排不要求原上传者身份。",
+        "operationId": "replaceWindowGallery",
+        "parameters": [
+          {
+            "name": "windowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WindowImagesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWindowAdminVO"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -777,6 +821,16 @@
             "format": "int32",
             "maximum": 1,
             "minimum": 0
+          },
+          "imageFileKeys": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{32}$"
+            },
+            "description": "有序图片文件键，最多5张，首图为封面，空数组清空"
           }
         },
         "required": [
@@ -839,6 +893,24 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "imageFileKeys": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{32}$"
+            },
+            "description": "有序图片文件键，最多5张，首图为封面，空数组清空"
+          },
+          "imageUrls": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string"
+            },
+            "description": "有序展示地址，首图为封面"
           }
         }
       },
@@ -1327,6 +1399,14 @@
             "items": {
               "$ref": "#/components/schemas/MenuProductVO"
             }
+          },
+          "imageUrls": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string"
+            },
+            "description": "有序展示地址，首图为封面"
           }
         }
       },
@@ -1472,6 +1552,24 @@
             "type": "string"
           },
           "data": {}
+        }
+      },
+      "WindowImagesRequest": {
+        "type": "object",
+        "required": [
+          "fileKeys"
+        ],
+        "properties": {
+          "fileKeys": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{32}$"
+            },
+            "description": "有序图片文件键，最多5张，首图为封面，空数组清空"
+          }
         }
       }
     },

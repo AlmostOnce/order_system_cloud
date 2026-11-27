@@ -25,10 +25,14 @@ import java.util.UUID;
 @Component
 public class BalancePaymentChannel implements PaymentChannel {
 
-    /** 余额渠道标识，与 payments.channel_code 对应。 */
+    /**
+     * 余额渠道标识，与 payments.channel_code 对应。
+     */
     public static final String CHANNEL_CODE = "BALANCE";
 
-    /** 渠道交易号的时间格式。 */
+    /**
+     * 渠道交易号的时间格式。
+     */
     private static final DateTimeFormatter TRADE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
@@ -60,7 +64,7 @@ public class BalancePaymentChannel implements PaymentChannel {
     /**
      * 余额渠道不支持主动查询，恒返回 UNKNOWN；该结果表示渠道状态未知，不代表支付失败。
      *
-     * @param paymentNo 业务支付单号
+     * @param paymentNo      业务支付单号
      * @param channelTradeNo 渠道交易号
      * @return 状态 UNKNOWN 的查询结果
      */
@@ -76,7 +80,7 @@ public class BalancePaymentChannel implements PaymentChannel {
     /**
      * 余额渠道不存在异步通知，一律拒绝验签。
      *
-     * @param request 渠道通知请求体
+     * @param request   渠道通知请求体
      * @param signature 渠道侧签名
      * @return 恒返回 false
      */

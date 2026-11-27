@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hbue.ordering.cart.config.CartProperties;
 import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
 import com.hbue.ordering.cart.model.CartItemDO;
+import com.hbue.ordering.cart.model.CartSelectionKey;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.RedisOperationsService;
@@ -15,11 +16,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 购物车 Redis 持久化访问层，只负责存取与原子修改，不调用商品服务。
@@ -32,33 +29,53 @@ import java.util.UUID;
  */
 @Repository
 public class CartRedisRepository {
-    /** Redis 错误仅在持久化边界记录，不记录 Token 或请求密码。 */
+    /**
+     * Redis 错误仅在持久化边界记录，不记录 Token 或请求密码。
+     */
     private static final Logger log = LoggerFactory.getLogger(CartRedisRepository.class);
-    /** 脚本返回：目标条目不存在。 */
+    /**
+     * 脚本返回：目标条目不存在。
+     */
     private static final long MISSING = -1;
-    /** 脚本返回：新增菜品会超过购物车容量。 */
+    /**
+     * 脚本返回：新增菜品会超过购物车容量。
+     */
     private static final long CAPACITY_EXCEEDED = -2;
-    /** 脚本返回：最终数量超过单项限制。 */
+    /**
+     * 脚本返回：最终数量超过单项限制。
+     */
     private static final long QUANTITY_EXCEEDED = -3;
-    /** 脚本返回：保存的数据不符合预期结构。 */
+    /**
+     * 脚本返回：保存的数据不符合预期结构。
+     */
     private static final long CORRUPT = -4;
-    /** 普通购物车增删改使用同一段单 Key 原子脚本；下单清理使用独立比较删除脚本。 */
+    /**
+     * 普通购物车增删改使用同一段单 Key 原子脚本；下单清理使用独立比较删除脚本。
+     */
     private static final DefaultRedisScript<Long> MUTATE_SCRIPT = mutationScript();
-    /** 提交快照清理脚本，版本比较与删除位于同一 Redis 原子操作。 */
+    /**
+     * 提交快照清理脚本，版本比较与删除位于同一 Redis 原子操作。
+     */
     private static final DefaultRedisScript<Long> CLEANUP_SCRIPT = cleanupScript();
-    /** 同步 Redis 模板，只在 Servlet 请求线程执行。 */
+    /**
+     * 同步 Redis 模板，只在 Servlet 请求线程执行。
+     */
     private final RedisOperationsService redis;
-    /** JSON 反序列化组件，与 HTTP 响应使用相同的数字类型约定。 */
+    /**
+     * JSON 反序列化组件，与 HTTP 响应使用相同的数字类型约定。
+     */
     private final ObjectMapper objectMapper;
-    /** 购物车命名空间、容量与过期配置。 */
+    /**
+     * 购物车命名空间、容量与过期配置。
+     */
     private final CartProperties properties;
 
     /**
      * 创建购物车存储访问组件。
      *
-     * @param redis 公共 Redis 操作组件
+     * @param redis        公共 Redis 操作组件
      * @param objectMapper JSON 反序列化组件
-     * @param properties 购物车存储约束
+     * @param properties   购物车存储约束
      */
     public CartRedisRepository(RedisOperationsService redis, ObjectMapper objectMapper, CartProperties properties) {
         this.redis = redis;
@@ -79,89 +96,141 @@ public class CartRedisRepository {
             List<CartItemDO> items = new ArrayList<>();
             for (Map.Entry<Object, Object> entry : values.entrySet()) {
                 CartItemDO item = objectMapper.readValue(entry.getValue().toString(), CartItemDO.class);
-                // 校验 Field 与内容一致，避免坏数据被当成其它窗口或菜品展示。
+                // 老 JSON 没有规格字段时绑定到 base；新 Field 和 JSON 必须同时标识同一规格行。
+                if (item != null) {
+                    item.setSelectionKey(CartSelectionKey.normalize(item.getSelectionKey()));
+                    if (item.getSpecificationTextSnapshot() == null) {
+                        item.setSpecificationTextSnapshot("");
+                    }
+                }
+                // 校验 Field 与内容一致，避免坏数据被当成其它窗口、菜品或规格展示。
                 if (item == null || item.getWindowId() == null || item.getWindowId() < 1
                         || item.getProductId() == null || item.getProductId() < 1
                         || item.getQuantity() == null || item.getQuantity() < 1 || item.getChecked() == null
                         || item.getRevision() == null || item.getRevision().isBlank()
-                        || !field(item.getWindowId(), item.getProductId()).equals(entry.getKey())) {
+                        || !field(item.getWindowId(), item.getProductId(), item.getSelectionKey()).equals(entry.getKey())) {
                     throw unavailable("购物车数据异常，请稍后重试");
                 }
                 items.add(item);
             }
-            items.sort(Comparator.comparing(CartItemDO::getWindowId).thenComparing(CartItemDO::getProductId));
+            items.sort(Comparator.comparing(CartItemDO::getWindowId).thenComparing(CartItemDO::getProductId)
+                    .thenComparing(CartItemDO::getSelectionKey));
             return items;
         } catch (DataAccessException | JsonProcessingException exception) {
             log.error("读取购物车失败，userId={}", userId, exception);
             throw unavailable("购物车暂时不可用，请稍后重试");
+        } catch (IllegalArgumentException exception) {
+            // Redis 中的规格键不符合规范时按损坏数据处理，不能把异常冒泡成 500。
+            log.error("购物车规格键损坏，userId={}", userId, exception);
+            throw unavailable("购物车数据异常，请稍后重试");
         }
     }
 
     /**
      * 原子加入菜品，并从商品事实来源保存展示快照。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
-     * @param productId 菜品 ID
-     * @param quantity 本次增加数量
+     * @param userId      当前用户 ID
+     * @param windowId    窗口 ID
+     * @param productId   菜品 ID
+     * @param quantity    本次增加数量
      * @param productName 商品服务确认的名称
      * @param productCode 商品服务确认的编码
      * @throws BusinessException 数量或容量超限时返回 400，Redis 故障时返回 503
      */
     public void add(Long userId, Long windowId, Long productId, int quantity, String productName, String productCode) {
-        mutate(userId, windowId, productId, "add", String.valueOf(quantity), productName, productCode);
+        add(userId, windowId, productId, CartSelectionKey.BASE, quantity, productName, productCode, "");
+    }
+
+    /**
+     * 加入指定规格行；同菜不同规格落入不同 Hash Field，名称、编码和规格文字来自商品服务。
+     *
+     * @param userId            当前顾客
+     * @param windowId          窗口编号
+     * @param productId         菜品编号
+     * @param selectionKey      商品服务核价返回的规范规格键
+     * @param quantity          本次新增数量
+     * @param productName       已核验商品名称
+     * @param productCode       已核验商品编码
+     * @param specificationText 已核验规格展示文字
+     */
+    public void add(Long userId, Long windowId, Long productId, String selectionKey, int quantity,
+                    String productName, String productCode, String specificationText) {
+        mutate(userId, windowId, productId, selectionKey, "add", String.valueOf(quantity),
+                productName, productCode, specificationText);
     }
 
     /**
      * 设置已有条目的目标数量；脚本保留其它字段，避免覆盖并发勾选。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
-     * @param quantity 目标数量
+     * @param quantity  目标数量
      */
     public void updateQuantity(Long userId, Long windowId, Long productId, int quantity) {
-        mutate(userId, windowId, productId, "quantity", String.valueOf(quantity), "", "");
+        updateQuantity(userId, windowId, productId, CartSelectionKey.BASE, quantity);
+    }
+
+    /**
+     * 设置指定规格行数量；旧接口重载只会修改 base 行。
+     */
+    public void updateQuantity(Long userId, Long windowId, Long productId, String selectionKey, int quantity) {
+        mutate(userId, windowId, productId, selectionKey, "quantity", String.valueOf(quantity), "", "", "");
     }
 
     /**
      * 更新已有条目的勾选状态，保留同时提交的数量变更。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
-     * @param checked 目标勾选状态
+     * @param checked   目标勾选状态
      */
     public void updateChecked(Long userId, Long windowId, Long productId, boolean checked) {
-        mutate(userId, windowId, productId, "checked", String.valueOf(checked), "", "");
+        updateChecked(userId, windowId, productId, CartSelectionKey.BASE, checked);
+    }
+
+    /**
+     * 更新指定规格行勾选状态；旧接口重载只会修改 base 行。
+     */
+    public void updateChecked(Long userId, Long windowId, Long productId, String selectionKey, boolean checked) {
+        mutate(userId, windowId, productId, selectionKey, "checked", String.valueOf(checked), "", "", "");
     }
 
     /**
      * 幂等删除单项，最后一项被移除时 Redis 会自动删除空 Hash。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID
      */
     public void remove(Long userId, Long windowId, Long productId) {
-        mutate(userId, windowId, productId, "remove", "", "", "");
+        remove(userId, windowId, productId, CartSelectionKey.BASE);
+    }
+
+    /**
+     * 删除指定规格行，不会触碰同一菜品的其它规格。
+     */
+    public void remove(Long userId, Long windowId, Long productId, String selectionKey) {
+        mutate(userId, windowId, productId, selectionKey, "remove", "", "", "", "");
     }
 
     /**
      * 只清空指定窗口，不影响同一用户其它窗口及其它用户。
      *
-     * @param userId 当前用户 ID
+     * @param userId   当前用户 ID
      * @param windowId 窗口 ID
      */
     public void clearWindow(Long userId, Long windowId) {
-        mutate(userId, windowId, 0L, "clearWindow", "", "", "");
+        mutate(userId, windowId, 0L, CartSelectionKey.BASE, "clearWindow", "", "", "", "");
     }
 
     /**
      * 按原始版本、数量及勾选状态删除已购买条目；缺少或变更条目跳过且不续期。
      * 调用前由 Service 验证订单归属、实际明细和快照参数。
-     * @param userId 当前顾客 ID
-     * @param windowId 本次订单窗口
+     *
+     * @param userId    当前顾客 ID
+     * @param windowId  本次订单窗口
      * @param submitted 下单前保存的完整购买快照
      * @return 实际删除条目数；重复清理或全部发生变化时为零
      */
@@ -171,7 +240,8 @@ public class CartRedisRepository {
             for (CartSubmittedItemRequest item : submitted) {
                 // ID 明确编码成字符串，避免 Lua cjson 将 BIGINT 转成双精度数丢失精度。
                 snapshots.add(Map.of("productId", item.productId().toString(),
-                        "quantity", item.quantity(), "revision", item.revision()));
+                        "quantity", item.quantity(), "revision", item.revision(),
+                        "selectionKey", CartSelectionKey.normalize(item.selectionKey())));
             }
             Long removed = redis.executeScript(CLEANUP_SCRIPT, List.of(key(userId)), windowId.toString(),
                     objectMapper.writeValueAsString(snapshots));
@@ -187,6 +257,7 @@ public class CartRedisRepository {
 
     /**
      * 加载独立的安全清理脚本，不影响普通增删改查的语义。
+     *
      * @return 返回删除数量或错误标识的 Redis 脚本
      */
     private static DefaultRedisScript<Long> cleanupScript() {
@@ -199,21 +270,23 @@ public class CartRedisRepository {
     /**
      * 执行单用户原子修改并转换脚本返回码。
      *
-     * @param userId 当前用户 ID
-     * @param windowId 窗口 ID
+     * @param userId    当前用户 ID
+     * @param windowId  窗口 ID
      * @param productId 菜品 ID，清空窗口时为占位值零
-     * @param action Lua 中的操作类型
-     * @param value 数量或勾选状态
-     * @param name 名称快照，非添加操作时为空
-     * @param code 编码快照，非添加操作时为空
+     * @param action    Lua 中的操作类型
+     * @param value     数量或勾选状态
+     * @param name      名称快照，非添加操作时为空
+     * @param code      编码快照，非添加操作时为空
      * @throws BusinessException 业务约束拒绝或 Redis 不可用时抛出
      */
-    private void mutate(Long userId, Long windowId, Long productId, String action,
-                        String value, String name, String code) {
+    private void mutate(Long userId, Long windowId, Long productId, String selectionKey, String action,
+                        String value, String name, String code, String specificationText) {
         try {
+            String normalizedSelectionKey = CartSelectionKey.normalize(selectionKey);
             // UUID 每次重新生成，后续删除重建也不会出现旧版本被误认为新版本的情况。
-            Long result = redis.executeScript(MUTATE_SCRIPT, List.of(key(userId)), action, field(windowId, productId),
-                    windowId.toString(), productId.toString(), value, UUID.randomUUID().toString(), name, code,
+            Long result = redis.executeScript(MUTATE_SCRIPT, List.of(key(userId)), action,
+                    field(windowId, productId, normalizedSelectionKey), windowId.toString(), productId.toString(),
+                    normalizedSelectionKey, value, UUID.randomUUID().toString(), name, code, specificationText,
                     String.valueOf(properties.maxItems()), String.valueOf(properties.maxQuantity()),
                     String.valueOf(properties.timeToLive().toMillis()));
             if (result == null || result == CORRUPT) {
@@ -250,12 +323,16 @@ public class CartRedisRepository {
     /**
      * 构造单用户 Hash 内的菜品唯一标识。
      *
-     * @param windowId 窗口 ID
-     * @param productId 菜品 ID
-     * @return 带分隔符的窗口与菜品组合标识
+     * @param windowId     窗口 ID
+     * @param productId    菜品 ID
+     * @param selectionKey 规格组合键；base 保持旧版 Field 格式
+     * @return base 为 window:product，规格行追加 :selectionKey
      */
-    private String field(Long windowId, Long productId) {
-        return windowId + ":" + productId;
+    private String field(Long windowId, Long productId, String selectionKey) {
+        String baseField = windowId + ":" + productId;
+        String normalizedSelectionKey = CartSelectionKey.normalize(selectionKey);
+        return CartSelectionKey.BASE.equals(normalizedSelectionKey)
+                ? baseField : baseField + ":" + normalizedSelectionKey;
     }
 
     /**

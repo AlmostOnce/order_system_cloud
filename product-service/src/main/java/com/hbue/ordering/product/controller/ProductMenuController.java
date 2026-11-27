@@ -2,17 +2,16 @@ package com.hbue.ordering.product.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.product.service.ProductMenuService;
+import com.hbue.ordering.product.vo.ProductImageVO;
 import com.hbue.ordering.product.vo.RestaurantSummaryVO;
 import com.hbue.ordering.product.vo.WindowMenuVO;
 import com.hbue.ordering.product.vo.WindowSummaryVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -29,7 +28,19 @@ import java.util.List;
 @PreAuthorize("hasRole('CUSTOMER')")
 public class ProductMenuController {
 
-    /** 窗口菜单查询服务。 */
+    /**
+     * 最多50道菜一次查询，避免榜单逐项请求完整菜单。
+     */
+    @GetMapping("/images")
+    public ApiResponse<List<ProductImageVO>> productImages(
+            @RequestParam("productIds")
+            @Size(min = 1, max = 50) List<@Positive Long> productIds) {
+        return ApiResponse.success(productMenuService.getProductImages(productIds));
+    }
+
+    /**
+     * 窗口菜单查询服务。
+     */
     private final ProductMenuService productMenuService;
 
     /**
@@ -72,5 +83,21 @@ public class ProductMenuController {
             @PathVariable("windowId") @Positive Long windowId
     ) {
         return ApiResponse.success(productMenuService.getWindowMenu(windowId));
+    }
+
+    /**
+     * 查询单个窗口的展示摘要，供订单详情展示取餐地点。
+     *
+     * <p>与菜单接口相互独立：订单详情用它在窗口停用或休息时也能回看取餐地点；
+     * 查询失败只影响地点行展示，不影响订单正文、取餐码和支付。</p>
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口摘要；窗口不存在时 data 为 null
+     */
+    @GetMapping("/windows/{windowId}")
+    public ApiResponse<WindowSummaryVO> getWindowSummary(
+            @PathVariable("windowId") @Positive Long windowId
+    ) {
+        return ApiResponse.success(productMenuService.getWindowSummary(windowId));
     }
 }

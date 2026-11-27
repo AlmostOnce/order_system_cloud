@@ -17,7 +17,9 @@ public class SearchIndexReconcileTask {
     private static final Logger log = LoggerFactory.getLogger(SearchIndexReconcileTask.class);
     private final ProductSearchService searchService;
 
-    public SearchIndexReconcileTask(ProductSearchService searchService) { this.searchService = searchService; }
+    public SearchIndexReconcileTask(ProductSearchService searchService) {
+        this.searchService = searchService;
+    }
 
     @Scheduled(cron = "${search.reconcile.cron:0 30 3 * * *}")
     public void reconcile() {

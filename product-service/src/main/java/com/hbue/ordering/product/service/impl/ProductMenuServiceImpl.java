@@ -1,10 +1,10 @@
 package com.hbue.ordering.product.service.impl;
 
-import com.hbue.ordering.common.web.media.FileReferences;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.DistributedLockService;
+import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.cache.ProductCacheKeys;
 import com.hbue.ordering.product.cache.ProductMenuCacheService;
@@ -17,18 +17,12 @@ import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
 import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductMenuService;
-import com.hbue.ordering.product.vo.MenuProductVO;
-import com.hbue.ordering.product.vo.ProductCategoryMenuVO;
-import com.hbue.ordering.product.vo.RestaurantSummaryVO;
-import com.hbue.ordering.product.vo.WindowMenuVO;
-import com.hbue.ordering.product.vo.WindowSummaryVO;
+import com.hbue.ordering.product.service.ProductSpecificationService;
+import com.hbue.ordering.product.util.WindowImageGallery;
+import com.hbue.ordering.product.vo.*;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 从商品目录组装顾客可见的窗口菜单，并协调缓存、布隆过滤器与回源查询。
@@ -43,45 +37,71 @@ import java.util.Map;
 @Service
 public class ProductMenuServiceImpl implements ProductMenuService {
 
-    /** 启用状态值。 */
+    /**
+     * 启用状态值。
+     */
     private static final int ACTIVE_STATUS = 1;
 
-    /** 在售状态值。 */
+    /**
+     * 在售状态值。
+     */
     private static final int ON_SALE_STATUS = 1;
 
-    /** 餐厅未配置展示排序或所属餐厅已停用时使用的兜底排序值，排在已配置餐厅之后。 */
+    /**
+     * 餐厅未配置展示排序或所属餐厅已停用时使用的兜底排序值，排在已配置餐厅之后。
+     */
     private static final int UNRANKED_SORT_ORDER = Integer.MAX_VALUE;
 
-    /** 窗口数据 Mapper。 */
+    /**
+     * 窗口数据 Mapper。
+     */
     private final DiningWindowMapper diningWindowMapper;
 
-    /** 餐厅数据 Mapper。 */
+    /**
+     * 餐厅数据 Mapper。
+     */
     private final RestaurantMapper restaurantMapper;
 
-    /** 分类数据 Mapper。 */
+    /**
+     * 分类数据 Mapper。
+     */
     private final ProductCategoryMapper productCategoryMapper;
 
-    /** 菜品数据 Mapper。 */
+    /**
+     * 菜品数据 Mapper。
+     */
     private final ProductMapper productMapper;
 
-    /** 商品菜单缓存读写组件。 */
+    /**
+     * 商品菜单缓存读写组件。
+     */
     private final ProductMenuCacheService menuCacheService;
 
-    /** 商品布隆过滤器管理器。 */
+    /**
+     * 商品布隆过滤器管理器。
+     */
     private final ProductBloomFilterManager bloomFilterManager;
 
-    /** 分布式锁组件。 */
+    /**
+     * 规格批量读取服务，避免对菜单每个菜品逐一查询。
+     */
+    private final ProductSpecificationService specifications;
+
+    /**
+     * 分布式锁组件。
+     */
     private final DistributedLockService distributedLockService;
 
     /**
      * 创建窗口菜单查询服务。
      *
-     * @param diningWindowMapper 窗口数据 Mapper
-     * @param restaurantMapper 餐厅数据 Mapper
-     * @param productCategoryMapper 分类数据 Mapper
-     * @param productMapper 菜品数据 Mapper
-     * @param menuCacheService 商品菜单缓存读写组件
-     * @param bloomFilterManager 商品布隆过滤器管理器
+     * @param diningWindowMapper     窗口数据 Mapper
+     * @param restaurantMapper       餐厅数据 Mapper
+     * @param productCategoryMapper  分类数据 Mapper
+     * @param productMapper          菜品数据 Mapper
+     * @param menuCacheService       商品菜单缓存读写组件
+     * @param bloomFilterManager     商品布隆过滤器管理器
+     * @param specifications         规格批量查询服务
      * @param distributedLockService 分布式锁组件
      */
     public ProductMenuServiceImpl(
@@ -91,7 +111,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             ProductMapper productMapper,
             ProductMenuCacheService menuCacheService,
             ProductBloomFilterManager bloomFilterManager,
-            DistributedLockService distributedLockService
+            DistributedLockService distributedLockService,
+            ProductSpecificationService specifications
     ) {
         this.diningWindowMapper = diningWindowMapper;
         this.restaurantMapper = restaurantMapper;
@@ -100,6 +121,22 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         this.menuCacheService = menuCacheService;
         this.bloomFilterManager = bloomFilterManager;
         this.distributedLockService = distributedLockService;
+        this.specifications = specifications;
+    }
+
+    /**
+     * 批量读取顾客可见菜品图片，限制一次最多50项。
+     */
+    @Override
+    public List<ProductImageVO> getProductImages(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty() || productIds.size() > 50
+                || productIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "请提交1至50个有效菜品编号");
+        }
+        return productMapper.selectPublicImageProducts(productIds.stream().distinct().toList()).stream()
+                .map(product -> new ProductImageVO(product.getProductId(),
+                        product.getWindowId(), FileReferences.url(product.getImageFileKey())))
+                .toList();
     }
 
     /**
@@ -126,7 +163,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     restaurant.getRestaurantId(),
                     restaurant.getRestaurantCode(),
                     restaurant.getRestaurantName(),
-                    restaurant.getLocation()
+                    restaurant.getLocation(),
+                    restaurant.getNotice(),
+                    restaurant.getPhone()
             ));
         }
         return summaries;
@@ -156,7 +195,14 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         // 先取启用餐厅的展示排序，让同一餐厅的档口在列表中相邻出现。
         Map<Long, Integer> restaurantSortOrders = loadRestaurantSortOrders();
 
-        List<DiningWindowDO> orderedWindows = new ArrayList<>(windows);
+        // 所属餐厅已停用或不存在的档口不能再出现在顾客列表；未挂餐厅的历史档口保持可见，避免旧数据消失。
+        List<DiningWindowDO> orderedWindows = new ArrayList<>();
+        for (DiningWindowDO window : windows) {
+            if (window.getRestaurantId() != null && !restaurantSortOrders.containsKey(window.getRestaurantId())) {
+                continue;
+            }
+            orderedWindows.add(window);
+        }
         orderedWindows.sort(new Comparator<DiningWindowDO>() {
             @Override
             public int compare(DiningWindowDO left, DiningWindowDO right) {
@@ -195,7 +241,8 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                     window.getDescription(),
                     window.getSortOrder(),
                     window.getLocation(),
-                    FileReferences.url(window.getImageFileKey())
+                    FileReferences.url(window.getImageFileKey()),
+                    window.getIsOpen()
             ));
         }
         menuCacheService.saveActiveWindows(summaries);
@@ -238,10 +285,10 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             return cached;
         }
 
-        // 抢互斥锁，只让一个实例回源数据库重建缓存。
+        // 抢互斥锁，只让一个实例回源并写缓存；30秒租约覆盖数据库读取与缓存写入，供提交后失效串行等待。
         try (DistributedLockService.LockHandle lock =
                      distributedLockService.tryAcquire(
-                             ProductCacheKeys.windowMenuLock(windowId)
+                             ProductCacheKeys.windowMenuLock(windowId), 3L, 30L
                      )) {
             if (lock == null) {
                 // 未抢到锁时降级直接查库返回，不写缓存，避免与持锁方竞争写入。
@@ -277,6 +324,37 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     }
 
     /**
+     * 查询单个窗口的展示摘要，供订单详情展示取餐地点。
+     *
+     * <p>只按主键读取一行窗口数据，不校验启用/营业状态：历史订单即使窗口已停用，
+     * 也应能展示当时的取餐地点。这里不加缓存也不抢锁，单行主键查询本身足够廉价，
+     * 且学生可能刚下单就查看，缓存反而会延后管理端对位置的临时修改。</p>
+     *
+     * @param windowId 窗口 ID
+     * @return 窗口摘要；窗口不存在时返回 null
+     */
+    @Override
+    public WindowSummaryVO getWindowSummary(Long windowId) {
+        validateWindowId(windowId);
+        DiningWindowDO window = diningWindowMapper.selectById(windowId);
+        if (window == null) {
+            return null;
+        }
+        // 复用列表摘要结构，保证订单详情与首页对同一窗口的名称、位置展示一致。
+        return new WindowSummaryVO(
+                window.getWindowId(),
+                window.getRestaurantId(),
+                window.getWindowCode(),
+                window.getWindowName(),
+                window.getDescription(),
+                window.getSortOrder(),
+                window.getLocation(),
+                FileReferences.url(window.getImageFileKey()),
+                window.getIsOpen()
+        );
+    }
+
+    /**
      * 回源数据库组装窗口菜单。
      *
      * @param windowId 窗口 ID
@@ -285,7 +363,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     private WindowMenuVO loadWindowMenu(Long windowId) {
         DiningWindowDO window = diningWindowMapper.selectById(windowId);
         if (window == null
-                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())
+                // 所属餐厅停用后不再返回菜单，即使档口状态残留为启用也不能继续浏览或下单。
+                || !restaurantActive(window.getRestaurantId())) {
             return null;
         }
 
@@ -312,9 +392,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     /**
      * 组装分类与菜品；被停用分类下的菜品不会出现在顾客菜单中。
      *
-     * @param window 启用窗口
+     * @param window     启用窗口
      * @param categories 启用分类
-     * @param products 当前在售菜品
+     * @param products   当前在售菜品
      * @return 窗口菜单视图
      */
     private WindowMenuVO assembleMenu(
@@ -327,9 +407,13 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             productsByCategory.put(category.getCategoryId(), new ArrayList<>());
         }
 
+        // 两次批量查询即可拿到所有规格；无规格菜品填空数组，不混用缺少字段的旧缓存。
+        Map<Long, List<ProductSpecificationGroupVO>> specificationGroups = specifications.loadActive(
+                products.stream().map(ProductDO::getProductId).toList());
         List<MenuProductVO> uncategorizedProducts = new ArrayList<>();
         for (ProductDO product : products) {
             MenuProductVO menuProduct = toMenuProduct(product);
+            menuProduct.setSpecificationGroups(specificationGroups.getOrDefault(product.getProductId(), List.of()));
             if (product.getCategoryId() == null) {
                 uncategorizedProducts.add(menuProduct);
                 continue;
@@ -352,7 +436,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             ));
         }
 
-        return new WindowMenuVO(
+        WindowMenuVO menu = new WindowMenuVO(
                 window.getWindowId(),
                 window.getWindowCode(),
                 window.getWindowName(),
@@ -362,6 +446,11 @@ public class ProductMenuServiceImpl implements ProductMenuService {
                 uncategorizedProducts,
                 FileReferences.url(window.getImageFileKey())
         );
+        // 一次读取窗口行即可得到完整有序图片，不为每张图片跨服务查询或访问文件数据库。
+        menu.setImageUrls(WindowImageGallery.read(window).stream().map(FileReferences::url).toList());
+        // 营业状态来自同一行窗口数据，随菜单一起返回，避免客户端再发一次档口详情请求。
+        menu.setIsOpen(window.getIsOpen());
+        return menu;
     }
 
     /**
@@ -406,7 +495,7 @@ public class ProductMenuServiceImpl implements ProductMenuService {
      * <p>档口未挂餐厅、所属餐厅已停用或餐厅未配置排序值时，一律取兜底值排到最后，
      * 保证排序结果稳定且不会因空值抛出异常。</p>
      *
-     * @param sortOrders 餐厅 ID 到展示排序值的映射
+     * @param sortOrders   餐厅 ID 到展示排序值的映射
      * @param restaurantId 餐厅 ID
      * @return 展示排序值
      */
@@ -419,6 +508,20 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             return UNRANKED_SORT_ORDER;
         }
         return sortOrder;
+    }
+
+    /**
+     * 判断档口所属餐厅是否可用：未挂餐厅的历史档口保持可用，挂了餐厅则必须存在且启用。
+     *
+     * <p>与核价、窗口列表使用同一口径，避免出现"列表已隐藏但菜单仍可浏览"的入口不一致。</p>
+     *
+     * @param restaurantId 档口所属餐厅 ID，可为空
+     * @return 可以继续返回菜单时返回 true
+     */
+    private boolean restaurantActive(Long restaurantId) {
+        if (restaurantId == null) return true;
+        RestaurantDO restaurant = restaurantMapper.selectById(restaurantId);
+        return restaurant != null && Integer.valueOf(ACTIVE_STATUS).equals(restaurant.getStatus());
     }
 
     /**

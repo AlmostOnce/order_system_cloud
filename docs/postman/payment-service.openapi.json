@@ -217,6 +217,96 @@
           }
         }
       }
+    },
+    "/internal/payments/orders/{orderId}/refund": {
+      "post": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "refundPaymentBalance",
+        "description": "只退真实BALANCE成功支付，返回稳定refundNo。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-Internal-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseString"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRefundRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/payments/orders/{orderId}/refund-fact": {
+      "get": {
+        "tags": [
+          "退款与售后"
+        ],
+        "operationId": "getPaymentRefundFact",
+        "description": "返回核验用最小实付事实。",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-Internal-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePaymentRefundFactVO"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -438,6 +528,66 @@
             "type": "number"
           },
           "status": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentRefundRequest": {
+        "type": "object",
+        "required": [
+          "refundNo",
+          "amount"
+        ],
+        "properties": {
+          "refundNo": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        }
+      },
+      "PaymentRefundFactVO": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "paidAmount": {
+            "type": "number"
+          },
+          "channelCode": {
+            "type": "string"
+          }
+        }
+      },
+      "ApiResponsePaymentRefundFactVO": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PaymentRefundFactVO"
+          }
+        }
+      },
+      "ApiResponseString": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
             "type": "string"
           }
         }

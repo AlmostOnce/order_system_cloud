@@ -10,12 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jwt.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -28,9 +23,7 @@ import java.util.Base64;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * 购物车 JWT 签名、签发方与注销状态验证测试。
@@ -43,13 +36,19 @@ import static org.mockito.Mockito.when;
  */
 class CartJwtDecoderTest {
 
-    /** 测试专用 RSA 密钥对，多个用例共享以减少生成成本。 */
+    /**
+     * 测试专用 RSA 密钥对，多个用例共享以减少生成成本。
+     */
     private static KeyPair keyPair;
 
-    /** Redis 黑名单查询替身。 */
+    /**
+     * Redis 黑名单查询替身。
+     */
     private RedisOperationsService redis;
 
-    /** 包含实际 RSA 验签与黑名单规则的被测解码器。 */
+    /**
+     * 包含实际 RSA 验签与黑名单规则的被测解码器。
+     */
     private JwtDecoder decoder;
 
     /**
@@ -83,35 +82,45 @@ class CartJwtDecoderTest {
         );
     }
 
-    /** 有效签名、正确签发方且不在黑名单的令牌可以访问。 */
+    /**
+     * 有效签名、正确签发方且不在黑名单的令牌可以访问。
+     */
     @Test
     void shouldAcceptValidToken() {
         when(redis.hasKey("auth:access-token:blacklist:cart-jti")).thenReturn(false);
         assertEquals("5", decoder.decode(signedToken("test-issuer", "cart-jti")).getSubject());
     }
 
-    /** 已注销的令牌即使签名正确也必须拒绝。 */
+    /**
+     * 已注销的令牌即使签名正确也必须拒绝。
+     */
     @Test
     void shouldRejectRevokedToken() {
         when(redis.hasKey(anyString())).thenReturn(true);
         assertThrows(JwtException.class, () -> decoder.decode(signedToken("test-issuer", "cart-jti")));
     }
 
-    /** Redis 故障时不能绕过注销状态检查。 */
+    /**
+     * Redis 故障时不能绕过注销状态检查。
+     */
     @Test
     void shouldRejectRedisFailure() {
         when(redis.hasKey(anyString())).thenThrow(new IllegalStateException("Redis unavailable"));
         assertThrows(JwtException.class, () -> decoder.decode(signedToken("test-issuer", "cart-jti")));
     }
 
-    /** 缺少 jti 时无法定位注销状态，应在查询 Redis 前拒绝。 */
+    /**
+     * 缺少 jti 时无法定位注销状态，应在查询 Redis 前拒绝。
+     */
     @Test
     void shouldRejectMissingTokenId() {
         assertThrows(JwtException.class, () -> decoder.decode(signedToken("test-issuer", null)));
         verifyNoInteractions(redis);
     }
 
-    /** 签发方不匹配时应先拒绝令牌，不查询黑名单。 */
+    /**
+     * 签发方不匹配时应先拒绝令牌，不查询黑名单。
+     */
     @Test
     void shouldRejectWrongIssuer() {
         assertThrows(JwtException.class, () -> decoder.decode(signedToken("other-issuer", "cart-jti")));
@@ -121,7 +130,7 @@ class CartJwtDecoderTest {
     /**
      * 用内存私钥签发测试 JWT。
      *
-     * @param issuer 测试签发方
+     * @param issuer  测试签发方
      * @param tokenId jti，为 null 时生成缺少 jti 的令牌
      * @return 实际 RS256 签名的 JWT 字符串
      */

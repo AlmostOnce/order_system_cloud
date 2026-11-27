@@ -12,7 +12,9 @@ import lombok.Data;
 @Data
 public class PaymentCreateRequest {
 
-    /** 待支付订单 ID。 */
+    /**
+     * 待支付订单 ID。
+     */
     @NotNull
     private Long orderId;
 

@@ -91,6 +91,12 @@
             <artifactId>stock-api</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
+        <!-- 下单与取消流程通过服务契约锁定、释放优惠券，不直接访问券库。 -->
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>coupon-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
 
         <!--
             Seata 客户端：下单事务是全局事务的发起者（TM），同时也是订单库的本地分支（RM）。
@@ -180,6 +186,19 @@
             <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
 
+        <!-- 取餐二维码：core 负责编码矩阵，javase 提供 PNG 输出；版本在根 pom 统一管理。 -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+        <!-- 仅服务端渲染二维码图片，扫码端仍由浏览器/扫码枪负责。 -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>${zxing.version}</version>
+        </dependency>
+
         <!-- 请求参数校验 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -208,6 +227,18 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>order-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.hbue.ordering</groupId>
+            <artifactId>order-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

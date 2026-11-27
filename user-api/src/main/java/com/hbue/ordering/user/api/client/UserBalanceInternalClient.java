@@ -30,9 +30,9 @@ public interface UserBalanceInternalClient {
     /**
      * 扣减指定用户余额，并按业务单据幂等记账。
      *
-     * @param userId 用户 ID
+     * @param userId        用户 ID
      * @param internalToken 服务间共享密钥
-     * @param command 余额扣款命令（含支付密码）
+     * @param command       余额扣款命令（含支付密码）
      * @return 扣款成功结果；包含业务引用、金额、扣款后余额和幂等重放标记
      * @throws feign.FeignException 下游返回非成功 HTTP 状态或调用链路失败时抛出，调用方必须停止推进支付成功
      */
@@ -42,4 +42,17 @@ public interface UserBalanceInternalClient {
             @RequestHeader("X-Internal-Token") String internalToken,
             @RequestBody UserBalanceDeductCommand command
     );
+
+    @PostMapping("/internal/users/{userId}/balance/close")
+    ApiResponse<String> close(@PathVariable("userId") Long userId,
+                              @RequestHeader("X-Internal-Token") String token,
+                              @RequestBody com.hbue.ordering.user.api.dto.BalanceCloseCommand command);
+
+    /**
+     * 退回实际扣款余额：原支付事实与累计退款上限由用户服务同库事务再次校验。
+     */
+    @PostMapping("/internal/users/{userId}/balance/refund")
+    ApiResponse<String> refund(@PathVariable("userId") Long userId,
+                               @RequestHeader("X-Internal-Token") String token,
+                               @RequestBody com.hbue.ordering.user.api.dto.BalanceRefundCommand command);
 }

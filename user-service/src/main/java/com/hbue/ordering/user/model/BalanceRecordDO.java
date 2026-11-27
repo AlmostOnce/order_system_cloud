@@ -38,7 +38,7 @@ public class BalanceRecordDO {
     private Long userId;
 
     /**
-     * 变动类型：RECHARGE 入账 / PAY 消费 / REFUND 退回。
+     * 变动类型：RECHARGE 入账 / PAY 消费 / REFUND 退回 / WRITE_OFF 注销放弃余额。
      */
     @TableField("change_type")
     private String changeType;
@@ -66,6 +66,12 @@ public class BalanceRecordDO {
      */
     @TableField("biz_ref")
     private String bizRef;
+
+    /**
+     * 退款关联的原支付/订单引用；退款号本身仍写biz_ref用于幂等，普通流水为空。
+     */
+    @TableField("original_biz_ref")
+    private String originalBizRef;
 
     /**
      * 备注。

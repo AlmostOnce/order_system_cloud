@@ -3,24 +3,25 @@ package com.hbue.ordering.order.controller;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.order.api.dto.CouponConsumeConfirmationRequest;
+import com.hbue.ordering.order.api.dto.OrderPaidCommand;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
+import com.hbue.ordering.order.coupon.CouponConsumeOutboxWriter;
+import com.hbue.ordering.order.mapper.PurchaseFactMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.security.InternalTokenVerifier;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderInternalVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.vo.PurchaseFactVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
- * 订单服务内部接口，仅供支付服务经服务发现调用。
+ * 订单服务内部接口，仅供支付与优惠券服务经服务发现调用。
  *
  * <p>鉴权说明：与代表用户的 /internal/products/quote（透传用户 JWT）不同，
- * 支付回调驱动的订单推进没有用户上下文，属于"系统事件"调用，
+ * 支付状态推进和券核销回执没有用户上下文，属于"系统事件"调用，
  * 因此使用共享密钥（X-Internal-Token）认证。两种模式并存是刻意设计。
  * 内部接口不依赖用户角色或用户 JWT，但每个请求仍须通过本控制器的共享密钥校验；
  * Gateway 不暴露该路径，服务发现地址也不应被视为认证措施。</p>
@@ -33,33 +34,55 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/orders")
 public class OrderInternalController {
 
-    /** 内部令牌请求头名称。 */
+    /**
+     * 内部令牌请求头名称。
+     */
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
 
-    /** 订单业务服务。 */
+    /**
+     * 订单业务服务。
+     */
     private final OrderService orderService;
 
-    /** 内部令牌校验器。 */
+    /**
+     * 内部令牌校验器。
+     */
     private final InternalTokenVerifier internalTokenVerifier;
+
+    /**
+     * 支付后优惠券核销 Outbox 回执处理器。
+     */
+    private final CouponConsumeOutboxWriter couponConsumeOutboxWriter;
+
+    /**
+     * 消费事实只读查询。
+     */
+    private final PurchaseFactMapper purchaseFacts;
 
     /**
      * 创建订单服务内部接口。
      *
-     * @param orderService 订单业务服务
+     * @param orderService          订单业务服务
      * @param internalTokenVerifier 内部令牌校验器
+     * @param couponConsumeOutboxWriter 支付后优惠券核销 Outbox 回执处理器
+     * @param purchaseFacts         消费事实只读查询
      */
     public OrderInternalController(
             OrderService orderService,
-            InternalTokenVerifier internalTokenVerifier
+            InternalTokenVerifier internalTokenVerifier,
+            CouponConsumeOutboxWriter couponConsumeOutboxWriter,
+            PurchaseFactMapper purchaseFacts
     ) {
         this.orderService = orderService;
         this.internalTokenVerifier = internalTokenVerifier;
+        this.couponConsumeOutboxWriter = couponConsumeOutboxWriter;
+        this.purchaseFacts = purchaseFacts;
     }
 
     /**
      * 查询订单内部视图，供创建支付单时校验归属与状态。
      *
-     * @param token 内部调用令牌
+     * @param token   内部调用令牌
      * @param orderId 订单 ID
      * @return 内部订单视图
      */
@@ -83,18 +106,96 @@ public class OrderInternalController {
     /**
      * 支付成功后推进订单状态：待支付到已支付。
      *
-     * @param token 内部调用令牌
+     * @param token   内部调用令牌
      * @param orderId 订单 ID
+     * @param request 支付服务已经持久化的支付成功时间；订单服务不使用本机时间推测
      * @return 订单状态变更结果
      */
     @PatchMapping("/{orderId}/paid")
     public ApiResponse<OrderStatusVO> markOrderPaid(
             @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false)
             String token,
+            @PathVariable("orderId") Long orderId,
+            @RequestBody OrderPaidCommand request
+    ) {
+        verifyInternalToken(token);
+        if (request == null || request.paidAt() == null)
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付成功时间");
+        return ApiResponse.success(orderService.markOrderPaid(orderId, request.paidAt()));
+    }
+
+    /**
+     * 为统计服务提供兼容旧版 ID-only 消息所需的最小销量快照。
+     *
+     * <p>内部共享密钥校验通过后，返回真实订单 paid_at、窗口及下单菜品原始份数；
+     * 该契约不包含用户、金额或支付凭据，也不经过 Gateway 对外开放。</p>
+     *
+     * @param token   统计服务配置的内部共享密钥
+     * @param orderId 来源订单主键
+     * @return 订单服务当前保存的不可变支付销量事实
+     */
+    @GetMapping("/{orderId}/paid-sales-snapshot")
+    public ApiResponse<OrderPaidSalesSnapshotVO> paidSalesSnapshot(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
             @PathVariable("orderId") Long orderId
     ) {
         verifyInternalToken(token);
-        return ApiResponse.success(orderService.markOrderPaid(orderId));
+        return ApiResponse.success(orderService.getPaidSalesSnapshot(orderId));
+    }
+
+    /**
+     * 接收券服务在本地核销事务提交后的回执，使 Outbox 不会仅凭 Broker 接收就永久结案。
+     *
+     * @param token   服务间共享令牌
+     * @param request 已核销事件的身份快照
+     * @return 同一事件首次确认或安全重放时均返回成功
+     */
+    @PostMapping("/coupon-consume/confirmed")
+    public ApiResponse<Void> confirmCouponConsumed(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
+            @RequestBody CouponConsumeConfirmationRequest request
+    ) {
+        verifyInternalToken(token);
+        couponConsumeOutboxWriter.confirm(request);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 查询用户是否具有某道菜或某个档口的有效消费事实。
+     *
+     * <p>供评论服务在发表评论前校验"必须消费过才能评论"。只返回布尔结论，
+     * 不返回订单号、金额或明细；{@code userId} 由评论服务从已认证身份解析后传入，
+     * 不接受终端用户直接指定他人编号。</p>
+     *
+     * <p>类型白名单在入口处校验：未知类型直接拒绝，避免拼写错误被静默当成某一种维度，
+     * 导致"买过菜"被当成"在该店消费过"这类错误的放行结论。</p>
+     *
+     * @param token      服务间共享令牌
+     * @param userId     用户内部编号
+     * @param targetType 目标类型：PRODUCT 菜品，WINDOW 档口
+     * @param targetId   菜品编号或档口编号
+     * @return 消费事实布尔结果
+     */
+    @GetMapping("/purchase-facts")
+    public ApiResponse<PurchaseFactVO> purchaseFact(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String token,
+            @RequestParam("userId") Long userId,
+            @RequestParam("targetType") String targetType,
+            @RequestParam("targetId") Long targetId
+    ) {
+        verifyInternalToken(token);
+        if (userId == null || userId <= 0 || targetId == null || targetId <= 0) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "用户编号与目标编号必须为正数");
+        }
+        if ("PRODUCT".equals(targetType)) {
+            return ApiResponse.success(new PurchaseFactVO(
+                    purchaseFacts.existsCompletedProductPurchase(userId, targetId)));
+        }
+        if ("WINDOW".equals(targetType)) {
+            return ApiResponse.success(new PurchaseFactVO(
+                    purchaseFacts.existsCompletedWindowPurchase(userId, targetId)));
+        }
+        throw new BusinessException(CommonErrorCode.BAD_REQUEST, "不支持的目标类型");
     }
 
     /**

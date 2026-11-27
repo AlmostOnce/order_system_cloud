@@ -21,23 +21,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserWalletServiceImplTest {
-    @Mock private UserMapper userMapper;
-    @Mock private BalanceRecordMapper recordMapper;
-    @Mock private PayPasswordService payPasswordService;
+    @Mock
+    private UserMapper userMapper;
+    @Mock
+    private BalanceRecordMapper recordMapper;
+    @Mock
+    private PayPasswordService payPasswordService;
 
     @Test
     void shouldCreditAndWriteRechargeRecordAfterPasswordVerification() {
@@ -165,14 +161,21 @@ class UserWalletServiceImplTest {
     }
 
     private UserDO user(String balance) {
-        UserDO user = new UserDO(); user.setUserId(1L); user.setStatus(1);
-        user.setBalance(new BigDecimal(balance)); user.setPayPasswordHash("hashed");
+        UserDO user = new UserDO();
+        user.setUserId(1L);
+        user.setStatus(1);
+        user.setBalance(new BigDecimal(balance));
+        user.setPayPasswordHash("hashed");
         return user;
     }
 
     private BalanceRecordDO record(Long id, String amount) {
-        BalanceRecordDO record = new BalanceRecordDO(); record.setRecordId(id); record.setChangeType("RECHARGE");
-        record.setUserId(1L); record.setAmount(new BigDecimal(amount)); record.setBalanceAfter(new BigDecimal("70.00"));
+        BalanceRecordDO record = new BalanceRecordDO();
+        record.setRecordId(id);
+        record.setChangeType("RECHARGE");
+        record.setUserId(1L);
+        record.setAmount(new BigDecimal(amount));
+        record.setBalanceAfter(new BigDecimal("70.00"));
         return record;
     }
 }

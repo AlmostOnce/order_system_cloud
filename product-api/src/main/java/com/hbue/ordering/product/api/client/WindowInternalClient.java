@@ -26,11 +26,19 @@ import org.springframework.web.bind.annotation.RequestHeader;
         fallbackFactory = WindowInternalClientFallbackFactory.class
 )
 public interface WindowInternalClient {
+    /**
+     * 批量读取当前店铺名称，包含停用店铺，供历史订单展示。
+     */
+    @GetMapping("/internal/windows/names")
+    ApiResponse<java.util.Map<Long, String>> getWindowNames(
+            @org.springframework.web.bind.annotation.RequestParam("windowIds") java.util.List<Long> windowIds,
+            @RequestHeader("X-Internal-Token") String internalToken);
+
 
     /**
      * 查询档口基本信息。
      *
-     * @param windowId 档口 ID
+     * @param windowId      档口 ID
      * @param internalToken 服务间共享密钥
      * @return 档口信息；档口不存在时 data 为 null
      */
@@ -43,7 +51,7 @@ public interface WindowInternalClient {
     /**
      * 查询餐厅基本信息。
      *
-     * @param restaurantId 餐厅 ID
+     * @param restaurantId  餐厅 ID
      * @param internalToken 服务间共享密钥
      * @return 餐厅信息；餐厅不存在时 data 为 null
      */

@@ -1,0 +1,23 @@
+spring:
+  cloud:
+    function:
+      definition: couponPaid
+    stream:
+      bindings:
+        couponPaid-in-0:
+          destination: order-coupon-paid-v1
+          group: coupon-service-coupon-paid-v1
+          content-type: application/json
+          consumer:
+            # 事务性消费者自行判定异常并交由 RocketMQ 重投，避免框架重试造成状态越级。
+            max-attempts: 1
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          couponPaid-in-0:
+            consumer:
+              consume-from-where: CONSUME_FROM_FIRST_OFFSET
+              push:
+                orderly: false
+                max-reconsume-times: 16

@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="CouponServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="NACOS_USERNAME" value="nacos" />
+      <env name="NACOS_PASSWORD" value="root" />
+      <env name="SW_AGENT_NAME" value="coupon-service" />
+      <env name="SW_AGENT_COLLECTOR_BACKEND_SERVICES" value="127.0.0.1:11800" />
+    </envs>
+    <module name="coupon-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.hbue.ordering.coupon.CouponServiceApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

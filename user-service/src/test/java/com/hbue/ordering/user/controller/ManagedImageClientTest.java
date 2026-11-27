@@ -12,14 +12,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 用真实 HTTP 边界验证文件归属，避免 Mapper mock 掩盖缺失字段。 */
+/**
+ * 用真实 HTTP 边界验证文件归属，避免 Mapper mock 掩盖缺失字段。
+ */
 class ManagedImageClientTest {
     private static final String KEY = "0123456789abcdef0123456789abcdef";
     private HttpServer server;
     private final AtomicInteger requests = new AtomicInteger();
 
     @AfterEach
-    void stopServer() { if (server != null) server.stop(0); }
+    void stopServer() {
+        if (server != null) server.stop(0);
+    }
 
     private ManagedImageClient client(String data, int status) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

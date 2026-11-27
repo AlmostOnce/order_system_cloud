@@ -6,6 +6,11 @@ import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.audit.ManagementAuditLogger;
+import com.hbue.ordering.coupon.api.client.CouponServiceClient;
+import com.hbue.ordering.coupon.api.dto.CouponLockRequest;
+import com.hbue.ordering.coupon.api.dto.CouponReleaseRequest;
+import com.hbue.ordering.coupon.api.vo.CouponLockVO;
+import com.hbue.ordering.order.api.vo.OrderPaidSalesSnapshotVO;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderItemCreateRequest;
 import com.hbue.ordering.order.enums.OrderStatus;
@@ -14,11 +19,15 @@ import com.hbue.ordering.order.mapper.OrderMapper;
 import com.hbue.ordering.order.model.OrderDO;
 import com.hbue.ordering.order.model.OrderItemDO;
 import com.hbue.ordering.order.notification.CancellationNotificationTcc;
+import com.hbue.ordering.order.recommendation.OrderSpecificationSnapshot;
 import com.hbue.ordering.order.service.OrderPersistenceService;
 import com.hbue.ordering.order.service.OrderService;
 import com.hbue.ordering.order.vo.OrderDetailVO;
+import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
+import com.hbue.ordering.order.vo.PaymentCloseVO;
 import com.hbue.ordering.product.api.client.ProductServiceClient;
+import com.hbue.ordering.product.api.dto.ProductQuoteItemRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteRequest;
 import com.hbue.ordering.product.api.dto.ProductQuoteResponse;
 import com.hbue.ordering.product.api.vo.ProductQuoteVO;
@@ -28,31 +37,25 @@ import com.hbue.ordering.stock.api.dto.StockItemRequest;
 import com.hbue.ordering.stock.api.dto.StockRestoreRequest;
 import com.hbue.ordering.user.api.client.UserServiceClient;
 import com.hbue.ordering.user.api.vo.UserBasicVO;
+import feign.FeignException;
 import org.apache.seata.spring.annotation.GlobalTransactional;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 订单业务服务实现。
@@ -67,45 +70,83 @@ public class OrderServiceImpl
 
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
 
-    /** 单个订单允许的最大菜品行数。 */
+    /**
+     * 单个订单允许的最大菜品行数。
+     */
     private static final int MAX_ORDER_ITEMS = OrderCreateRequest.MAX_ITEM_COUNT;
 
-    /** 新订单的初始状态。 */
+    /**
+     * 新订单的初始状态。
+     */
     private static final String INITIAL_ORDER_STATUS = "待支付";
 
-    /** 订单表 DECIMAL(10,2) 能保存的最大金额。 */
+    /**
+     * 订单表 DECIMAL(10,2) 能保存的最大金额。
+     */
     private static final BigDecimal MAX_ORDER_AMOUNT =
             new BigDecimal("99999999.99");
 
-    /** 审计动作：商家推进订单状态。 */
+    /**
+     * 审计动作：商家推进订单状态。
+     */
     private static final String ORDER_STATUS_ADVANCE = "ORDER_STATUS_ADVANCE";
 
-    /** 审计目标类型：订单。 */
+    /**
+     * 审计目标类型：订单。
+     */
     private static final String ORDER_TARGET_TYPE = "ORDER";
 
-    /** 用户服务远程客户端。 */
+    /**
+     * 用户服务远程客户端。
+     */
     private final UserServiceClient userServiceClient;
 
-    /** 商品服务核价客户端。 */
+    /**
+     * 商品服务核价客户端。
+     */
     private final ProductServiceClient productServiceClient;
 
-    /** 订单头和明细原子持久化服务。 */
+    /**
+     * 订单头和明细原子持久化服务。
+     */
     private final OrderPersistenceService orderPersistenceService;
 
-    /** 订单明细 Mapper。 */
+    /**
+     * 订单明细 Mapper。
+     */
     private final OrderItemMapper orderItemMapper;
 
-    /** 数据范围判定服务。 */
+    /**
+     * 数据范围判定服务。
+     */
     private final DataScopeService dataScopeService;
 
-    /** 管理操作审计日志记录器。 */
+    /**
+     * 管理操作审计日志记录器。
+     */
     private final ManagementAuditLogger auditLogger;
 
-    /** 库存服务内部扣减客户端。 */
+    /**
+     * 库存服务内部扣减客户端。
+     */
     private final StockServiceClient stockServiceClient;
 
-    /** 服务间内部接口共享密钥，调用库存服务时通过请求头传递。 */
+    /**
+     * 优惠券服务内部客户端；锁券/释放随当前 Seata 全局事务提交或回滚。
+     */
+    private final CouponServiceClient couponServiceClient;
+
+    /**
+     * 服务间内部接口共享密钥，调用库存与优惠券服务时通过请求头传递。
+     */
     private final String internalScopeToken;
+
+    private com.hbue.ordering.order.feign.PaymentCloseClient paymentClose;
+
+    @Autowired
+    void setPaymentClose(com.hbue.ordering.order.feign.PaymentCloseClient client) {
+        this.paymentClose = client;
+    }
 
     @Value("${notification.cancel-tcc.enabled:false}")
     private boolean cancellationNotificationEnabled;
@@ -119,14 +160,15 @@ public class OrderServiceImpl
     /**
      * 创建订单业务服务。
      *
-     * @param userServiceClient 用户服务远程客户端
-     * @param productServiceClient 商品服务核价客户端
+     * @param userServiceClient       用户服务远程客户端
+     * @param productServiceClient    商品服务核价客户端
      * @param orderPersistenceService 订单原子持久化服务
-     * @param orderItemMapper 订单明细 Mapper
-     * @param dataScopeService 数据范围判定服务
-     * @param auditLogger 管理操作审计日志记录器
-     * @param stockServiceClient 库存服务内部扣减客户端
-     * @param internalScopeToken 服务间内部接口共享密钥
+     * @param orderItemMapper         订单明细 Mapper
+     * @param dataScopeService        数据范围判定服务
+     * @param auditLogger             管理操作审计日志记录器
+     * @param stockServiceClient      库存服务内部扣减客户端
+     * @param couponServiceClient     优惠券服务内部锁定与释放客户端
+     * @param internalScopeToken      服务间内部接口共享密钥
      */
     public OrderServiceImpl(
             UserServiceClient userServiceClient,
@@ -136,6 +178,7 @@ public class OrderServiceImpl
             DataScopeService dataScopeService,
             ManagementAuditLogger auditLogger,
             StockServiceClient stockServiceClient,
+            CouponServiceClient couponServiceClient,
             @Value("${internal.scope.token:}") String internalScopeToken
     ) {
         this.userServiceClient = userServiceClient;
@@ -145,6 +188,7 @@ public class OrderServiceImpl
         this.dataScopeService = dataScopeService;
         this.auditLogger = auditLogger;
         this.stockServiceClient = stockServiceClient;
+        this.couponServiceClient = couponServiceClient;
         this.internalScopeToken = internalScopeToken;
     }
 
@@ -172,7 +216,7 @@ public class OrderServiceImpl
     /**
      * 查询当前用户的订单详情。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId  当前登录用户 ID
      * @param orderId 订单 ID
      * @return 订单及其菜品快照
      */
@@ -199,13 +243,13 @@ public class OrderServiceImpl
     /**
      * 创建订单，商品价格始终以商品服务返回值为准。
      *
-     * <p>整个方法运行在 Seata 全局事务中：订单与明细写入本地库后调用库存服务扣减库存，
-     * 任一环节失败（包括库存不足、库存服务不可用）都会回滚全局事务，
-     * 使「订单落库」与「库存扣减」要么同时成功、要么同时不发生。</p>
+     * <p>整个方法运行在 Seata 全局事务中：先由数据库唯一约束确定幂等赢家，再按需锁券、
+     * 保存优惠金额快照并扣减库存。任一环节失败（包括券服务拒绝、库存不足或远程不可用）
+     * 都会回滚订单、优惠券锁定和库存分支，避免留下没有对应订单的资源占用。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId         当前登录用户 ID
      * @param idempotencyKey 客户端幂等键
-     * @param request 窗口、菜品清单和备注
+     * @param request        窗口、菜品清单、可选用户券 ID 和备注
      * @return 新订单详情；同键同请求时返回已有订单
      */
     @Override
@@ -265,11 +309,8 @@ public class OrderServiceImpl
         );
 
         try {
-            // 订单头和明细必须在同一事务保存，避免出现缺少明细的半成品订单。
+            // 先让数据库唯一约束选出幂等赢家，再锁券；败者不会先占券后因订单冲突而错误提交券状态。
             orderPersistenceService.saveOrderWithItems(orderDO, orderItems);
-            // 订单与明细已写入本地库，紧接着扣减库存：
-            // 库存不足或库存服务不可用时抛出业务异常，由方法上的全局事务回滚订单写入。
-            deductStock(orderDO.getOrderNo(), userId, request);
         } catch (DuplicateKeyException exception) {
             // 原子写入事务已回滚；使用新的一致性读取取得并发请求的赢家订单。
             OrderDO concurrentOrder = baseMapper.selectByUserIdAndIdempotencyKey(
@@ -282,7 +323,135 @@ public class OrderServiceImpl
             return replayOrder(concurrentOrder, requestHash);
         }
 
+        // 锁券在订单唯一插入后执行，保证并发幂等失败不会锁定一张未创建的订单券。
+        applySelectedCoupon(orderDO, orderItems, request.getUserCouponId());
+        // 订单优惠快照与库存扣减仍处于同一 Seata 事务；任一服务失败都回滚锁券和订单写入。
+        deductStock(orderDO.getOrderNo(), userId, request);
+
         return OrderDetailVO.from(orderDO, userBasicVO, orderItems);
+    }
+
+    /**
+     * 按服务端商品报价锁定顾客选择的券并保存金额快照；客户端提交的金额从不参与优惠计算。
+     *
+     * @param order        已先写入订单库并生成订单号的订单
+     * @param items        已由商品服务核价形成的订单明细
+     * @param userCouponId 顾客选择的本人持券 ID；为空时不调用优惠券服务
+     */
+    private void applySelectedCoupon(OrderDO order, List<OrderItemDO> items, Long userCouponId) {
+        if (userCouponId == null) return;
+        if (order.getTotalAmount() == null || order.getTotalAmount().signum() <= 0) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "零金额订单不能使用优惠券");
+        }
+
+        ApiResponse<CouponLockVO> response;
+        try {
+            // 内部身份由服务间共享密钥传递；用户、窗口和门槛金额均来自已认证主体及服务端报价。
+            response = couponServiceClient.lock(internalScopeToken, CouponLockRequest.builder()
+                    .userCouponId(userCouponId)
+                    .userId(order.getUserId())
+                    .orderNo(order.getOrderNo())
+                    .windowId(order.getWindowId())
+                    .eligibleAmount(order.getTotalAmount())
+                    .build());
+        } catch (RuntimeException exception) {
+            log.warn("锁定优惠券远程调用失败，订单号={}", order.getOrderNo(), exception);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务暂时不可用");
+        }
+        if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode())
+                || response.getData() == null) {
+            String code = response == null ? null : response.getCode();
+            String message = response == null ? null : response.getMessage();
+            if (CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(code)) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,
+                        message == null || message.isBlank() ? "优惠券服务暂时不可用" : message);
+            }
+            if (CommonErrorCode.BAD_REQUEST.code().equals(code)) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST,
+                        message == null || message.isBlank() ? "所选优惠券不适用于当前订单" : message);
+            }
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    message == null || message.isBlank() ? "所选优惠券已不可用，请刷新后重试" : message);
+        }
+
+        CouponLockVO coupon = response.getData();
+        BigDecimal discount = coupon.getDiscountAmount();
+        if (coupon.getUserCouponId() == null || !userCouponId.equals(coupon.getUserCouponId())
+                || coupon.getTitle() == null || coupon.getTitle().isBlank() || coupon.getTitle().length() > 120
+                || discount == null) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务返回了无效的锁券结果");
+        }
+        try {
+            // 数据库金额列为两位小数；不静默舍入券服务返回的非法高精度金额。
+            discount = discount.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务返回了无效的优惠金额");
+        }
+        if (discount.signum() <= 0 || discount.compareTo(order.getTotalAmount()) >= 0) {
+            // 订单系统没有“零元支付”状态流，因此即使远端错误返回全额抵扣也必须拒绝。
+            throw new BusinessException(CommonErrorCode.CONFLICT, "优惠金额必须小于订单金额");
+        }
+
+        // 分摊快照先在内存中完整校验，再一次性写入订单头和全部明细；任何失败触发 Seata 回滚。
+        allocateCouponDiscount(order, items, userCouponId, coupon.getTitle(), discount);
+        orderPersistenceService.applyCouponSnapshot(order, items);
+    }
+
+    /**
+     * 按各行原价占比计算分摊，金额以分为单位；最后一行承接剩余金额，保证总额严格守恒。
+     * 当早期行的四舍五入可能使剩余优惠超过后续商品金额时，向当前行补足最低必要分值，
+     * 避免把某一行优惠分摊成负实付金额或产生负尾差。
+     *
+     * @param order        服务端已计算的订单总金额快照
+     * @param items        按订单行顺序排列的商品金额快照
+     * @param userCouponId 已由优惠券服务成功锁定的用户券 ID
+     * @param couponTitle  下单时固定的优惠券标题
+     * @param discount     优惠券服务核定的两位小数优惠金额
+     */
+    private void allocateCouponDiscount(OrderDO order, List<OrderItemDO> items, Long userCouponId,
+                                        String couponTitle, BigDecimal discount) {
+        BigDecimal grossAmount = order.getTotalAmount();
+        BigDecimal remainingDiscount = discount;
+        BigDecimal remainingGross = grossAmount;
+        BigDecimal discountSum = BigDecimal.ZERO;
+        BigDecimal payableSum = BigDecimal.ZERO;
+        for (int index = 0; index < items.size(); index++) {
+            OrderItemDO item = items.get(index);
+            BigDecimal lineGross = item == null ? null : item.getLineAmount();
+            if (lineGross == null || lineGross.signum() < 0) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "订单明细金额快照无效");
+            }
+            BigDecimal lineDiscount;
+            if (index == items.size() - 1) {
+                lineDiscount = remainingDiscount;
+            } else {
+                BigDecimal roundedShare = discount.multiply(lineGross)
+                        .divide(grossAmount, 2, RoundingMode.HALF_UP);
+                BigDecimal grossAfterLine = remainingGross.subtract(lineGross);
+                BigDecimal minimumToFitRemaining = remainingDiscount.subtract(grossAfterLine).max(BigDecimal.ZERO);
+                lineDiscount = roundedShare.max(minimumToFitRemaining)
+                        .min(remainingDiscount).min(lineGross).setScale(2, RoundingMode.UNNECESSARY);
+            }
+            BigDecimal linePayable = lineGross.subtract(lineDiscount);
+            if (lineDiscount.signum() < 0 || linePayable.signum() < 0) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券分摊金额无效");
+            }
+            item.setLineDiscountAmount(lineDiscount);
+            item.setLinePayableAmount(linePayable);
+            discountSum = discountSum.add(lineDiscount);
+            payableSum = payableSum.add(linePayable);
+            remainingDiscount = remainingDiscount.subtract(lineDiscount);
+            remainingGross = remainingGross.subtract(lineGross);
+        }
+        BigDecimal payable = grossAmount.subtract(discount).setScale(2, RoundingMode.UNNECESSARY);
+        if (remainingDiscount.signum() != 0 || discountSum.compareTo(discount) != 0
+                || payableSum.compareTo(payable) != 0) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "优惠券分摊金额不守恒");
+        }
+        order.setUserCouponId(userCouponId);
+        order.setCouponTitleSnapshot(couponTitle);
+        order.setDiscountAmount(discount);
+        order.setPayableAmount(payable);
     }
 
     /**
@@ -293,7 +462,7 @@ public class OrderServiceImpl
      * 绝不会出现「订单已落库但库存未扣减」的超卖窗口。</p>
      *
      * @param orderNo 订单号，作为库存流水的幂等业务单据号
-     * @param userId 下单用户 ID，作为库存流水操作者
+     * @param userId  下单用户 ID，作为库存流水操作者
      * @param request 创建订单请求，提供档口与菜品明细
      */
     private void deductStock(
@@ -301,14 +470,12 @@ public class OrderServiceImpl
             Long userId,
             OrderCreateRequest request
     ) {
-        // 把订单明细转换为库存扣减明细：菜品 ID、数量与下单内容完全一致。
-        List<StockItemRequest> stockItems = new ArrayList<>();
+        // 多规格会让同一菜品在订单中出现多行；库存仍按菜品维护，因此先合并总份数。
+        Map<Long, Long> quantitiesByProduct = new TreeMap<>();
         for (OrderItemCreateRequest item : request.getItems()) {
-            stockItems.add(StockItemRequest.builder()
-                    .productId(item.getProductId())
-                    .quantity(item.getQuantity())
-                    .build());
+            quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
         }
+        List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
 
         StockDeductRequest deductRequest = StockDeductRequest.builder()
                 // 订单号是库存扣减的幂等键，重复下单请求不会重复扣减同一订单的库存。
@@ -355,15 +522,49 @@ public class OrderServiceImpl
     }
 
     /**
+     * 把同菜的规格明细合并成库存服务现有的菜品级请求，并拒绝超出其 Integer 数量字段的合计。
+     *
+     * @param quantitiesByProduct 按商品 ID 汇总后的长整型数量
+     * @return 商品 ID 唯一且数量可由库存服务准确表示的请求明细
+     */
+    private List<StockItemRequest> toStockItems(Map<Long, Long> quantitiesByProduct) {
+        List<StockItemRequest> stockItems = new ArrayList<>();
+        for (Map.Entry<Long, Long> entry : quantitiesByProduct.entrySet()) {
+            if (entry.getValue() == null || entry.getValue() <= 0
+                    || entry.getValue() > Integer.MAX_VALUE) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "同一菜品的购买总数超出库存服务限制");
+            }
+            stockItems.add(StockItemRequest.builder()
+                    .productId(entry.getKey()).quantity(entry.getValue().intValue()).build());
+        }
+        return stockItems;
+    }
+
+    /**
      * 顾客取消自己尚未支付的订单。
      *
-     * @param userId 当前登录顾客 ID
+     * @param userId  当前登录顾客 ID
      * @param orderId 订单 ID
      * @return 订单状态变更结果
      */
     @Override
     @GlobalTransactional(name = "cancel-order-restore-stock", rollbackFor = Exception.class)
     public OrderStatusVO cancelOrder(Long userId, Long orderId) {
+        return cancelPendingOrder(userId, orderId, false);
+    }
+
+    @Override
+    @GlobalTransactional(name = "expire-order-restore-stock", rollbackFor = Exception.class)
+    public OrderStatusVO cancelExpiredOrder(Long orderId) {
+        OrderDO current = getOrderForStatusChange(orderId);
+        if (getCurrentStatus(current) != OrderStatus.PENDING_PAYMENT)
+            return OrderStatusVO.builder().orderId(orderId).status(current.getStatus()).build();
+        if (System.currentTimeMillis() < com.hbue.ordering.order.util.OrderPaymentDeadline.epochMillis(current))
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单尚未到支付截止时间");
+        return cancelPendingOrder(current.getUserId(), orderId, true);
+    }
+
+    private OrderStatusVO cancelPendingOrder(Long userId, Long orderId, boolean automatic) {
         // 先确认订单归属；随后状态机校验确保已支付或履约中的订单不能由顾客取消。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         if (userId == null || !userId.equals(orderDO.getUserId())) {
@@ -385,42 +586,130 @@ public class OrderServiceImpl
             throw invalidStatusTransition();
         }
 
-        // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
-        // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
-        OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
-        List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
-        if (orderItems == null || orderItems.isEmpty()) {
-            throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
+        // 关单请求本身可能超时或返回失败；支付库可能已经置位关闭，而订单取消并未成立，因此同样要补偿。
+        ApiResponse<PaymentCloseVO> closure;
+        try {
+            closure = paymentClose.close(orderId, internalScopeToken);
+        } catch (RuntimeException exception) {
+            reopenPaymentGate(orderId);
+            throw exception;
         }
-        List<StockItemRequest> stockItems = new ArrayList<>();
-        for (OrderItemDO item : orderItems) {
-            stockItems.add(StockItemRequest.builder()
-                    .productId(item.getProductId()).quantity(item.getQuantity()).build());
+        if (closure == null || !CommonErrorCode.SUCCESS.code().equals(closure.getCode())) {
+            reopenPaymentGate(orderId);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "暂时无法确认支付关闭结果，请稍后重试");
         }
+        var closeResult = closure.getData();
+        if (closeResult == null) {
+            reopenPaymentGate(orderId);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "支付服务没有返回关单结果");
+        }
+        if ("PAID".equals(closeResult.status())) {
+            // 关单与支付成功竞争时，支付服务返回其持久化的 success_time，订单不能自行用当前时间补猜。
+            // 款项已到账不能撤销关闭意图，否则后续回调可能在已支付订单上再次记账。
+            if (closeResult.paidAt() == null)
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "无法确认支付成功时间，请稍后重试");
+            return markOrderPaid(orderId, closeResult.paidAt());
+        }
+        if (!"CLOSED".equals(closeResult.status())) {
+            reopenPaymentGate(orderId);
+            throw new BusinessException(CommonErrorCode.CONFLICT, "支付结果待确认，不能取消订单");
+        }
+        try {
+            // 关闭期间订单可能已被成功支付推进，重新读取版本后再竞争取消。
+            orderDO = getOrderForStatusChange(orderId);
+            if (getCurrentStatus(orderDO) == OrderStatus.CANCELLED)
+                return OrderStatusVO.builder().orderId(orderId).status(OrderStatus.CANCELLED.getLabel()).build();
+            if (getCurrentStatus(orderDO) != OrderStatus.PENDING_PAYMENT) throw invalidStatusTransition();
+
+            // 先竞争状态迁移权，再回补：取消与支付竞争时只有取消成功的一方能回补。
+            // 任一远程失败均抛异常，由全局事务回滚取消状态与库存分支。
+            OrderStatusVO result = persistStatusTransition(orderDO, OrderStatus.CANCELLED);
+            List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
+            if (orderItems == null || orderItems.isEmpty()) {
+                throw new BusinessException(CommonErrorCode.CONFLICT, "订单缺少菜品明细，无法回补库存");
+            }
+            // 规格分行不拆分库存；向库存服务提交每道菜的合计回补数量，保持其现有幂等键语义。
+            Map<Long, Long> quantitiesByProduct = new TreeMap<>();
+            for (OrderItemDO item : orderItems) {
+                quantitiesByProduct.merge(item.getProductId(), item.getQuantity().longValue(), Long::sum);
+            }
+            List<StockItemRequest> stockItems = toStockItems(quantitiesByProduct);
+            ApiResponse<Void> response;
+            try {
+                response = stockServiceClient.restore(internalScopeToken,
+                        StockRestoreRequest.builder()
+                                .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
+                                .items(stockItems).operatorId(automatic ? null : userId)
+                                .remark(automatic ? "订单十五分钟未支付自动取消" : "顾客取消待支付订单").build());
+            } catch (RuntimeException exception) {
+                log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            }
+            if (response == null || CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            }
+            if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
+                throw new BusinessException(CommonErrorCode.CONFLICT,
+                        response.getMessage() == null || response.getMessage().isBlank()
+                                ? "库存回补失败，请稍后重试取消" : response.getMessage());
+            }
+            if (cancellationNotificationEnabled) {
+                CancellationNotificationTcc participant = cancellationNotification.getIfAvailable();
+                if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
+                    throw new IllegalStateException("取消通知事务准备失败");
+            }
+            // 只有支付已确认关闭、订单取消和库存回补均成功后才释放券；远程失败抛出以回滚整个 Seata 事务。
+            releaseCoupon(orderDO);
+            return result;
+        } catch (RuntimeException exception) {
+            // 关单已确认且不存在成功支付，但取消本身未能提交（状态迁移/回补/释放券失败，全局事务回滚）。
+            // 支付库的关闭标记不随 Seata 回滚，这里补偿撤销，避免订单仍是待支付却永久无法支付。
+            reopenPaymentGate(orderId);
+            throw exception;
+        }
+    }
+
+    /**
+     * 尽力撤销支付入口的关闭意图。
+     *
+     * <p>补偿发生在订单取消失败路径上，不能因为补偿本身失败而掩盖原始异常，因此只记录告警。
+     * 若补偿未生效，支付入口会保持关闭直至订单超时自动取消；该情况会留下可检索的告警日志。</p>
+     *
+     * @param orderId 取消失败的订单主键
+     */
+    private void reopenPaymentGate(Long orderId) {
+        try {
+            ApiResponse<Void> response = paymentClose.reopen(orderId, internalScopeToken);
+            if (response == null || !CommonErrorCode.SUCCESS.code().equals(response.getCode()))
+                log.warn("撤销支付入口关闭意图未确认：订单 {}", orderId);
+        } catch (RuntimeException exception) {
+            log.warn("撤销支付入口关闭意图失败：订单 {}", orderId, exception);
+        }
+    }
+
+    /**
+     * 释放已绑定到待支付订单的锁定券；优惠券服务按订单号复核状态并以 Seata undo 支持整体回滚。
+     *
+     * @param order 已成功迁移为已取消的订单快照
+     */
+    private void releaseCoupon(OrderDO order) {
+        if (order.getUserCouponId() == null) return;
         ApiResponse<Void> response;
         try {
-            response = stockServiceClient.restore(internalScopeToken,
-                    StockRestoreRequest.builder()
-                            .bizRef(orderDO.getOrderNo()).windowId(orderDO.getWindowId())
-                            .items(stockItems).operatorId(userId).remark("顾客取消待支付订单").build());
+            response = couponServiceClient.release(internalScopeToken, new CouponReleaseRequest(order.getOrderNo()));
         } catch (RuntimeException exception) {
-            log.warn("取消订单时调用库存回补失败：订单 {}", orderId, exception);
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+            log.warn("释放订单优惠券远程调用失败，订单号={}", order.getOrderNo(), exception);
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "优惠券服务暂时不可用，请稍后重试取消");
         }
-        if (response == null || CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(response.getCode())) {
-            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "库存服务暂时不可用，请稍后重试取消");
+        if (response != null && CommonErrorCode.SUCCESS.code().equals(response.getCode())) return;
+        String code = response == null ? null : response.getCode();
+        String message = response == null ? null : response.getMessage();
+        if (CommonErrorCode.SERVICE_UNAVAILABLE.code().equals(code)) {
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE,
+                    message == null || message.isBlank() ? "优惠券服务暂时不可用，请稍后重试取消" : message);
         }
-        if (!CommonErrorCode.SUCCESS.code().equals(response.getCode())) {
-            throw new BusinessException(CommonErrorCode.CONFLICT,
-                    response.getMessage() == null || response.getMessage().isBlank()
-                            ? "库存回补失败，请稍后重试取消" : response.getMessage());
-        }
-        if (cancellationNotificationEnabled) {
-            CancellationNotificationTcc participant = cancellationNotification.getIfAvailable();
-            if (participant == null || !participant.prepare(orderId, orderDO.getVersion() + 1, userId))
-                throw new IllegalStateException("取消通知事务准备失败");
-        }
-        return result;
+        throw new BusinessException(CommonErrorCode.CONFLICT,
+                message == null || message.isBlank() ? "优惠券释放失败，请稍后重试取消" : message);
     }
 
     /**
@@ -429,8 +718,8 @@ public class OrderServiceImpl
      * <p>先做细粒度数据范围校验：订单属私有数据，越权与不存在对外表现一致，
      * 统一返回 404；再校验状态机（待支付→已支付由支付回调独占，此处必然拒绝）。</p>
      *
-     * @param operatorId 当前登录操作者 ID
-     * @param orderId 订单 ID
+     * @param operatorId   当前登录操作者 ID
+     * @param orderId      订单 ID
      * @param targetStatus 目标状态
      * @return 订单状态变更结果
      */
@@ -502,12 +791,14 @@ public class OrderServiceImpl
      * @return 订单状态变更结果
      */
     @Override
-    public OrderStatusVO markOrderPaid(Long orderId) {
+    public OrderStatusVO markOrderPaid(Long orderId, java.time.LocalDateTime paidAt) {
+        if (paidAt == null) throw new BusinessException(CommonErrorCode.BAD_REQUEST, "缺少支付服务确认的支付成功时间");
         // 支付通知可能重放或并发到达，先读取状态并按状态机判定是否允许推进。
         OrderDO orderDO = getOrderForStatusChange(orderId);
         OrderStatus currentStatus = getCurrentStatus(orderDO);
 
-        if (currentStatus == OrderStatus.PAID) {
+        if (currentStatus == OrderStatus.REFUNDED || currentStatus == OrderStatus.PAID || currentStatus == OrderStatus.PREPARING
+                || currentStatus == OrderStatus.WAITING_FOR_PICKUP || currentStatus == OrderStatus.COMPLETED) {
             // 重复的支付成功通知按幂等成功处理。
             return OrderStatusVO.builder()
                     .orderId(orderId)
@@ -521,7 +812,7 @@ public class OrderServiceImpl
 
         try {
             // 状态与版本号条件更新用于竞争唯一写入权，防止重复通知重复推进订单。
-            return persistStatusTransition(orderDO, OrderStatus.PAID);
+            return persistPaidTransition(orderDO, paidAt);
         } catch (BusinessException conflictException) {
             // 并发回调竞争失败时回读订单：已被推进为已支付则幂等成功。
             OrderDO latestOrder = getById(orderId);
@@ -534,6 +825,31 @@ public class OrderServiceImpl
             }
             throw conflictException;
         }
+    }
+
+    /**
+     * 查询订单已支付的最小销量事实，供统计服务处理旧版 ID-only MQ 事件。
+     *
+     * @param orderId 订单主键
+     * @return 仅含原始菜品购买份数和不可变支付时间的快照
+     */
+    @Override
+    public OrderPaidSalesSnapshotVO getPaidSalesSnapshot(Long orderId) {
+        OrderDO order = getOrderForStatusChange(orderId);
+        OrderStatus status = getCurrentStatus(order);
+        if (order.getPaidAt() == null || !(status == OrderStatus.PAID || status == OrderStatus.PREPARING
+                || status == OrderStatus.WAITING_FOR_PICKUP || status == OrderStatus.COMPLETED || status == OrderStatus.REFUNDED)) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "订单没有可统计的成功支付事实");
+        }
+        List<OrderItemDO> orderItems = orderItemMapper.selectByOrderId(orderId);
+        if (orderItems == null || orderItems.isEmpty()) {
+            throw new BusinessException(CommonErrorCode.CONFLICT, "已支付订单缺少菜品明细");
+        }
+        List<OrderPaidSalesSnapshotVO.Item> items = orderItems.stream()
+                .map(item -> new OrderPaidSalesSnapshotVO.Item(item.getItemId(), item.getProductId(),
+                        item.getProductNameSnapshot(), item.getQuantity()))
+                .toList();
+        return new OrderPaidSalesSnapshotVO(order.getOrderId(), order.getPaidAt(), order.getWindowId(), items);
     }
 
     /**
@@ -578,7 +894,7 @@ public class OrderServiceImpl
     /**
      * 执行带旧状态及版本号条件的原子状态更新。
      *
-     * @param orderDO 已读取的订单
+     * @param orderDO      已读取的订单
      * @param targetStatus 已校验的目标状态
      * @return 订单状态变更结果
      */
@@ -603,6 +919,15 @@ public class OrderServiceImpl
                 .orderId(orderDO.getOrderId())
                 .status(targetStatus.getLabel())
                 .build();
+    }
+
+    /**
+     * 通过支付专用 CAS 写入 paid_at；失败的并发请求由调用方回读状态并按原规则幂等处理。
+     */
+    private OrderStatusVO persistPaidTransition(OrderDO order, java.time.LocalDateTime paidAt) {
+        boolean updated = orderPersistenceService.markPaidIfUnchanged(order.getOrderId(), order.getVersion(), paidAt);
+        if (!updated) throw invalidStatusTransition();
+        return OrderStatusVO.builder().orderId(order.getOrderId()).status(OrderStatus.PAID.getLabel()).build();
     }
 
     /**
@@ -635,7 +960,7 @@ public class OrderServiceImpl
     }
 
     /**
-     * 校验订单业务字段并拒绝重复菜品行。
+     * 校验订单业务字段并拒绝重复的菜品规格行。
      *
      * @param request 创建订单请求
      */
@@ -644,6 +969,7 @@ public class OrderServiceImpl
         if (request == null
                 || request.getWindowId() == null
                 || request.getWindowId() <= 0
+                || (request.getUserCouponId() != null && request.getUserCouponId() <= 0)
                 || request.getItems() == null
                 || request.getItems().isEmpty()
                 || request.getItems().size() > MAX_ORDER_ITEMS) {
@@ -653,19 +979,28 @@ public class OrderServiceImpl
             );
         }
 
-        // 同一订单内每种商品只允许一行；购买多个同类商品应通过 quantity 表达。
-        Set<Long> productIds = new HashSet<>();
+        // 相同菜品可以按不同规格分行；完全相同的选择组合仍须合并到 quantity，避免重复行。
+        Set<String> productSelections = new HashSet<>();
         for (OrderItemCreateRequest item : request.getItems()) {
             if (item == null
                     || item.getProductId() == null
                     || item.getProductId() <= 0
                     || item.getQuantity() == null
-                    || item.getQuantity() <= 0
-                    || !productIds.add(item.getProductId())) {
+                    || item.getQuantity() <= 0) {
                 throw new BusinessException(
                         CommonErrorCode.BAD_REQUEST,
-                        "菜品 ID、数量无效，且同一菜品不能重复提交"
+                        "菜品 ID 或数量无效"
                 );
+            }
+            List<Long> rawOptionIds = item.getSelectedOptionIds();
+            if (rawOptionIds != null && (rawOptionIds.size() > 10
+                    || rawOptionIds.stream().anyMatch(id -> id == null || id <= 0)
+                    || new HashSet<>(rawOptionIds).size() != rawOptionIds.size())) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "菜品规格选项无效");
+            }
+            List<Long> selectedOptionIds = normalizedSelectedOptionIds(item);
+            if (!productSelections.add(quoteKey(item.getProductId(), selectionKey(selectedOptionIds)))) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "相同菜品与规格不能重复提交");
             }
         }
     }
@@ -679,17 +1014,34 @@ public class OrderServiceImpl
     private List<ProductQuoteVO> queryProductQuotes(
             OrderCreateRequest request
     ) {
-        // 仅把窗口和商品 ID 清单交给商品服务，由商品服务判定归属、可售状态和实际价格。
+        // 逐行提交商品 ID 与选项 ID；商品服务负责规格归属、必选规则和最终价格校验。
         ProductQuoteRequest quoteRequest = new ProductQuoteRequest();
         quoteRequest.setWindowId(request.getWindowId());
-        List<Long> productIds = new ArrayList<>();
+        List<ProductQuoteItemRequest> quoteItems = new ArrayList<>();
         for (OrderItemCreateRequest item : request.getItems()) {
-            productIds.add(item.getProductId());
+            ProductQuoteItemRequest quoteItem = new ProductQuoteItemRequest();
+            quoteItem.setProductId(item.getProductId());
+            quoteItem.setSelectedOptionIds(normalizedSelectedOptionIds(item));
+            quoteItems.add(quoteItem);
         }
-        quoteRequest.setProductIds(productIds);
+        quoteRequest.setItems(quoteItems);
 
-        ApiResponse<ProductQuoteResponse> response =
-                productServiceClient.quote(quoteRequest);
+        ApiResponse<ProductQuoteResponse> response;
+        try {
+            response = productServiceClient.quote(quoteRequest);
+        } catch (FeignException exception) {
+            // 商品服务以HTTP 400报告失效规格，映射为顾客可修正的请求错误；其它HTTP故障视为依赖失败。
+            if (exception.status() == 400) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "规格选择无效，请刷新菜单后重试");
+            }
+            throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "商品服务暂时不可用");
+        }
+        if (response != null && CommonErrorCode.BAD_REQUEST.code().equals(response.getCode())) {
+            // 规格已失效、必选项缺失等属于顾客可修正的业务错误，不能伪装成依赖服务不可用。
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST,
+                    response.getMessage() == null || response.getMessage().isBlank()
+                            ? "规格选择无效，请刷新菜单后重试" : response.getMessage());
+        }
         // 校验远程服务的统一响应结构，防止失败响应或空数据被继续当作有效报价使用。
         if (response == null
                 || !CommonErrorCode.SUCCESS.code().equals(response.getCode())
@@ -723,7 +1075,7 @@ public class OrderServiceImpl
     /**
      * 将请求菜品和商品核价结果组装为订单明细快照。
      *
-     * @param request 创建订单请求
+     * @param request       创建订单请求
      * @param productQuotes 商品服务核价结果
      * @return 已计算行金额的订单明细列表
      */
@@ -731,28 +1083,42 @@ public class OrderServiceImpl
             OrderCreateRequest request,
             List<ProductQuoteVO> productQuotes
     ) {
-        // 按商品 ID 建立报价索引，之后按客户端请求顺序组装订单行。
-        Map<Long, ProductQuoteVO> quoteByProductId = new HashMap<>();
+        // 按商品 ID 与规格选择键索引报价，同菜的不同规格必须读取各自的服务端价格。
+        Map<String, ProductQuoteVO> quoteBySelection = new HashMap<>();
+        Set<String> expectedSelections = new HashSet<>();
+        for (OrderItemCreateRequest requestedItem : request.getItems()) {
+            expectedSelections.add(quoteKey(requestedItem.getProductId(),
+                    selectionKey(normalizedSelectedOptionIds(requestedItem))));
+        }
         for (ProductQuoteVO quote : productQuotes) {
             if (quote == null
                     || quote.getProductId() == null
-                    || quoteByProductId.putIfAbsent(
-                            quote.getProductId(),
-                            quote
-                    ) != null) {
+                    || quote.getSelectionKey() == null
+                    || quote.getSelectionKey().isBlank()
+                    || quote.getSelectedOptionIds() == null
+                    || quote.getSelectedOptionIds().stream().anyMatch(id -> id == null || id <= 0)
+                    || new HashSet<>(quote.getSelectedOptionIds()).size() != quote.getSelectedOptionIds().size()
+                    || !selectionKey(quote.getSelectedOptionIds()).equals(quote.getSelectionKey())) {
                 throw new BusinessException(
                         CommonErrorCode.SERVICE_UNAVAILABLE,
                         "商品服务返回了无效的核价结果"
                 );
             }
+            String key = quoteKey(quote.getProductId(), quote.getSelectionKey());
+            if (!expectedSelections.contains(key) || quoteBySelection.putIfAbsent(key, quote) != null) {
+                throw new BusinessException(
+                        CommonErrorCode.SERVICE_UNAVAILABLE,
+                        "商品服务返回了与请求不匹配的核价结果"
+                );
+            }
         }
-
         List<OrderItemDO> items = new ArrayList<>();
         for (OrderItemCreateRequest requestedItem : request.getItems()) {
             // 任一请求商品缺少报价都整体拒绝，不静默跳过菜品以免总金额与顾客意图不符。
-            ProductQuoteVO quote = quoteByProductId.get(
-                    requestedItem.getProductId()
-            );
+            List<Long> requestedOptionIds = normalizedSelectedOptionIds(requestedItem);
+            String requestedSelectionKey = selectionKey(requestedOptionIds);
+            ProductQuoteVO quote = quoteBySelection.get(
+                    quoteKey(requestedItem.getProductId(), requestedSelectionKey));
             if (quote == null) {
                 throw new BusinessException(
                         CommonErrorCode.BAD_REQUEST,
@@ -777,8 +1143,20 @@ public class OrderServiceImpl
             item.setProductCodeSnapshot(quote.getProductCode());
             item.setProductNameSnapshot(quote.getProductName());
             item.setUnitPriceSnapshot(quote.getPrice());
+            item.setSelectionKeySnapshot(quote.getSelectionKey());
+            item.setSpecificationTextSnapshot(quote.getSpecificationText() == null
+                    ? "" : quote.getSpecificationText());
+            // 结构化事实只接受商品服务核价结果；若协议缺失或选择键不一致，整体拒绝而不保存伪造历史。
+            try {
+                item.setSpecificationSelectionSnapshot(OrderSpecificationSnapshot.validate(
+                        quote.getSelectionKey(), quote.getSpecificationSelectionSnapshot(), false));
+            } catch (IllegalArgumentException exception) {
+                throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "商品服务返回了无效的规格快照");
+            }
             item.setQuantity(requestedItem.getQuantity());
             item.setLineAmount(lineAmount);
+            item.setLineDiscountAmount(BigDecimal.ZERO.setScale(2));
+            item.setLinePayableAmount(lineAmount.setScale(2, RoundingMode.UNNECESSARY));
             item.setCreatedAt(LocalDateTime.now());
             items.add(item);
         }
@@ -788,11 +1166,11 @@ public class OrderServiceImpl
     /**
      * 组装服务端控制的订单持久化字段。
      *
-     * @param userId 当前用户 ID
+     * @param userId         当前用户 ID
      * @param idempotencyKey 客户端幂等键
-     * @param request 创建订单请求
-     * @param requestHash 规范化请求摘要
-     * @param totalAmount 服务端计算的订单总金额
+     * @param request        创建订单请求
+     * @param requestHash    规范化请求摘要
+     * @param totalAmount    服务端计算的订单总金额
      * @return 新订单持久化对象
      */
     private OrderDO buildOrder(
@@ -803,7 +1181,7 @@ public class OrderServiceImpl
             BigDecimal totalAmount
     ) {
         // 订单号包含时间和随机后缀；并发幂等仍依赖用户 ID 与幂等键的数据库唯一约束。
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
         String time = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         String random = UUID.randomUUID()
                 .toString()
@@ -816,12 +1194,15 @@ public class OrderServiceImpl
         order.setUserId(userId);
         order.setWindowId(request.getWindowId());
         order.setTotalAmount(totalAmount);
+        order.setDiscountAmount(BigDecimal.ZERO.setScale(2));
+        order.setPayableAmount(totalAmount.setScale(2, RoundingMode.UNNECESSARY));
         order.setRemark(request.getRemark());
         order.setIdempotencyKey(idempotencyKey);
         order.setRequestHash(requestHash);
         order.setStatus(INITIAL_ORDER_STATUS);
         order.setVersion(0);
         order.setCreatedAt(now);
+        order.setExpiresAt(now.plusMinutes(15));
         order.setUpdatedAt(now);
         return order;
     }
@@ -830,7 +1211,7 @@ public class OrderServiceImpl
      * 检查重放请求摘要并返回已保存的订单及明细。
      *
      * @param existingOrder 已有订单
-     * @param requestHash 本次请求摘要
+     * @param requestHash   本次请求摘要
      * @return 已有订单详情
      */
     private OrderDetailVO replayOrder(
@@ -851,7 +1232,7 @@ public class OrderServiceImpl
     }
 
     /**
-     * 对窗口、菜品 ID 和数量、备注生成稳定摘要；菜品顺序不影响请求语义。
+     * 对窗口、菜品 ID、规格选项、数量和备注生成稳定摘要；行顺序不影响请求语义。
      *
      * @param request 创建订单请求
      * @return 请求内容的 SHA-256 摘要
@@ -861,17 +1242,21 @@ public class OrderServiceImpl
             // 采用 SHA-256 对参与订单语义的字段生成摘要，不将幂等键本身纳入摘要内容。
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             updateDigest(digest, request.getWindowId().toString());
+            // 只有主动选券时才把券 ID 纳入摘要；无券请求沿用旧摘要格式，保证部署前订单仍可安全重放。
+            if (request.getUserCouponId() != null) {
+                updateDigest(digest, request.getUserCouponId().toString());
+            }
 
-            // 先按商品 ID 排序，使商品行排列顺序不同但内容相同的请求得到相同摘要。
+            // 按商品及规范化规格键排序，使不同排列顺序的等价请求得到相同摘要。
             List<OrderItemCreateRequest> sortedItems = new ArrayList<>(
                     request.getItems()
             );
-            sortedItems.sort(Comparator.comparing(
-                    OrderItemCreateRequest::getProductId
-            ));
+            sortedItems.sort(Comparator.comparing(OrderItemCreateRequest::getProductId)
+                    .thenComparing(item -> selectionKey(normalizedSelectedOptionIds(item))));
             updateDigest(digest, Integer.toString(sortedItems.size()));
             for (OrderItemCreateRequest item : sortedItems) {
                 updateDigest(digest, item.getProductId().toString());
+                updateDigest(digest, selectionKey(normalizedSelectedOptionIds(item)));
                 updateDigest(digest, item.getQuantity().toString());
             }
 
@@ -894,10 +1279,49 @@ public class OrderServiceImpl
     }
 
     /**
+     * 取得有序、无重复的规格选项 ID；空/null 按旧版无规格请求解释。
+     *
+     * @param item 订单行请求
+     * @return 按数值升序排列的选择项 ID
+     */
+    private List<Long> normalizedSelectedOptionIds(OrderItemCreateRequest item) {
+        List<Long> ids = item.getSelectedOptionIds();
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return ids.stream().sorted().toList();
+    }
+
+    /**
+     * 生成与商品服务一致的选择键，选项 ID 排序后拼接，空列表固定为 base。
+     *
+     * @param selectedOptionIds 规格选项 ID
+     * @return 可用于区分同菜不同规格的稳定键
+     */
+    private String selectionKey(List<Long> selectedOptionIds) {
+        if (selectedOptionIds == null || selectedOptionIds.isEmpty()) {
+            return "base";
+        }
+        return selectedOptionIds.stream().sorted().map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining("-"));
+    }
+
+    /**
+     * 在当前服务内部拼接菜品 ID 和规格键，避免报价索引把不同规格混为一行。
+     *
+     * @param productId    商品 ID
+     * @param selectionKey 规范化选择键
+     * @return 唯一报价索引键
+     */
+    private String quoteKey(Long productId, String selectionKey) {
+        return productId + ":" + selectionKey;
+    }
+
+    /**
      * 按 UTF-8 编码并使用长度前缀写入摘要，避免字段拼接歧义。
      *
      * @param digest SHA-256 摘要器
-     * @param value 请求字段
+     * @param value  请求字段
      */
     private void updateDigest(MessageDigest digest, String value) {
         // 每个字段前写入 UTF-8 字节长度，避免直接拼接导致字段边界不明确。
@@ -909,14 +1333,44 @@ public class OrderServiceImpl
     }
 
     /**
-     * 查询当前用户的订单列表。
-     *
-     * @param userId 当前用户 ID
-     * @return 订单列表
+     * 分页读取本人订单。先校验身份、筛选、大小及游标，再执行一次有界主表查询。
+     * 查询不加载明细、不逐笔请求用户或店铺，不在服务内保留全部历史订单。
      */
     @Override
-    public List<OrderDO> listByUserId(Long userId) {
-        // 查询条件限定为当前用户 ID，避免列表接口跨用户暴露订单。
-        return baseMapper.selectByUserId(userId);
+    public OrderPageVO pageByUserId(Long userId, String status, String cursor, int limit) {
+        if (userId == null || userId <= 0 || limit < 1 || limit > 50 || status == null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单分页参数不正确");
+        }
+        // 状态分组由服务端固定映射，不拼接客户端SQL，不把未知状态降级成全量查询。
+        List<String> statuses = switch (status) {
+            case "all" -> null;
+            case "pending" -> List.of(OrderStatus.PENDING_PAYMENT.getLabel());
+            case "active" ->
+                    List.of(OrderStatus.PAID.getLabel(), OrderStatus.PREPARING.getLabel(), OrderStatus.WAITING_FOR_PICKUP.getLabel());
+            case "completed" -> List.of(OrderStatus.COMPLETED.getLabel(), OrderStatus.REFUNDED.getLabel());
+            case "cancelled" -> List.of(OrderStatus.CANCELLED.getLabel());
+            default -> throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单筛选状态不正确");
+        };
+        Long beforeId = null;
+        if (cursor != null) {
+            // 字符串游标避免客户端额外数值计算；格式、Long溢出及归属均在查询前检查。
+            if (!cursor.matches("[1-9][0-9]{0,18}")) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            try {
+                beforeId = Long.valueOf(cursor);
+            } catch (NumberFormatException error) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            if (!baseMapper.existsForUserOrder(userId, beforeId)) {
+                throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单游标不存在");
+            }
+        }
+        // 多取一条判断下一页；只转换limit条摘要，不把探测记录作为本页内容返回。
+        List<OrderDO> rows = baseMapper.selectUserPage(userId, statuses, beforeId, limit + 1);
+        boolean hasMore = rows.size() > limit;
+        List<OrderDetailVO> items = rows.stream().limit(limit).map(OrderDetailVO::from).toList();
+        String nextCursor = hasMore ? Long.toString(items.getLast().getOrderId()) : null;
+        return new OrderPageVO(items, nextCursor, hasMore);
     }
 }

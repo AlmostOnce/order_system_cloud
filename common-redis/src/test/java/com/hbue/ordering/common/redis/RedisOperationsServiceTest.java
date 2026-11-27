@@ -12,14 +12,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 /**
  * Redis 基础操作服务测试。
@@ -35,6 +31,11 @@ class RedisOperationsServiceTest {
 
     private HashOperations<String, Object, Object> hashOperations;
 
+    /**
+     * 有序集合操作测试替身，用于验证 ZADD/ZCARD/ZRANGE/ZREM 是否被正确委托。
+     */
+    private org.springframework.data.redis.core.ZSetOperations<String, String> zSetOperations;
+
     private RedisOperationsService redisOperationsService;
 
     /**
@@ -46,6 +47,7 @@ class RedisOperationsServiceTest {
         stringRedisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
         hashOperations = mock(HashOperations.class);
+        zSetOperations = mock(org.springframework.data.redis.core.ZSetOperations.class);
 
         when(stringRedisTemplate.opsForValue())
                 .thenReturn(valueOperations);
@@ -210,5 +212,107 @@ class RedisOperationsServiceTest {
 
         // 确认 Redis 返回删除成功。
         assertTrue(result);
+    }
+
+    /**
+     * 有序集合写入应调用 ZADD 并返回确认结果。
+     */
+    @Test
+    void addToSortedSetShouldDelegateToRedis() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.add("sample:zset", "member", 1000D)).thenReturn(true);
+
+        // 写入成员并按分数排序。
+        Boolean result = redisOperationsService.addToSortedSet("sample:zset", "member", 1000D);
+
+        // 确认使用 Redis 有序集合写入。
+        assertTrue(result);
+        verify(zSetOperations).add("sample:zset", "member", 1000D);
+    }
+
+    /**
+     * 有序集合数量统计应调用 ZCARD。
+     */
+    @Test
+    void sortedSetSizeShouldReturnCardinality() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.zCard("sample:zset")).thenReturn(3L);
+
+        // 统计有序集合成员数量。
+        Long size = redisOperationsService.sortedSetSize("sample:zset");
+
+        // 确认返回 Redis 统计结果。
+        assertEquals(3L, size);
+    }
+
+    /**
+     * 有序集合区间读取应按分数升序返回成员，Redis 返回 null 时按空集合处理。
+     */
+    @Test
+    void sortedSetRangeShouldReturnOrderedMembers() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.range("sample:zset", 0L, 1L))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of("first", "second")));
+
+        // 读取最旧的 2 个成员。
+        List<String> members = redisOperationsService.sortedSetRange("sample:zset", 0L, 1L);
+
+        // 确认保持 Redis 返回的分数升序。
+        assertEquals(List.of("first", "second"), members);
+    }
+
+    /**
+     * 有序集合删除应调用 ZREM 并返回删除数量。
+     */
+    @Test
+    void removeFromSortedSetShouldReturnRemovedCount() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.remove("sample:zset", "member")).thenReturn(1L);
+
+        // 删除指定成员。
+        Long removed = redisOperationsService.removeFromSortedSet("sample:zset", "member");
+
+        // 确认 Redis 返回删除数量。
+        assertEquals(1L, removed);
+    }
+
+    /**
+     * 互斥租约写入应使用 SET NX EX 语义，并保留租约时长。
+     */
+    @Test
+    void setIfAbsentShouldUseSetNxWithExpiration() {
+        Duration lease = Duration.ofMinutes(5);
+        when(valueOperations.setIfAbsent("scheduler:lock:sample", "owner", lease)).thenReturn(true);
+
+        // 尝试抢占互斥租约。
+        Boolean acquired = redisOperationsService.setIfAbsent("scheduler:lock:sample", "owner", lease);
+
+        // 确认写入走"不存在才写入并带过期时间"的单条命令。
+        assertTrue(acquired);
+        verify(valueOperations).setIfAbsent("scheduler:lock:sample", "owner", lease);
+    }
+
+    /**
+     * 释放租约必须先比较持有者标识，避免误删其它实例重新获取的锁。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void deleteIfEqualsShouldCompareOwnerBeforeDelete() {
+        when(stringRedisTemplate.<Long>execute(
+                any(RedisScript.class),
+                eq(List.of("scheduler:lock:sample")),
+                eq("owner")
+        )).thenReturn(1L);
+
+        // 以持有者标识安全释放租约。
+        Boolean removed = redisOperationsService.deleteIfEquals("scheduler:lock:sample", "owner");
+
+        // 确认比较与删除在同一段 Lua 中执行。
+        assertTrue(removed);
+        verify(stringRedisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of("scheduler:lock:sample")),
+                eq("owner")
+        );
     }
 }

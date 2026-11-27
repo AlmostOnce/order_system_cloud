@@ -3,6 +3,9 @@ server:
   port: 9092
 
 spring:
+  profiles:
+    # 收藏事件独立绑定；发件箱与收藏关系始终同事务，发布配置只控制异步投递。
+    include: user-favorite-mq
   config:
     # IDEA 在项目根目录或 user-service 目录运行时读取本机配置；不会提交凭据。
     import: optional:file:./user-service/email-local.properties,optional:file:./email-local.properties
@@ -21,6 +24,9 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     druid:
+      # DATETIME 统一采用 UTC+8；JDBC serverTimezone 不会设置 MySQL 会话时区。
+      connection-init-sqls:
+        - "SET SESSION time_zone = '+08:00'"
       # 本机开发容量：每个实例独立持有连接池，扩容时需合计 MySQL 连接数。
       initial-size: 1
       min-idle: 1
@@ -72,6 +78,18 @@ email:
   verification:
     secret: ${EMAIL_VERIFICATION_SECRET:}
 
+# 账号注销：冷静期、可放弃余额上限、到期扫描与提醒参数。
+# 冷静期与提醒提前量以小时为单位；扫描默认每 5 分钟执行一次，单批最多 20 人。
+account-deletion:
+  cooling-off-hours: ${ACCOUNT_DELETION_COOLING_OFF_HOURS:72}
+  max-forfeitable-balance: ${ACCOUNT_DELETION_MAX_FORFEITABLE_BALANCE:20.00}
+  reminder-lead-hours: ${ACCOUNT_DELETION_REMINDER_LEAD_HOURS:24}
+  scan-enabled: ${ACCOUNT_DELETION_SCAN_ENABLED:true}
+  scan-interval-ms: ${ACCOUNT_DELETION_SCAN_INTERVAL_MS:300000}
+  scan-initial-delay-ms: ${ACCOUNT_DELETION_SCAN_INITIAL_DELAY_MS:60000}
+  scan-batch-size: ${ACCOUNT_DELETION_SCAN_BATCH_SIZE:20}
+  lease-seconds: ${ACCOUNT_DELETION_LEASE_SECONDS:300}
+
 management:
   endpoints:
     web:
@@ -94,7 +112,8 @@ USER_MANAGER_BOOTSTRAP_PASSWORD: ""
 internal:
   scope:
     # 数据范围相关内部接口的共享密钥，与 order-service / product-service 保持一致。
-    token: ${INTERNAL_SCOPE_TOKEN:internal_scope_token_dev_2026}
+    # 必须由运行环境注入，不提供仓库内默认值：漏配时启动失败，避免用公开默认串通过内部鉴权。
+    token: ${INTERNAL_SCOPE_TOKEN}
 
 security:
   jwt:

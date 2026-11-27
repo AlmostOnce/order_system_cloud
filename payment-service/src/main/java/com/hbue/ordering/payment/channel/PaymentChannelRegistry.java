@@ -22,7 +22,9 @@ import java.util.Map;
 @Component
 public class PaymentChannelRegistry {
 
-    /** 按渠道标识索引的渠道实现。 */
+    /**
+     * 按渠道标识索引的渠道实现。
+     */
     private final Map<String, PaymentChannel> channels;
 
     /**

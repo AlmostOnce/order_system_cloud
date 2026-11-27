@@ -23,7 +23,7 @@ public interface UserScopeAdministrationService {
     /**
      * 查询指定用户持有的全部数据范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
      * @return 目标用户的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效或目标用户不存在时抛出
@@ -36,9 +36,9 @@ public interface UserScopeAdministrationService {
      * <p>覆盖式语义：请求即该用户最终持有的全部范围，为空表示清空。
      * 授予者不得越出自身范围、不得操作本人，且每条范围的引用对象必须真实存在。</p>
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param request 新的范围列表
+     * @param request      新的范围列表
      * @return 写入后的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 越权、自我操作、引用对象不存在或商品服务不可用时抛出
      */
@@ -51,9 +51,9 @@ public interface UserScopeAdministrationService {
     /**
      * 撤销指定用户的一条数据范围。
      *
-     * @param operatorId 操作者用户 ID
+     * @param operatorId   操作者用户 ID
      * @param targetUserId 目标用户 ID
-     * @param scopeId 范围记录 ID
+     * @param scopeId      范围记录 ID
      * @throws com.hbue.ordering.common.core.exception.BusinessException 越权、自我操作或范围记录不存在时抛出
      */
     void revokeScope(Long operatorId, Long targetUserId, Long scopeId);

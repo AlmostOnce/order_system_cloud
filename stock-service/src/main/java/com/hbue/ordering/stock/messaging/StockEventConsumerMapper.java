@@ -5,7 +5,9 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
-/** 库存事件消费幂等记录。 */
+/**
+ * 库存事件消费幂等记录。
+ */
 @Mapper
 public interface StockEventConsumerMapper {
     @Select("SELECT COUNT(*) FROM stock_event_consumed WHERE event_id = #{eventId}")

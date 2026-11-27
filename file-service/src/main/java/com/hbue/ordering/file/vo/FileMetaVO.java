@@ -20,35 +20,55 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class FileMetaVO {
 
-    /** 对外文件键。 */
+    /**
+     * 对外文件键。
+     */
     private String fileKey;
 
-    /** 业务类型。 */
+    /**
+     * 业务类型。
+     */
     private String bizType;
 
-    /** 关联业务主键，可为空。 */
+    /**
+     * 关联业务主键，可为空。
+     */
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Long bizRef;
 
-    /** 原始文件名，仅作展示。 */
+    /**
+     * 原始文件名，仅作展示。
+     */
     private String originalName;
 
-    /** 扩展名（小写、白名单内）。 */
+    /**
+     * 扩展名（小写、白名单内）。
+     */
     private String fileExt;
 
-    /** MIME 类型。 */
+    /**
+     * MIME 类型。
+     */
     private String contentType;
 
-    /** 字节数。 */
+    /**
+     * 字节数。
+     */
     private Long fileSize;
 
-    /** 内容摘要，用于秒传去重与完整性校验。 */
+    /**
+     * 内容摘要，用于秒传去重与完整性校验。
+     */
     private String sha256;
 
-    /** 上传者 user_id。 */
+    /**
+     * 上传者 user_id。
+     */
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Long uploaderId;
 
-    /** 创建时间。 */
+    /**
+     * 创建时间。
+     */
     private LocalDateTime createdAt;
 }

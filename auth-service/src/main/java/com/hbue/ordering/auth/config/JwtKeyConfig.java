@@ -43,8 +43,8 @@ public class JwtKeyConfig {
      * 创建 JWT 密钥配置。
      *
      * @param privateKeyResource RSA 私钥资源
-     * @param publicKeyResource RSA 公钥资源
-     * @param keyId 密钥编号
+     * @param publicKeyResource  RSA 公钥资源
+     * @param keyId              密钥编号
      */
     public JwtKeyConfig(
             @Value("${security.jwt.private-key-location}")

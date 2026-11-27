@@ -2,11 +2,15 @@ package com.hbue.ordering.common.web.media;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
+
 import java.util.Locale;
 
-/** 业务仅持久化文件键；展示地址由统一规则派生。 */
+/**
+ * 业务仅持久化文件键；展示地址由统一规则派生。
+ */
 public final class FileReferences {
-    private FileReferences() {}
+    private FileReferences() {
+    }
 
     public static String normalize(String key) {
         if (key == null || key.isEmpty()) return null;

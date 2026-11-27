@@ -29,7 +29,7 @@ public interface FileStorage {
      * 由上层转换为业务异常。</p>
      *
      * @param objectKey 介质内相对路径
-     * @param content 文件字节内容
+     * @param content   文件字节内容
      */
     void store(String objectKey, byte[] content);
 

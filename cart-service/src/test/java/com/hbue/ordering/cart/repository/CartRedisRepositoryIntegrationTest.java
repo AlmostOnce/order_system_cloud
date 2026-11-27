@@ -6,11 +6,7 @@ import com.hbue.ordering.cart.dto.request.CartSubmittedItemRequest;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.redis.RedisOperationsService;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -20,17 +16,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 真实 Redis 上的购物车 Lua 集成测试。
@@ -43,16 +31,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @EnabledIfEnvironmentVariable(named = "CART_REDIS_IT", matches = "true")
 class CartRedisRepositoryIntegrationTest {
-    /** 测试命名空间，即使并行启动另一轮集成测试也不会冲突。 */
+    /**
+     * 测试命名空间，即使并行启动另一轮集成测试也不会冲突。
+     */
     private static final String PREFIX = "cart:integration:" + UUID.randomUUID() + ":user:";
-    /** 本测试独有的 Redis 连接工厂。 */
+    /**
+     * 本测试独有的 Redis 连接工厂。
+     */
     private static LettuceConnectionFactory connectionFactory;
-    /** 真实 Redis 模板。 */
+    /**
+     * 真实 Redis 模板。
+     */
     private static StringRedisTemplate redis;
-    /** 默认容量约束下的被测组件。 */
+    /**
+     * 默认容量约束下的被测组件。
+     */
     private CartRedisRepository repository;
 
-    /** 下单快照只删除版本未变的条目，重复清理及其它用户、窗口均安全。 */
+    /**
+     * 下单快照只删除版本未变的条目，重复清理及其它用户、窗口均安全。
+     */
     @Test
     void shouldRemoveOnlyUnchangedSubmittedItems() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -67,7 +65,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(1, repository.findAll(2L).size());
     }
 
-    /** 数量改后再改回、取消勾选、删除后重新添加，都不能被旧提交快照删除。 */
+    /**
+     * 数量改后再改回、取消勾选、删除后重新添加，都不能被旧提交快照删除。
+     */
     @Test
     void shouldKeepModifiedAndRecreatedItems() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -84,7 +84,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(0L, repository.removeSubmitted(1L, 1L, snapshot));
     }
 
-    /** 任一候选值损坏时，整个脚本在删除前失败，不能只清掉前几项。 */
+    /**
+     * 任一候选值损坏时，整个脚本在删除前失败，不能只清掉前几项。
+     */
     @Test
     void shouldValidateAllCleanupCandidatesBeforeDeleting() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -97,7 +99,9 @@ class CartRedisRepositoryIntegrationTest {
         assertTrue(redis.opsForHash().hasKey(PREFIX + "1", "1:11"));
     }
 
-    /** 清理不续期剩余商品；没有购物车时不创建空 Key。 */
+    /**
+     * 清理不续期剩余商品；没有购物车时不创建空 Key。
+     */
     @Test
     void shouldPreserveTtlAndNotCreateMissingCartDuringCleanup() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -112,7 +116,9 @@ class CartRedisRepositoryIntegrationTest {
         assertFalse(redis.hasKey(PREFIX + "1"));
     }
 
-    /** 清理的大主键保持字符串精度，最后一项删除后不保留空 Hash。 */
+    /**
+     * 清理的大主键保持字符串精度，最后一项删除后不保留空 Hash。
+     */
     @Test
     void shouldCleanLargeIdsWithoutPrecisionLoss() {
         long id = 9007199254740993L;
@@ -123,7 +129,9 @@ class CartRedisRepositoryIntegrationTest {
         assertFalse(redis.hasKey(PREFIX + "1"));
     }
 
-    /** 精确匹配版本也不能删除数量不符或已取消勾选的条目。 */
+    /**
+     * 精确匹配版本也不能删除数量不符或已取消勾选的条目。
+     */
     @Test
     void shouldKeepDifferentQuantityAndUncheckedItems() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -137,7 +145,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(1, repository.findAll(1L).size());
     }
 
-    /** 清理与再次加购并发时，新加的一份必须保留，不能落入 Java 先查后删的竞态。 */
+    /**
+     * 清理与再次加购并发时，新加的一份必须保留，不能落入 Java 先查后删的竞态。
+     */
     @Test
     void shouldKeepNewIntentWhenCleanupRacesWithAdd() throws Exception {
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -165,7 +175,9 @@ class CartRedisRepositoryIntegrationTest {
         }
     }
 
-    /** 创建实际 Redis 连接，不读取或输出业务密码。 */
+    /**
+     * 创建实际 Redis 连接，不读取或输出业务密码。
+     */
     @BeforeAll
     static void connect() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(
@@ -182,26 +194,34 @@ class CartRedisRepositoryIntegrationTest {
         redis.afterPropertiesSet();
     }
 
-    /** 每条用例开始前仅清理测试前缀下的两个固定 Key。 */
+    /**
+     * 每条用例开始前仅清理测试前缀下的两个固定 Key。
+     */
     @BeforeEach
     void setUp() {
         cleanTestKeys();
         repository = repositoryWithLimit(100);
     }
 
-    /** 每条用例结束时清理自身创建的数据，失败用例也执行清理。 */
+    /**
+     * 每条用例结束时清理自身创建的数据，失败用例也执行清理。
+     */
     @AfterEach
     void cleanTestKeys() {
         redis.delete(List.of(PREFIX + "1", PREFIX + "2"));
     }
 
-    /** 关闭测试自身的连接与线程资源。 */
+    /**
+     * 关闭测试自身的连接与线程资源。
+     */
     @AfterAll
     static void disconnect() {
         connectionFactory.destroy();
     }
 
-    /** 同菜品累加数量，用户 Key 隔离，修改数量不覆盖勾选。 */
+    /**
+     * 同菜品累加数量，用户 Key 隔离，修改数量不覆盖勾选。
+     */
     @Test
     void shouldMergeAndIsolateUsers() {
         repository.add(1L, 1L, 11L, 2, "饭", "RICE");
@@ -214,7 +234,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(1, repository.findAll(2L).getFirst().getQuantity());
     }
 
-    /** Redis Lua JSON 不得把超过 2^53 的 BIGINT 标识截断。 */
+    /**
+     * Redis Lua JSON 不得把超过 2^53 的 BIGINT 标识截断。
+     */
     @Test
     void shouldPreserveLargeIdsAcrossUpdates() {
         long id = 9007199254740993L;
@@ -224,7 +246,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(id, repository.findAll(1L).getFirst().getProductId());
     }
 
-    /** 不存在的条目不能通过数量修改意外新增。 */
+    /**
+     * 不存在的条目不能通过数量修改意外新增。
+     */
     @Test
     void shouldNotCreateMissingItemsOnUpdate() {
         assertEquals(CommonErrorCode.NOT_FOUND, assertThrows(BusinessException.class,
@@ -234,7 +258,9 @@ class CartRedisRepositoryIntegrationTest {
         assertFalse(redis.hasKey(PREFIX + "1"));
     }
 
-    /** 清空窗口 1 不会清空窗口 10，重复删除保持幂等。 */
+    /**
+     * 清空窗口 1 不会清空窗口 10，重复删除保持幂等。
+     */
     @Test
     void shouldClearOnlyRequestedWindowAndDeleteEmptyHash() {
         repository.add(1L, 1L, 11L, 1, "饭", "RICE");
@@ -246,7 +272,9 @@ class CartRedisRepositoryIntegrationTest {
         assertFalse(redis.hasKey(PREFIX + "1"));
     }
 
-    /** 首次写入带 TTL，查询不会把即将过期的购物车续期到 30 天。 */
+    /**
+     * 首次写入带 TTL，查询不会把即将过期的购物车续期到 30 天。
+     */
     @Test
     void shouldExpireAfterWritesButNotAfterReads() {
         repository.add(1L, 1L, 11L, 1, "饭", "RICE");
@@ -259,7 +287,9 @@ class CartRedisRepositoryIntegrationTest {
         assertTrue(redis.getExpire(PREFIX + "1", TimeUnit.SECONDS) > 60);
     }
 
-    /** 每次修改及删除后重建都使用新版本，为后续快照清理提供可靠比较依据。 */
+    /**
+     * 每次修改及删除后重建都使用新版本，为后续快照清理提供可靠比较依据。
+     */
     @Test
     void shouldNeverReuseRevision() {
         repository.add(1L, 1L, 11L, 1, "饭", "RICE");
@@ -274,7 +304,9 @@ class CartRedisRepositoryIntegrationTest {
         assertNotEquals(second, third);
     }
 
-    /** 并发累加不能超过最终数量上限，也不能丢失成功的增加操作。 */
+    /**
+     * 并发累加不能超过最终数量上限，也不能丢失成功的增加操作。
+     */
     @Test
     void shouldEnforceQuantityLimitUnderConcurrentAdds() throws Exception {
         List<Callable<Integer>> tasks = new ArrayList<>();
@@ -293,7 +325,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(99, repository.findAll(1L).getFirst().getQuantity());
     }
 
-    /** 多实例同时添加不同菜品时，容量判断与插入必须是同一个原子动作。 */
+    /**
+     * 多实例同时添加不同菜品时，容量判断与插入必须是同一个原子动作。
+     */
     @Test
     void shouldEnforceCapacityUnderConcurrentNewItems() throws Exception {
         CartRedisRepository limited = repositoryWithLimit(2);
@@ -314,7 +348,9 @@ class CartRedisRepositoryIntegrationTest {
         assertEquals(2, limited.findAll(1L).size());
     }
 
-    /** 异常 JSON 返回 503 且修改不覆盖原始数据，删除仍可用于清理坏条目。 */
+    /**
+     * 异常 JSON 返回 503 且修改不覆盖原始数据，删除仍可用于清理坏条目。
+     */
     @Test
     void shouldRejectCorruptDataWithoutOverwritingIt() {
         redis.opsForHash().put(PREFIX + "1", "1:11", "{broken");

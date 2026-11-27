@@ -27,10 +27,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-/** 验证真实 Feign 装配后的契约、Token 透传和实际超时配置，不依赖 Nacos 或外部 HTTP 服务。 */
+/**
+ * 验证真实 Feign 装配后的契约、Token 透传和实际超时配置，不依赖 Nacos 或外部 HTTP 服务。
+ */
 class CartOrderFeignContractTest {
     /**
      * 从生产 application.yml 读取配置，通过实际 Feign 客户端验证最终生效的请求选项。
+     *
      * @throws Exception YAML 读取失败时抛出
      */
     @Test
@@ -68,24 +71,32 @@ class CartOrderFeignContractTest {
         }
     }
 
-    /** 保存经过实际 Feign 编码后的请求及最终超时选项。 */
+    /**
+     * 保存经过实际 Feign 编码后的请求及最终超时选项。
+     */
     static class Capture {
         final AtomicReference<Request> request = new AtomicReference<>();
         final AtomicReference<Request.Options> options = new AtomicReference<>();
     }
 
-    /** 仅装配远程调用所需组件，不启动业务应用、数据库或 Nacos。 */
+    /**
+     * 仅装配远程调用所需组件，不启动业务应用、数据库或 Nacos。
+     */
     @Configuration(proxyBeanMethods = false)
     @EnableFeignClients(clients = OrderServiceClient.class)
     @Import(CartFeignConfiguration.class)
     static class TestFeignConfig {
-        /** 为每个测试上下文创建独立捕获器。 */
+        /**
+         * 为每个测试上下文创建独立捕获器。
+         */
         @Bean
         Capture capture() {
             return new Capture();
         }
 
-        /** 用传输边界替身观察真实 Feign 生成的请求，不替换契约和解码器。 */
+        /**
+         * 用传输边界替身观察真实 Feign 生成的请求，不替换契约和解码器。
+         */
         @Bean
         Client client(Capture capture) {
             return (request, options) -> {

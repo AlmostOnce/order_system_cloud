@@ -1,0 +1,25 @@
+# 默认订单运行组启用优惠券核销 Outbox 发布；Broker 故障只推迟券核销，不阻塞支付确认。
+coupon:
+  consume:
+    messaging:
+      enabled: true
+spring:
+  cloud:
+    stream:
+      # profile 组中此文件最后加载，因此保留此前输出并追加券核销输出。
+      output-bindings: salesPaid-out-0;orderTimeout-out-0;couponPaid-out-0
+      bindings:
+        couponPaid-out-0:
+          destination: order-coupon-paid-v1
+          content-type: application/json
+          producer:
+            error-channel-enabled: false
+      rocketmq:
+        binder:
+          name-server: ${ROCKETMQ_NAMESERVER:127.0.0.1:9876}
+        bindings:
+          couponPaid-out-0:
+            producer:
+              group: order-coupon-paid-outbox-v1
+              send-type: Sync
+              send-msg-timeout: 3000

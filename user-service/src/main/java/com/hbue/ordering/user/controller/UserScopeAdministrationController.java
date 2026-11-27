@@ -11,13 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -39,7 +33,9 @@ import java.util.List;
 @PreAuthorize("hasAnyRole('RESTAURANT_MANAGER','GENERAL_MANAGER')")
 public class UserScopeAdministrationController {
 
-    /** 数据范围授予业务服务。 */
+    /**
+     * 数据范围授予业务服务。
+     */
     private final UserScopeAdministrationService userScopeAdministrationService;
     private final com.hbue.ordering.user.service.UserService userService;
 
@@ -59,7 +55,7 @@ public class UserScopeAdministrationController {
     /**
      * 查询指定用户持有的数据范围。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt    当前登录操作者 JWT
      * @param userId 目标用户 ID
      * @return 目标用户的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 操作者无效或目标用户不存在时由统一异常处理转换为响应
@@ -82,8 +78,8 @@ public class UserScopeAdministrationController {
     /**
      * 覆盖式设置指定用户的数据范围。
      *
-     * @param jwt 当前登录操作者 JWT
-     * @param userId 目标用户 ID
+     * @param jwt     当前登录操作者 JWT
+     * @param userId  目标用户 ID
      * @param request 新的范围列表
      * @return 写入后的数据范围列表
      * @throws com.hbue.ordering.common.core.exception.BusinessException 范围超出操作者授权边界或引用对象不存在时由统一异常处理转换为响应
@@ -108,8 +104,8 @@ public class UserScopeAdministrationController {
     /**
      * 撤销指定用户的一条数据范围。
      *
-     * @param jwt 当前登录操作者 JWT
-     * @param userId 目标用户 ID
+     * @param jwt     当前登录操作者 JWT
+     * @param userId  目标用户 ID
      * @param scopeId 范围记录 ID
      * @return 空成功响应
      * @throws com.hbue.ordering.common.core.exception.BusinessException 范围不属于目标用户或超出操作者权限时由统一异常处理转换为响应

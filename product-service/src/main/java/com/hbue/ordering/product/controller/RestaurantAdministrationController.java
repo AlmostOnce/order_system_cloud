@@ -11,14 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -38,7 +31,9 @@ import java.util.List;
 @PreAuthorize("hasAnyRole('RESTAURANT_MANAGER','GENERAL_MANAGER')")
 public class RestaurantAdministrationController {
 
-    /** 餐厅管理服务。 */
+    /**
+     * 餐厅管理服务。
+     */
     private final RestaurantAdministrationService restaurantAdministrationService;
 
     /**
@@ -70,7 +65,7 @@ public class RestaurantAdministrationController {
     /**
      * 新建餐厅。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt     当前登录操作者 JWT
      * @param request 餐厅字段
      * @return 新建餐厅
      */
@@ -90,9 +85,9 @@ public class RestaurantAdministrationController {
     /**
      * 全量更新餐厅。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt          当前登录操作者 JWT
      * @param restaurantId 餐厅 ID
-     * @param request 餐厅字段
+     * @param request      餐厅字段
      * @return 更新后的餐厅
      */
     @PutMapping("/{restaurantId}")
@@ -113,7 +108,7 @@ public class RestaurantAdministrationController {
     /**
      * 停用餐厅。
      *
-     * @param jwt 当前登录操作者 JWT
+     * @param jwt          当前登录操作者 JWT
      * @param restaurantId 餐厅 ID
      * @return 空成功响应
      */

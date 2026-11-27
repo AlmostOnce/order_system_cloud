@@ -13,10 +13,14 @@ import java.time.Duration;
  */
 public final class AuthzCacheKeys {
 
-    /** 用户数据范围缓存键前缀。 */
+    /**
+     * 用户数据范围缓存键前缀。
+     */
     private static final String USER_SCOPE_PREFIX = "authz:user-scope:";
 
-    /** 用户数据范围缓存有效期，撤销范围后由 user-service 主动删除。 */
+    /**
+     * 用户数据范围缓存有效期，撤销范围后由 user-service 主动删除。
+     */
     public static final Duration USER_SCOPE_TTL = Duration.ofSeconds(300);
 
     /**

@@ -44,33 +44,45 @@ import java.util.Set;
 @Service
 public class DefaultDataScopeService implements DataScopeService {
 
-    /** 日志对象。 */
+    /**
+     * 日志对象。
+     */
     private static final Logger log =
             LoggerFactory.getLogger(DefaultDataScopeService.class);
 
-    /** 用户数据范围内部查询客户端。 */
+    /**
+     * 用户数据范围内部查询客户端。
+     */
     private final UserScopeInternalClient userScopeInternalClient;
 
-    /** 档口与餐厅内部查询客户端。 */
+    /**
+     * 档口与餐厅内部查询客户端。
+     */
     private final WindowInternalClient windowInternalClient;
 
-    /** Redis 基础操作服务。 */
+    /**
+     * Redis 基础操作服务。
+     */
     private final RedisOperationsService redisOperationsService;
 
-    /** JSON 序列化器，用于缓存范围快照。 */
+    /**
+     * JSON 序列化器，用于缓存范围快照。
+     */
     private final ObjectMapper objectMapper;
 
-    /** 服务间共享密钥。 */
+    /**
+     * 服务间共享密钥。
+     */
     private final String internalScopeToken;
 
     /**
      * 创建订单服务数据范围判定实现。
      *
      * @param userScopeInternalClient 用户数据范围内部查询客户端
-     * @param windowInternalClient 档口与餐厅内部查询客户端
-     * @param redisOperationsService Redis 基础操作服务
-     * @param objectMapper JSON 序列化器
-     * @param internalScopeToken 服务间共享密钥
+     * @param windowInternalClient    档口与餐厅内部查询客户端
+     * @param redisOperationsService  Redis 基础操作服务
+     * @param objectMapper            JSON 序列化器
+     * @param internalScopeToken      服务间共享密钥
      */
     public DefaultDataScopeService(
             UserScopeInternalClient userScopeInternalClient,
@@ -132,7 +144,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * <p>主管档口、全平台范围直接命中；否则把档口换算为所属餐厅，
      * 再判断是否被餐厅范围覆盖。</p>
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      * @return 有权时返回 true
      * @throws BusinessException 范围事实或档口归属依赖不可用时抛出，避免依赖故障导致错误授权
@@ -159,7 +171,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 判断用户是否有权操作指定餐厅。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      * @return 有权时返回 true
      * @throws BusinessException user-service 范围查询失败时抛出
@@ -175,7 +187,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 校验用户是否有权操作指定档口，失败时抛出 403。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId   当前登录用户 ID
      * @param windowId 目标档口 ID
      * @throws BusinessException 无权访问时抛出 403 业务异常
      */
@@ -192,7 +204,7 @@ public class DefaultDataScopeService implements DataScopeService {
     /**
      * 校验用户是否有权操作指定餐厅，失败时抛出 403。
      *
-     * @param userId 当前登录用户 ID
+     * @param userId       当前登录用户 ID
      * @param restaurantId 目标餐厅 ID
      * @throws BusinessException 无权访问时抛出 403 业务异常
      */
@@ -252,7 +264,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * 把范围写入 Redis 缓存。
      *
      * @param cacheKey 缓存键
-     * @param scopeVO 范围事实
+     * @param scopeVO  范围事实
      */
     private void writeCache(String cacheKey, UserScopeVO scopeVO) {
         try {
@@ -271,7 +283,7 @@ public class DefaultDataScopeService implements DataScopeService {
      * 把内部契约对象转换为范围快照。
      *
      * @param scopeVO 内部契约范围对象
-     * @param userId 用户 ID
+     * @param userId  用户 ID
      * @return 范围快照
      */
     private UserScopeSnapshot toSnapshot(UserScopeVO scopeVO, Long userId) {

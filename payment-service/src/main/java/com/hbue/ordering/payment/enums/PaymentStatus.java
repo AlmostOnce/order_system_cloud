@@ -11,19 +11,33 @@ package com.hbue.ordering.payment.enums;
  */
 public enum PaymentStatus {
 
-    /** 支付单已创建，尚未确认渠道结果，允许继续流转到成功或失败。 */
+    /**
+     * 支付单已创建，尚未确认渠道结果，允许继续流转到成功或失败。
+     */
     CREATED("CREATED"),
 
-    /** 渠道确认支付成功；该支付单进入终态，不再流转。 */
+    /**
+     * 渠道确认支付成功；该支付单进入终态，不再流转。
+     */
     SUCCESS("SUCCESS"),
 
-    /** 渠道确认支付失败；该支付单进入终态，不再流转。 */
+    /**
+     * 渠道确认支付失败；该支付单进入终态，不再流转。
+     */
     FAILED("FAILED"),
 
-    /** 支付单已关闭的终态，预留给超时关单场景，当前版本不会产生。 */
+    /**
+     * 支付单已关闭的终态。
+     *
+     * <p>用户取消订单或支付超时关单时，{@code PaymentMapper.closePayment} 会把仍为 CREATED 的支付单
+     * 改为 CLOSED，因此线上会真实产生该状态。它与 SUCCESS / FAILED 一样不可再流转：
+     * 关单后才到达的支付通知不会被改写为成功，避免已取消订单被"迟到支付"复活。</p>
+     */
     CLOSED("CLOSED");
 
-    /** 数据库存储的状态码。 */
+    /**
+     * 数据库存储的状态码。
+     */
     private final String code;
 
     /**

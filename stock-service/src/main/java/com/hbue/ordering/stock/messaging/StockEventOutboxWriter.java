@@ -4,7 +4,9 @@ import com.hbue.ordering.stock.model.StockFlowDO;
 import org.apache.seata.core.context.RootContext;
 import org.springframework.stereotype.Component;
 
-/** 在写入库存流水的同一数据库事务中持久化待发布事件。 */
+/**
+ * 在写入库存流水的同一数据库事务中持久化待发布事件。
+ */
 @Component
 public class StockEventOutboxWriter {
     private final StockEventOutboxMapper outboxMapper;

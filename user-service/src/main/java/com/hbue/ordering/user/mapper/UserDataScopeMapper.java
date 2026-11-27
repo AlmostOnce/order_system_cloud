@@ -26,16 +26,16 @@ public interface UserDataScopeMapper extends BaseMapper<UserDataScopeDO> {
      * @return 数据范围列表
      */
     @Select("""
-        SELECT
-            scope_id,
-            user_id,
-            scope_type,
-            scope_ref,
-            created_at,
-            updated_at
-        FROM user_data_scopes
-        WHERE user_id = #{userId}
-        ORDER BY scope_id
-        """)
+            SELECT
+                scope_id,
+                user_id,
+                scope_type,
+                scope_ref,
+                created_at,
+                updated_at
+            FROM user_data_scopes
+            WHERE user_id = #{userId}
+            ORDER BY scope_id
+            """)
     List<UserDataScopeDO> selectByUserId(@Param("userId") Long userId);
 }

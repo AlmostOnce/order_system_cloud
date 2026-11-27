@@ -12,25 +12,44 @@ package com.hbue.ordering.order.enums;
  */
 public enum OrderStatus {
 
-    /** 等待顾客完成支付。 */
+    /**
+     * 等待顾客完成支付。
+     */
     PENDING_PAYMENT("待支付"),
 
-    /** 支付已成功，等待商家接单。 */
+    /**
+     * 支付已成功，等待商家接单。
+     */
     PAID("已支付"),
 
-    /** 商家正在制作订单。 */
+    /**
+     * 商家正在制作订单。
+     */
     PREPARING("制作中"),
 
-    /** 订单已制作完成，等待顾客取货。 */
+    /**
+     * 订单已制作完成，等待顾客取货。
+     */
     WAITING_FOR_PICKUP("待取货"),
 
-    /** 顾客已完成取货，订单生命周期结束。 */
+    /**
+     * 顾客已完成取货，订单生命周期结束。
+     */
     COMPLETED("已完成"),
 
-    /** 顾客取消了尚未支付的订单。 */
-    CANCELLED("已取消");
+    /**
+     * 顾客取消了尚未支付的订单。
+     */
+    CANCELLED("已取消"),
 
-    /** 数据库及现有接口使用的中文状态值。 */
+    /**
+     * 未完成订单的菜品全部退款成功，不再允许接单、制作或取餐。
+     */
+    REFUNDED("已退款");
+
+    /**
+     * 数据库及现有接口使用的中文状态值。
+     */
     private final String label;
 
     /**
@@ -68,7 +87,7 @@ public enum OrderStatus {
             case PAID -> targetStatus == PREPARING;
             case PREPARING -> targetStatus == WAITING_FOR_PICKUP;
             case WAITING_FOR_PICKUP -> targetStatus == COMPLETED;
-            case COMPLETED, CANCELLED -> false;
+            case COMPLETED, CANCELLED, REFUNDED -> false;
         };
     }
 
@@ -76,7 +95,7 @@ public enum OrderStatus {
      * 判断商家能否执行当前状态到目标状态的履约推进。
      *
      * <p>支付状态只能由后续支付结果通知推进，商家不能手动标记已支付；
-     * 顾客取消也不属于商家履约操作。</p>
+     * 顾客取消也不属于商家履约操作；已完成必须由独立取餐码核销入口触发。</p>
      *
      * @param targetStatus 目标状态
      * @return 可以执行时返回 true
@@ -84,6 +103,7 @@ public enum OrderStatus {
     public boolean canBeAdvancedByManagerTo(OrderStatus targetStatus) {
         return this != PENDING_PAYMENT
                 && targetStatus != CANCELLED
+                && targetStatus != COMPLETED
                 && canTransitionTo(targetStatus);
     }
 

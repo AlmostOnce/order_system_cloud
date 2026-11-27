@@ -7,7 +7,9 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.function.Consumer;
 
-/** 收到已提交的库存变更后只失效快照，由后续请求按需回源数据库重建。 */
+/**
+ * 收到已提交的库存变更后只失效快照，由后续请求按需回源数据库重建。
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "stock.messaging.enabled", havingValue = "true")
 public class StockEventConsumer {
