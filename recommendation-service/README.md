@@ -15,7 +15,7 @@
 | 框架 | Spring Boot Web / Security / OAuth2 Resource Server（jose）、Validation、Actuator |
 | 微服务 | Nacos Discovery、OpenFeign + LoadBalancer、Spring Cloud Stream RocketMQ |
 | 数据 | MyBatis-Plus 3.5.8（注解 SQL）、Druid、MySQL `recommendation_db`（默认 `127.0.0.1:9095`） |
-| 缓存 | Redis 仅用于 JWT jti 注销黑名单；无 Redisson、无 Lua |
+| 缓存 | Redis 用于 JWT jti 注销黑名单，以及定时任务互斥租约（`SET NX EX` + 比较删除 Lua）；无 Redisson |
 | 定时任务 | `@EnableScheduling`，4 个 `@Scheduled` 任务，调度线程池 2 |
 
 - 端口 `9112`；Feign 超时 connect 2000 / read 3000；`spring.profiles.include: recommendation-mq`。
@@ -291,7 +291,7 @@
 - 数据依赖（订单/收藏/目录读取）失败向上抛出，不伪装成「无行为」；商品或库存复核失败返回 FALLBACK 空列表。
 - 上游快照失败保留旧投影：目录替换、热榜替换均为事务整批，失败回滚。
 - 回填任务捕获全部异常仅记日志，下一轮从断点续跑。
-- 并发控制：订单投影行锁串行同订单版本；搜索意图 INSERT IGNORE；游标 `GREATEST` 只增不减；无分布式锁，靠唯一键与行锁保证单实例语义。
+- 并发控制：订单投影行锁串行同订单版本；搜索意图 INSERT IGNORE；游标 `GREATEST` 只增不减；目录对账与热榜刷新用 Redis 租约（`ScheduledTaskLock`）保证多实例同轮只执行一次，其余投影靠唯一键与行锁。
 - 已知限制：搜索意图的计数与插入非原子，双实例并发时每日上限可能略超 10 条。
 
 ## 关键代码入口

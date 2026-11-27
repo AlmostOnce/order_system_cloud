@@ -42,6 +42,20 @@ public class RedisOperationsService {
             );
 
     /**
+     * 仅当 Key 的当前值等于期望值时删除的 Lua 脚本。
+     *
+     * <p>用于释放带租约的互斥锁：锁可能在业务执行超时后已被其它实例重新获取，
+     * 直接 DEL 会误删别人的锁，因此必须比较持有者标识后再删除。</p>
+     */
+    private static final DefaultRedisScript<Long> DELETE_IF_EQUALS_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('GET', KEYS[1]) == ARGV[1] then "
+                            + "return redis.call('DEL', KEYS[1]) "
+                            + "else return 0 end",
+                    Long.class
+            );
+
+    /**
      * Spring Data Redis 字符串操作模板。
      */
     private final StringRedisTemplate stringRedisTemplate;
@@ -198,6 +212,51 @@ public class RedisOperationsService {
                 List.of(key),
                 String.valueOf(timeToLive.toMillis())
         );
+    }
+
+    /**
+     * 仅当 Key 不存在时写入并设置过期时间。
+     *
+     * <p>底层是 Redis 的 SET NX EX，用于定时任务的互斥租约：同一任务在多实例部署时
+     * 只有抢到 Key 的实例执行，其余实例跳过本轮。租约到期自动释放，避免实例崩溃后任务永久停摆。</p>
+     *
+     * @param key        Redis Key
+     * @param value      持有者标识，释放时需要匹配
+     * @param timeToLive 租约时长，必须为正
+     * @return 是否抢到租约；Redis 无法确认时可能返回 null
+     * @throws IllegalArgumentException Key、标识为空或租约时长非法时抛出
+     */
+    public Boolean setIfAbsent(String key, String value, Duration timeToLive) {
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            throw new IllegalArgumentException("互斥租约的 Key 与持有者标识不能为空");
+        }
+        if (timeToLive == null || timeToLive.isNegative() || timeToLive.isZero()) {
+            throw new IllegalArgumentException("互斥租约时长必须为正数");
+        }
+        // SET NX EX 由 Redis 原子完成"不存在才写入 + 过期时间"，不需要额外的 EXPIRE 调用。
+        return stringRedisTemplate.opsForValue().setIfAbsent(key, value, timeToLive);
+    }
+
+    /**
+     * 仅当 Key 的当前值等于期望值时删除 Key。
+     *
+     * <p>用于安全释放互斥租约：如果租约已过期并被其它实例重新持有，比较失败后不会误删。</p>
+     *
+     * @param key            Redis Key
+     * @param expectedValue  期望的当前值（持有者标识）
+     * @return 是否由本次调用删除；Key 不存在、值不匹配或无法确认时返回 false
+     */
+    public Boolean deleteIfEquals(String key, String expectedValue) {
+        if (key == null || key.isBlank() || expectedValue == null) {
+            return false;
+        }
+        // 比较与删除由一段 Lua 原子完成，避免 GET 与 DEL 之间被其它实例插入。
+        Long removed = stringRedisTemplate.execute(
+                DELETE_IF_EQUALS_SCRIPT,
+                List.of(key),
+                expectedValue
+        );
+        return removed != null && removed > 0L;
     }
 
     /**

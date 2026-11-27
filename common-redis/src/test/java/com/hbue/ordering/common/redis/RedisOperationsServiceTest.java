@@ -275,4 +275,44 @@ class RedisOperationsServiceTest {
         // 确认 Redis 返回删除数量。
         assertEquals(1L, removed);
     }
+
+    /**
+     * 互斥租约写入应使用 SET NX EX 语义，并保留租约时长。
+     */
+    @Test
+    void setIfAbsentShouldUseSetNxWithExpiration() {
+        Duration lease = Duration.ofMinutes(5);
+        when(valueOperations.setIfAbsent("scheduler:lock:sample", "owner", lease)).thenReturn(true);
+
+        // 尝试抢占互斥租约。
+        Boolean acquired = redisOperationsService.setIfAbsent("scheduler:lock:sample", "owner", lease);
+
+        // 确认写入走"不存在才写入并带过期时间"的单条命令。
+        assertTrue(acquired);
+        verify(valueOperations).setIfAbsent("scheduler:lock:sample", "owner", lease);
+    }
+
+    /**
+     * 释放租约必须先比较持有者标识，避免误删其它实例重新获取的锁。
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void deleteIfEqualsShouldCompareOwnerBeforeDelete() {
+        when(stringRedisTemplate.<Long>execute(
+                any(RedisScript.class),
+                eq(List.of("scheduler:lock:sample")),
+                eq("owner")
+        )).thenReturn(1L);
+
+        // 以持有者标识安全释放租约。
+        Boolean removed = redisOperationsService.deleteIfEquals("scheduler:lock:sample", "owner");
+
+        // 确认比较与删除在同一段 Lua 中执行。
+        assertTrue(removed);
+        verify(stringRedisTemplate).execute(
+                any(RedisScript.class),
+                eq(List.of("scheduler:lock:sample")),
+                eq("owner")
+        );
+    }
 }

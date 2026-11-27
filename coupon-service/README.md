@@ -42,7 +42,7 @@
 | `CouponPaidMessaging` | RocketMQ 消费者，支付成功后核销 |
 | `CouponSecurityConfig` 及安全错误处理器 | 无状态 JWT 过滤链、roles→ROLE_ 转换、黑名单校验、统一 401/403 JSON |
 
-无定时任务：过期通过「我的券」查询时惰性迁移，不依赖后台扫描。
+过期通过「我的券」查询时惰性迁移，不依赖后台扫描；另有「到期前 24 小时提醒」定时任务（`CouponExpiryReminderTask`），用 Redis 租约保证多实例同轮只执行一次。
 
 ## 领域模型与数据表
 

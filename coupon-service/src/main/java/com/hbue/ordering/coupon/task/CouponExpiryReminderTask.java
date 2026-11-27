@@ -1,6 +1,7 @@
 package com.hbue.ordering.coupon.task;
 
 import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.common.redis.ScheduledTaskLock;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.coupon.client.CouponNotificationClient;
 import com.hbue.ordering.coupon.client.vo.CouponExpiryNotificationRequest;
@@ -12,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -21,8 +23,9 @@ import java.util.List;
  * <p>扫描条件由 SQL 决定：可用状态、未提醒、尚未过期且进入 24 小时窗口。任务本身只负责
  * "逐条发送 + 发送成功后打标记"，不在内存里计算时间窗，避免与数据库时钟产生偏差。</p>
  *
- * <p>幂等分两层：</p>
+ * <p>幂等分三层：</p>
  * <ul>
+ *   <li>分布式租约：多实例部署时同一轮只有一个实例扫描发送，避免重复调用通知服务；</li>
  *   <li>本地标记 {@code expiry_reminded_at}：发送成功后条件更新，多实例并发只有一次能写成功；</li>
  *   <li>通知表唯一键 {@code (recipient_id, event_id)}：事件标识按券记录派生且不变，
  *       即使标记丢失导致重复发送，也只会落一条提醒。</li>
@@ -44,6 +47,16 @@ public class CouponExpiryReminderTask {
      * 当前类日志对象。
      */
     private static final Logger log = LoggerFactory.getLogger(CouponExpiryReminderTask.class);
+
+    /**
+     * 稳定的任务名：所有实例必须一致，否则分布式互斥失效。
+     */
+    private static final String TASK_NAME = "coupon-expiry-reminder";
+
+    /**
+     * 租约时长：一批最多 200 条通知发送，10 分钟足以覆盖，过期后由下一轮实例接管。
+     */
+    private static final Duration LEASE = Duration.ofMinutes(10);
 
     /**
      * 单次扫描上限，控制一次调度的数据库读取量与远程调用数量。
@@ -76,18 +89,26 @@ public class CouponExpiryReminderTask {
     private final String internalToken;
 
     /**
+     * 定时任务互斥租约，避免多实例重复扫描并发送同一批提醒。
+     */
+    private final ScheduledTaskLock taskLock;
+
+    /**
      * 创建到期提醒任务。
      *
      * @param userCouponMapper   用户券数据访问
      * @param notificationClient 通知服务内部客户端
      * @param internalToken      服务间共享内部令牌
+     * @param taskLock           定时任务互斥租约
      */
     public CouponExpiryReminderTask(UserCouponMapper userCouponMapper,
                                     CouponNotificationClient notificationClient,
-                                    @Value("${internal.scope.token:}") String internalToken) {
+                                    @Value("${internal.scope.token:}") String internalToken,
+                                    ScheduledTaskLock taskLock) {
         this.userCouponMapper = userCouponMapper;
         this.notificationClient = notificationClient;
         this.internalToken = internalToken;
+        this.taskLock = taskLock;
     }
 
     /**
@@ -95,6 +116,9 @@ public class CouponExpiryReminderTask {
      *
      * <p>首次延迟 1 分钟、之后每 5 分钟执行一次，保证券进入 24 小时窗口后最多 5 分钟内
      * 收到提醒。两者都可通过配置覆盖，便于在低峰期调整扫描频率。</p>
+     *
+     * <p>扫描前先抢分布式租约：多实例部署时同一轮只有一个实例执行，其余实例直接跳过；
+     * Redis 不可用时同样跳过本轮，宁可晚 5 分钟提醒，也不在多实例上重复发起通知。</p>
      */
     @Scheduled(initialDelayString = "${coupon.expiry-reminder.initial-delay-ms:60000}",
             fixedDelayString = "${coupon.expiry-reminder.delay-ms:300000}")
@@ -104,28 +128,34 @@ public class CouponExpiryReminderTask {
             log.error("优惠券到期提醒跳过：internal.scope.token 未配置");
             return;
         }
-        List<CouponExpiryReminderRow> candidates;
-        try {
-            candidates = userCouponMapper.findExpiryReminderCandidates(BATCH_SIZE);
-        } catch (RuntimeException exception) {
-            log.error("优惠券到期提醒扫描失败，等待下一轮重试", exception);
-            return;
-        }
-        if (candidates.isEmpty()) {
-            return;
-        }
-        int sent = 0;
-        for (CouponExpiryReminderRow candidate : candidates) {
-            try {
-                sendOne(candidate);
-                sent++;
-            } catch (RuntimeException exception) {
-                // 单条失败不阻塞整批；该券仍为"未提醒"，下一轮会再次尝试。
-                log.warn("优惠券到期提醒发送失败，将在下一轮重试，userCouponId={}",
-                        candidate.getUserCouponId(), exception);
+        try (ScheduledTaskLock.Lease lease = taskLock.tryAcquire(TASK_NAME, LEASE)) {
+            if (lease == null) {
+                log.info("优惠券到期提醒已由其它实例执行，跳过本轮");
+                return;
             }
+            List<CouponExpiryReminderRow> candidates;
+            try {
+                candidates = userCouponMapper.findExpiryReminderCandidates(BATCH_SIZE);
+            } catch (RuntimeException exception) {
+                log.error("优惠券到期提醒扫描失败，等待下一轮重试", exception);
+                return;
+            }
+            if (candidates.isEmpty()) {
+                return;
+            }
+            int sent = 0;
+            for (CouponExpiryReminderRow candidate : candidates) {
+                try {
+                    sendOne(candidate);
+                    sent++;
+                } catch (RuntimeException exception) {
+                    // 单条失败不阻塞整批；该券仍为"未提醒"，下一轮会再次尝试。
+                    log.warn("优惠券到期提醒发送失败，将在下一轮重试，userCouponId={}",
+                            candidate.getUserCouponId(), exception);
+                }
+            }
+            log.info("优惠券到期提醒本轮完成，待提醒={}，成功={}", candidates.size(), sent);
         }
-        log.info("优惠券到期提醒本轮完成，待提醒={}，成功={}", candidates.size(), sent);
     }
 
     /**
