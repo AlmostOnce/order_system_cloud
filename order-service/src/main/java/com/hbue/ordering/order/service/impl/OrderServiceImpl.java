@@ -1373,4 +1373,54 @@ public class OrderServiceImpl
         String nextCursor = hasMore ? Long.toString(items.getLast().getOrderId()) : null;
         return new OrderPageVO(items, nextCursor, hasMore);
     }
+
+    /**
+     * 商家订单队列的游标分页查询。
+     *
+     * <p>先校验参数与档口数据范围，再解析状态白名单和游标，最后执行一次有界查询。
+     * 订单属私有数据，档口越权与档口不存在统一返回 404，避免通过错误码探测他人经营情况。</p>
+     */
+    @Override
+    public OrderPageVO pageByWindow(Long operatorId, Long windowId, String status, String cursor, int limit) {
+        if (operatorId == null || windowId == null || windowId <= 0
+                || limit < 1 || limit > 50 || status == null) {
+            throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单队列参数不正确");
+        }
+        // 档口不在操作者范围内时按不存在处理，不区分“无权限”和“档口不存在”。
+        if (!dataScopeService.canAccessWindow(operatorId, windowId)) {
+            throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单队列不存在");
+        }
+        // 状态分组由服务端固定映射，不拼接客户端 SQL，不把未知状态降级成全量查询。
+        List<String> statuses = switch (status) {
+            case "all" -> null;
+            case "active" ->
+                    List.of(OrderStatus.PAID.getLabel(), OrderStatus.PREPARING.getLabel(), OrderStatus.WAITING_FOR_PICKUP.getLabel());
+            case "paid" -> List.of(OrderStatus.PAID.getLabel());
+            case "preparing" -> List.of(OrderStatus.PREPARING.getLabel());
+            case "waiting" -> List.of(OrderStatus.WAITING_FOR_PICKUP.getLabel());
+            case "completed" -> List.of(OrderStatus.COMPLETED.getLabel());
+            case "cancelled" -> List.of(OrderStatus.CANCELLED.getLabel(), OrderStatus.REFUNDED.getLabel());
+            default -> throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单队列筛选状态不正确");
+        };
+        Long beforeId = null;
+        if (cursor != null) {
+            if (!cursor.matches("[1-9][0-9]{0,18}")) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            try {
+                beforeId = Long.valueOf(cursor);
+            } catch (NumberFormatException error) {
+                throw new BusinessException(CommonErrorCode.BAD_REQUEST, "订单游标不正确");
+            }
+            // 游标必须属于该档口，防止把其他窗口的订单号当作翻页位置。
+            if (!baseMapper.existsForWindowOrder(windowId, beforeId)) {
+                throw new BusinessException(CommonErrorCode.NOT_FOUND, "订单游标不存在");
+            }
+        }
+        List<OrderDO> rows = baseMapper.selectWindowPage(windowId, statuses, beforeId, limit + 1);
+        boolean hasMore = rows.size() > limit;
+        List<OrderDetailVO> items = rows.stream().limit(limit).map(OrderDetailVO::from).toList();
+        String nextCursor = hasMore ? Long.toString(items.getLast().getOrderId()) : null;
+        return new OrderPageVO(items, nextCursor, hasMore);
+    }
 }

@@ -122,4 +122,20 @@ public interface OrderService extends IService<OrderDO> {
      * @return 包含items、nextCursor、hasMore的订单页；店铺名称由调用方按页批量补全
      */
     OrderPageVO pageByUserId(Long userId, String status, String cursor, int limit);
+
+    /**
+     * 商家订单队列的游标分页查询。
+     *
+     * <p>调用方必须持有 STALL_MANAGER 或 RESTAURANT_MANAGER 角色，且目标档口在操作者
+     * 数据范围内；越权与档口不存在统一返回 404，避免通过错误码探测他人经营数据。
+     * 状态筛选由服务端白名单映射，未知值返回 400。</p>
+     *
+     * @param operatorId 当前登录操作者 ID
+     * @param windowId   目标档口 ID
+     * @param status     all、active、paid、preparing、waiting、completed 或 cancelled
+     * @param cursor     该档口订单主键的十进制字符串，首屏为空
+     * @param limit      每页1至50条，Controller默认20条
+     * @return 包含items、nextCursor、hasMore的订单页；店铺名称由调用方按页批量补全
+     */
+    OrderPageVO pageByWindow(Long operatorId, Long windowId, String status, String cursor, int limit);
 }

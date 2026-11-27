@@ -4,17 +4,21 @@ package com.hbue.ordering.order.controller;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.order.dto.request.OrderCreateRequest;
 import com.hbue.ordering.order.dto.request.OrderStatusUpdateRequest;
+import com.hbue.ordering.order.service.OrderSalesReportService;
 import com.hbue.ordering.order.service.OrderService;
+import com.hbue.ordering.order.vo.AdminSalesReportVO;
 import com.hbue.ordering.order.vo.OrderDetailVO;
 import com.hbue.ordering.order.vo.OrderPageVO;
 import com.hbue.ordering.order.vo.OrderStatusVO;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -33,15 +37,21 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderSalesReportService orderSalesReportService;
     private final com.hbue.ordering.order.service.OrderWindowNameService windowNames;
 
     /**
      * 创建订单 HTTP 接口控制器。
      *
-     * @param orderService 订单业务服务
+     * @param orderService            订单业务服务
+     * @param orderSalesReportService 经营报表业务服务
+     * @param windowNames             店铺名称补全服务
      */
-    public OrderController(OrderService orderService, com.hbue.ordering.order.service.OrderWindowNameService windowNames) {
+    public OrderController(OrderService orderService,
+                           OrderSalesReportService orderSalesReportService,
+                           com.hbue.ordering.order.service.OrderWindowNameService windowNames) {
         this.orderService = orderService;
+        this.orderSalesReportService = orderSalesReportService;
         this.windowNames = windowNames;
     }
 
@@ -189,5 +199,61 @@ public class OrderController {
 
         // 返回状态更新结果。
         return ApiResponse.success(statusVO);
+    }
+
+    /**
+     * 商家按档口读取订单队列。
+     *
+     * <p>只允许档口负责人与餐厅经理访问；Service 会校验档口是否在操作者数据范围内，
+     * 越权与档口不存在统一按 404 处理。店铺名称按当前页批量补全，不逐单远程调用。</p>
+     *
+     * @param jwt      当前登录操作者 JWT
+     * @param windowId 目标档口 ID
+     * @param status   状态筛选：all、active、paid、preparing、waiting、completed、cancelled
+     * @param cursor   上一页返回的 nextCursor，首屏不传
+     * @param limit    每页条数，默认 20，上限 50
+     * @return 当前页订单摘要、下一页游标与是否还有更多
+     */
+    @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER')")
+    @GetMapping("/admin/queue")
+    public ApiResponse<OrderPageVO> windowQueue(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "windowId") Long windowId,
+            @RequestParam(name = "status", defaultValue = "all") String status,
+            @RequestParam(name = "cursor", required = false) String cursor,
+            @RequestParam(name = "limit", defaultValue = "20") int limit
+    ) {
+        Long operatorId = Long.valueOf(jwt.getSubject());
+        var page = orderService.pageByWindow(operatorId, windowId, status, cursor, limit);
+        // 先分页再批量补名称：一页最多 50 个窗口，复用现有批量接口。
+        return ApiResponse.success(new OrderPageVO(
+                windowNames.enrich(page.items()), page.nextCursor(), page.hasMore()));
+    }
+
+    /**
+     * 管理端经营报表。
+     *
+     * <p>档口负责人、餐厅经理与总经理可访问；指定档口时校验该档口在操作者范围内，
+     * 未指定时按操作者范围汇总。所有金额、订单数、份数与客单价均由服务端聚合后返回，
+     * 前端只做展示与时间筛选。</p>
+     *
+     * @param jwt      当前登录操作者 JWT
+     * @param windowId 可选档口 ID；为空表示按操作者范围汇总
+     * @param from     区间起点，ISO 日期时间
+     * @param to       区间终点（不含），ISO 日期时间
+     * @return 经营报表
+     */
+    @PreAuthorize("hasAnyRole('STALL_MANAGER','RESTAURANT_MANAGER','GENERAL_MANAGER')")
+    @GetMapping("/admin/sales-report")
+    public ApiResponse<AdminSalesReportVO> salesReport(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(name = "windowId", required = false) Long windowId,
+            @RequestParam(name = "from")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(name = "to")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        Long operatorId = Long.valueOf(jwt.getSubject());
+        return ApiResponse.success(orderSalesReportService.summarize(operatorId, windowId, from, to));
     }
 }

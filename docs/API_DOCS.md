@@ -194,3 +194,52 @@ GET/PUT成功时 `data` 为如下数组（示例编号以实际返回值为准�
 - 角色编码只接受 `RoleCode` 中的值，非法值返回 400。
 - 经理的候选口径为“已持有本餐厅（含展开后的档口）范围”，避免借检索枚举全平台账号；首次给新员工授予范围由总经理完成。
 - product-service 不可用时候选接口返回 503，不返回未经范围收敛的数据。
+
+## 订单队列与经营报表（2026-11-28）
+
+新增前已核对：`GET /orders/list` 只返回本人订单；退款队列只含退款单；`PATCH /orders/{orderId}/status`
+只能推进单笔订单，三者都不提供商家按档口的订单队列或经营汇总，因此新增以下只读接口。
+经营金额事实位于 order_db，统计服务的 `statistics_sales_events` 只保存窗口、时间与份数，
+没有金额列，故报表落在订单服务实现，不重复建设统计库。
+
+| 方法与路径 | 权限及行为 |
+| --- | --- |
+| `GET /orders/admin/queue?windowId&status&cursor&limit` | `STALL_MANAGER`、`RESTAURANT_MANAGER`；按档口游标分页，档口必须在其数据范围内 |
+| `GET /orders/admin/sales-report?windowId&from&to` | `STALL_MANAGER`、`RESTAURANT_MANAGER`、`GENERAL_MANAGER`；按范围聚合已支付订单 |
+
+队列状态取值：`all`、`active`、`paid`、`preparing`、`waiting`、`completed`、`cancelled`，
+对应服务端白名单映射，未知值返回 400。`limit` 默认 20、上限 50；`cursor` 必须是该档口
+订单主键的十进制字符串，否则返回 400 或 404。
+
+报表约定：
+
+- `from`、`to` 使用 ISO 日期时间，区间为左闭右开；跨度最多 92 天，`to` 必须晚于 `from`。
+- 统计口径以首次支付时间 `paid_at` 落入区间为准，退款不冲减销售额与份数，与统计服务一致。
+- `windowId` 可省略：省略时全平台范围统计全部档口，餐厅范围展开为下属档口，档口范围只统计直接授权档口。
+- 指定 `windowId` 但不在操作者范围时返回 404，不区分“无权限”与“不存在”。
+- 金额、订单数、份数与客单价均由服务端聚合；前端只做展示，不得用订单明细重算。
+- 档口名称批量补全失败时返回 `windowName: null`，不影响金额数据。
+
+```json
+{
+  "from": "2026-11-01T00:00:00",
+  "to": "2026-11-08T00:00:00",
+  "windowId": 9,
+  "orderCount": 128,
+  "grossAmount": 4623.50,
+  "averageOrderAmount": 36.12,
+  "paidQuantity": 271,
+  "windows": [
+    {
+      "windowId": 9,
+      "windowName": "三楼自选窗口",
+      "orderCount": 128,
+      "grossAmount": 4623.50,
+      "paidQuantity": 271
+    }
+  ]
+}
+```
+
+内部接口 `GET /internal/windows/ids?restaurantIds=1,2` 同时服务于账号范围候选与经营报表的
+餐厅范围展开，只返回档口主键，必须携带 `X-Internal-Token`。

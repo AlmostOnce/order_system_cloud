@@ -57,7 +57,29 @@ public class OrderWindowNameServiceImpl implements OrderWindowNameService {
     @Override
     public List<OrderDetailVO> enrich(List<OrderDetailVO> orders) {
         var ids = orders.stream().map(OrderDetailVO::getWindowId).filter(id -> id != null && id > 0).distinct().toList();
+        Map<Long, String> names = loadNames(ids);
+        // 名称查询异常不影响支付和订单正文，前端显示名称暂不可用。
+        return orders.stream().map(order -> order.toBuilder().windowName(names.get(order.getWindowId())).build()).toList();
+    }
+
+    /**
+     * 批量读取档口名称，按 100 个编号一批调用商品服务。
+     *
+     * <p>单批失败只丢弃该批名称，不影响其他批次；名称属于展示字段，不应阻断报表查询。</p>
+     *
+     * @param windowIds 档口 ID 列表
+     * @return 档口 ID 到名称的映射
+     */
+    @Override
+    public Map<Long, String> loadNames(List<Long> windowIds) {
         Map<Long, String> names = new HashMap<>();
+        if (windowIds == null || windowIds.isEmpty()) {
+            return names;
+        }
+        List<Long> ids = windowIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
         for (int start = 0; start < ids.size(); start += 100) {
             var batch = ids.subList(start, Math.min(start + 100, ids.size()));
             try {
@@ -71,7 +93,6 @@ public class OrderWindowNameServiceImpl implements OrderWindowNameService {
                 log.warn("订单店铺名称暂不可用");
             }
         }
-        // 名称查询异常不影响支付和订单正文，前端显示名称暂不可用。
-        return orders.stream().map(order -> order.toBuilder().windowName(names.get(order.getWindowId())).build()).toList();
+        return names;
     }
 }

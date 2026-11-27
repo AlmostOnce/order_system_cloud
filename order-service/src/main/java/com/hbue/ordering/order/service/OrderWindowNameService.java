@@ -24,4 +24,15 @@ public interface OrderWindowNameService {
      * @return 补全后的新列表，保持原顺序
      */
     List<OrderDetailVO> enrich(List<OrderDetailVO> orders);
+
+    /**
+     * 批量读取档口名称。
+     *
+     * <p>按 100 个编号一批调用商品服务内部接口，单批失败只丢弃该批名称并记录日志，
+     * 不抛出异常。经营报表等只读展示可复用该方法，避免重复实现远程分批与容错。</p>
+     *
+     * @param windowIds 档口 ID 列表
+     * @return 档口 ID 到名称的映射；查询失败或名称为空的档口不在结果中
+     */
+    java.util.Map<Long, String> loadNames(List<Long> windowIds);
 }
