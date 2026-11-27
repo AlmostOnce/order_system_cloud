@@ -326,6 +326,18 @@ public class AuthServiceImpl implements AuthService {
             refreshTokenService.deleteRefreshToken(oldRefreshToken);
             throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录密码已重置，请重新登录");
         }
+
+        // 本次轮换必须沿用会话首次签发时间；旧版本令牌没有该字段时按当前时间起算，避免升级即失效。
+        long now = System.currentTimeMillis();
+        long sessionStartMillis = refreshTokenInfo.getIssuedAtMillis() > 0
+                ? refreshTokenInfo.getIssuedAtMillis() : now;
+        long maxLifetimeSeconds = refreshTokenService.getRefreshTokenMaxLifetimeSeconds();
+        // 超过绝对会话期限必须重新登录：即使单枚令牌尚未到期，也不能让轮换无限延长登录状态。
+        if (now - sessionStartMillis >= maxLifetimeSeconds * 1000L) {
+            refreshTokenService.deleteRefreshToken(oldRefreshToken);
+            throw new BusinessException(CommonErrorCode.UNAUTHORIZED, "登录状态已超过最长有效期，请重新登录");
+        }
+
         // 使用用户信息签发新的访问 Token。
         String accessToken = jwtTokenService.createAccessToken(
                 currentIdentity.getUserUuid(),
@@ -334,12 +346,13 @@ public class AuthServiceImpl implements AuthService {
                 currentIdentity.getCredentialVersion()
         );
 
-        // 创建新的 Refresh Token，实行刷新令牌轮换。
+        // 创建新的 Refresh Token，实行刷新令牌轮换，并继承会话首次签发时间以受绝对期限约束。
         String newRefreshToken = refreshTokenService.createRefreshToken(
                 refreshTokenInfo.getUserId(),
                 currentIdentity.getUsername(),
                 currentIdentity.getRoleCode(),
-                currentIdentity.getCredentialVersion()
+                currentIdentity.getCredentialVersion(),
+                sessionStartMillis
         );
 
         try {
@@ -371,9 +384,25 @@ public class AuthServiceImpl implements AuthService {
                         jwtTokenService.getAccessTokenTtlSeconds()
                 )
                 .refreshExpiresIn(
-                        refreshTokenService.getRefreshTokenTtlSeconds()
+                        minimalRefreshLifetimeSeconds(sessionStartMillis, maxLifetimeSeconds)
                 )
                 .build();
+    }
+
+    /**
+     * 计算本次刷新后 Refresh Token 的剩余有效秒数。
+     *
+     * <p>轮换不能让会话超过绝对期限，因此取"单次有效期"与"会话剩余时间"的较小值；
+     * 客户端据此决定何时提示用户重新登录，避免把绝对到期误报成完整 30 天。</p>
+     *
+     * @param sessionStartMillis 会话首次签发时间
+     * @param maxLifetimeSeconds 会话绝对有效期
+     * @return 至少为 1 的剩余秒数
+     */
+    private long minimalRefreshLifetimeSeconds(long sessionStartMillis, long maxLifetimeSeconds) {
+        long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - sessionStartMillis) / 1000L);
+        long absoluteRemaining = maxLifetimeSeconds - elapsedSeconds;
+        return Math.max(1L, Math.min(refreshTokenService.getRefreshTokenTtlSeconds(), absoluteRemaining));
     }
 
     /**

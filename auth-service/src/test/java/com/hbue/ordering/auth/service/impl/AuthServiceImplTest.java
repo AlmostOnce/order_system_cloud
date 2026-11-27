@@ -19,6 +19,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -239,15 +242,18 @@ class AuthServiceImplTest {
                 "CUSTOMER", 0L
         )).thenReturn("new-access-token");
         when(refreshTokenService.createRefreshToken(
-                5L,
-                "测试用户",
-                "CUSTOMER", 0L
+                eq(5L),
+                eq("测试用户"),
+                eq("CUSTOMER"), eq(0L), anyLong()
         )).thenReturn("new-refresh-token");
         when(refreshTokenService.consumeRefreshToken("old-refresh-token"))
                 .thenReturn(true);
         when(jwtTokenService.getAccessTokenTtlSeconds())
                 .thenReturn(1800L);
         when(refreshTokenService.getRefreshTokenTtlSeconds())
+                .thenReturn(2592000L);
+        // 旧令牌没有首次签发时间，本轮刷新按当前时间起算，剩余有效期等于配置的 30 天。
+        when(refreshTokenService.getRefreshTokenMaxLifetimeSeconds())
                 .thenReturn(2592000L);
         when(redissonClient.getLock(expectedLockKey))
                 .thenReturn(distributedLock);
@@ -323,12 +329,14 @@ class AuthServiceImplTest {
                 "CUSTOMER", 0L
         )).thenReturn("new-access-token");
         when(refreshTokenService.createRefreshToken(
-                5L,
-                "测试用户",
-                "CUSTOMER", 0L
+                eq(5L),
+                eq("测试用户"),
+                eq("CUSTOMER"), eq(0L), anyLong()
         )).thenReturn("orphan-refresh-token");
         when(refreshTokenService.consumeRefreshToken("old-refresh-token"))
                 .thenReturn(false);
+        when(refreshTokenService.getRefreshTokenMaxLifetimeSeconds())
+                .thenReturn(2592000L);
 
         AuthServiceImpl authService = new AuthServiceImpl(
                 userServiceClient,
@@ -353,6 +361,52 @@ class AuthServiceImplTest {
         );
         verify(refreshTokenService)
                 .deleteRefreshToken("orphan-refresh-token");
+    }
+
+    /**
+     * 验证超过会话绝对期限的 Refresh Token 不能再换取新令牌。
+     */
+    @Test
+    void shouldRejectRefreshAfterAbsoluteSessionLifetime() {
+        UserServiceClient userServiceClient = mock(UserServiceClient.class);
+        JwtTokenService jwtTokenService = mock(JwtTokenService.class);
+        RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
+        RefreshTokenLockService refreshTokenLockService = mock(RefreshTokenLockService.class);
+        when(refreshTokenLockService.acquire("old-refresh-token"))
+                .thenReturn(mock(RefreshTokenLockService.LockHandle.class));
+        // 会话在 31 天前签发，已超过 30 天绝对期限；单枚令牌本身尚未到期。
+        long expiredSessionStart = System.currentTimeMillis() - 31L * 24 * 3600 * 1000;
+        when(refreshTokenService.getRefreshTokenInfo("old-refresh-token"))
+                .thenReturn(new RefreshTokenInfo(5L, "测试用户", "CUSTOMER", 0L, expiredSessionStart));
+        when(refreshTokenService.getRefreshTokenMaxLifetimeSeconds()).thenReturn(2592000L);
+        when(userServiceClient.getUserById(5L)).thenReturn(ApiResponse.success(
+                com.hbue.ordering.user.api.vo.UserBasicVO.builder().emailVerified(true).userId(5L)
+                        .userUuid("12345678-1234-4234-8234-123456789abc")
+                        .username("测试用户").roleCode("CUSTOMER").credentialVersion(0L).build()));
+
+        AuthServiceImpl authService = new AuthServiceImpl(
+                userServiceClient,
+                mock(LoginAttemptService.class),
+                mock(CaptchaService.class),
+                jwtTokenService,
+                refreshTokenService,
+                mock(AccessTokenBlacklistService.class),
+                refreshTokenLockService,
+                org.mockito.Mockito.mock(com.hbue.ordering.auth.service.EmailOwnershipService.class));
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("old-refresh-token");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> authService.refreshAccessToken(request)
+        );
+
+        assertEquals(CommonErrorCode.UNAUTHORIZED, exception.getErrorCode());
+        // 必须让旧令牌失效，并且不得签发访问令牌或新的刷新令牌。
+        verify(refreshTokenService).deleteRefreshToken("old-refresh-token");
+        verify(refreshTokenService, never())
+                .createRefreshToken(anyLong(), anyString(), anyString(), anyLong(), anyLong());
+        verifyNoInteractions(jwtTokenService);
     }
 
     /**

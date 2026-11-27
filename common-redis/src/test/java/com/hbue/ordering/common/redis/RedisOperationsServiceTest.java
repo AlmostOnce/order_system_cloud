@@ -31,6 +31,11 @@ class RedisOperationsServiceTest {
 
     private HashOperations<String, Object, Object> hashOperations;
 
+    /**
+     * 有序集合操作测试替身，用于验证 ZADD/ZCARD/ZRANGE/ZREM 是否被正确委托。
+     */
+    private org.springframework.data.redis.core.ZSetOperations<String, String> zSetOperations;
+
     private RedisOperationsService redisOperationsService;
 
     /**
@@ -42,6 +47,7 @@ class RedisOperationsServiceTest {
         stringRedisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
         hashOperations = mock(HashOperations.class);
+        zSetOperations = mock(org.springframework.data.redis.core.ZSetOperations.class);
 
         when(stringRedisTemplate.opsForValue())
                 .thenReturn(valueOperations);
@@ -206,5 +212,67 @@ class RedisOperationsServiceTest {
 
         // 确认 Redis 返回删除成功。
         assertTrue(result);
+    }
+
+    /**
+     * 有序集合写入应调用 ZADD 并返回确认结果。
+     */
+    @Test
+    void addToSortedSetShouldDelegateToRedis() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.add("sample:zset", "member", 1000D)).thenReturn(true);
+
+        // 写入成员并按分数排序。
+        Boolean result = redisOperationsService.addToSortedSet("sample:zset", "member", 1000D);
+
+        // 确认使用 Redis 有序集合写入。
+        assertTrue(result);
+        verify(zSetOperations).add("sample:zset", "member", 1000D);
+    }
+
+    /**
+     * 有序集合数量统计应调用 ZCARD。
+     */
+    @Test
+    void sortedSetSizeShouldReturnCardinality() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.zCard("sample:zset")).thenReturn(3L);
+
+        // 统计有序集合成员数量。
+        Long size = redisOperationsService.sortedSetSize("sample:zset");
+
+        // 确认返回 Redis 统计结果。
+        assertEquals(3L, size);
+    }
+
+    /**
+     * 有序集合区间读取应按分数升序返回成员，Redis 返回 null 时按空集合处理。
+     */
+    @Test
+    void sortedSetRangeShouldReturnOrderedMembers() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.range("sample:zset", 0L, 1L))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of("first", "second")));
+
+        // 读取最旧的 2 个成员。
+        List<String> members = redisOperationsService.sortedSetRange("sample:zset", 0L, 1L);
+
+        // 确认保持 Redis 返回的分数升序。
+        assertEquals(List.of("first", "second"), members);
+    }
+
+    /**
+     * 有序集合删除应调用 ZREM 并返回删除数量。
+     */
+    @Test
+    void removeFromSortedSetShouldReturnRemovedCount() {
+        when(stringRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        when(zSetOperations.remove("sample:zset", "member")).thenReturn(1L);
+
+        // 删除指定成员。
+        Long removed = redisOperationsService.removeFromSortedSet("sample:zset", "member");
+
+        // 确认 Redis 返回删除数量。
+        assertEquals(1L, removed);
     }
 }

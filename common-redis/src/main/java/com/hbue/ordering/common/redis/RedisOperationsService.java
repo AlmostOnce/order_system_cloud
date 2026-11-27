@@ -235,6 +235,59 @@ public class RedisOperationsService {
     }
 
     /**
+     * 向有序集合写入成员，并按分数升序维护成员顺序。
+     *
+     * <p>用于需要按时间淘汰旧成员的场景，例如限制同一用户同时有效的会话数量。
+     * 成员已存在时会用新分数覆盖旧分数。</p>
+     *
+     * @param key   Redis 有序集合 Key
+     * @param value 成员值
+     * @param score 排序分数，通常为毫秒时间戳
+     * @return Redis 是否确认写入；无法确认时可能返回 null
+     */
+    public Boolean addToSortedSet(String key, String value, double score) {
+        // 返回 Redis 对 ZADD 的确认结果。
+        return stringRedisTemplate.opsForZSet().add(key, value, score);
+    }
+
+    /**
+     * 统计有序集合的成员数量。
+     *
+     * @param key Redis 有序集合 Key
+     * @return 成员数量；无法确认时可能返回 null
+     */
+    public Long sortedSetSize(String key) {
+        // 返回 Redis 对 ZCARD 的结果。
+        return stringRedisTemplate.opsForZSet().zCard(key);
+    }
+
+    /**
+     * 按分数升序读取指定下标区间的成员。
+     *
+     * @param key   Redis 有序集合 Key
+     * @param start 起始下标，从 0 开始
+     * @param end   结束下标，包含该位置
+     * @return 区间内的成员列表；Key 不存在或无法确认时返回空列表
+     */
+    public List<String> sortedSetRange(String key, long start, long end) {
+        // 使用 ZRANGE 按分数升序读取成员，避免一次取回整份集合。
+        java.util.Set<String> members = stringRedisTemplate.opsForZSet().range(key, start, end);
+        return members == null ? List.of() : List.copyOf(members);
+    }
+
+    /**
+     * 从有序集合中删除一个或多个成员。
+     *
+     * @param key    Redis 有序集合 Key
+     * @param values 待删除的成员
+     * @return 实际删除的成员数量；无法确认时可能返回 null
+     */
+    public Long removeFromSortedSet(String key, String... values) {
+        // ZREM 对不存在的成员幂等，便于重复清理时安全调用。
+        return stringRedisTemplate.opsForZSet().remove(key, (Object[]) values);
+    }
+
+    /**
      * 发布可补查的在线变更提示，统一封装Redis Pub/Sub入口；不用于持久化消息正文。
      *
      * @param channel 服务端固定主题，业务不能直接采用客户端指定的任意主题

@@ -85,6 +85,12 @@ security:
     # Refresh Token 有效期，单位为秒，当前为 30 天。
     refresh-token-ttl-seconds: 2592000
 
+    # 会话绝对有效期（秒）：从首次登录起算，轮换不会延长，超过后必须重新登录。
+    refresh-token-absolute-seconds: ${REFRESH_TOKEN_ABSOLUTE_SECONDS:2592000}
+
+    # 同一用户同时有效的 Refresh Token 上限，超过后淘汰最久未活动的一枚。
+    refresh-token-max-sessions: ${REFRESH_TOKEN_MAX_SESSIONS:5}
+
     # Access Token 黑名单 Key 前缀，认证服务、Gateway 和业务服务必须保持一致。
     blacklist-key-prefix: "auth:access-token:blacklist:"
 
