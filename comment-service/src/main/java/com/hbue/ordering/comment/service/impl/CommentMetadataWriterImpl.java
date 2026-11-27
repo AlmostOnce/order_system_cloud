@@ -6,10 +6,13 @@ import com.hbue.ordering.comment.api.ProductRatingChangedEvent;
 import com.hbue.ordering.comment.mapper.CommentWriteMapper;
 import com.hbue.ordering.comment.model.CommentRowDO;
 import com.hbue.ordering.comment.service.CommentMetadataWriter;
+import com.hbue.ordering.comment.service.RatingSummaryService;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.UUID;
 
@@ -40,14 +43,21 @@ public class CommentMetadataWriterImpl implements CommentMetadataWriter {
     private final ObjectMapper json;
 
     /**
+     * 评分读缓存失效器；只在本地事务提交后删除缓存键。
+     */
+    private final RatingSummaryService ratings;
+
+    /**
      * 创建元数据写入器。
      *
-     * @param mapper 评价与评分汇总写入
-     * @param json   JSON 编解码器
+     * @param mapper  评价与评分汇总写入
+     * @param json    JSON 编解码器
+     * @param ratings 评分读缓存失效器
      */
-    public CommentMetadataWriterImpl(CommentWriteMapper mapper, ObjectMapper json) {
+    public CommentMetadataWriterImpl(CommentWriteMapper mapper, ObjectMapper json, RatingSummaryService ratings) {
         this.mapper = mapper;
         this.json = json;
+        this.ratings = ratings;
     }
 
     /**
@@ -62,6 +72,8 @@ public class CommentMetadataWriterImpl implements CommentMetadataWriter {
         mapper.updateRating(row.productId(), row.score());
         // 上面的写入已持有该菜品行锁；同菜品并发提交的版本和快照保持一致。
         publishSnapshot(row.productId());
+        // 提交后删除评分读缓存，避免学生发出首条评价后 30–60 秒内仍看到 reviewCount=0。
+        evictAfterCommit(row.productId());
     }
 
     /**
@@ -87,6 +99,8 @@ public class CommentMetadataWriterImpl implements CommentMetadataWriter {
             throw new IllegalStateException("评分统计调整失败，事务必须回滚");
         }
         publishSnapshot(productId);
+        // 仅评分变化才需要失效缓存；只改正文或带图标记不影响评分读模型。
+        evictAfterCommit(productId);
     }
 
     /**
@@ -104,6 +118,31 @@ public class CommentMetadataWriterImpl implements CommentMetadataWriter {
             throw new IllegalStateException("评分统计调整失败，事务必须回滚");
         }
         publishSnapshot(row.productId());
+        // 删除评价后立刻失效缓存，批量与单条入口都应马上看不到这条评分。
+        evictAfterCommit(row.productId());
+    }
+
+    /**
+     * 在本地事务提交后删除评分读缓存。
+     *
+     * <p>不能在事务内直接删除：先删缓存、并发读者随后用尚未提交的旧库值回填，等本事务提交后
+     * 缓存又变回旧值。注册 afterCommit 同步器可保证删除一定发生在提交之后，最坏只是提交到删除
+     * 之间的极短窗口可能读到旧值。缓存删除失败不会回滚已提交事务，由 30–60 秒 TTL 兜底。</p>
+     *
+     * @param productId 菜品编号
+     */
+    private void evictAfterCommit(Long productId) {
+        // 无事务上下文时（例如直接单元测试调用）立即删除，行为与调用方预期一致。
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            ratings.evict(productId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                ratings.evict(productId);
+            }
+        });
     }
 
     /**
