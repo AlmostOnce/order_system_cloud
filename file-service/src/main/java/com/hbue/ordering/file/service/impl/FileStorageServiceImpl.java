@@ -16,20 +16,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
  * 文件存储业务实现。
  *
  * <p>上传流程为：校验大小与真实类型 → 计算内容摘要 → 按摘要生成存储路径并秒传判断
- * → 生成对外文件键 → 落库元数据。内容摘要决定存储路径，因此相同内容天然去重；
- * 删除只做逻辑删除，物理文件保留，避免误删仍被其它记录引用的内容。</p>
+ * → 生成对外文件键 → 落库元数据。存储路径只由内容摘要决定（不含上传日期），
+ * 因此同一内容无论何时上传都落到同一对象键，跨天也不会重复存盘。</p>
+ *
+ * <p>删除先做逻辑删除；仅当同一对象键已没有任何未删除记录引用时，才回收物理文件，
+ * 避免误删仍被其它元数据引用的内容。物理回收失败不会让逻辑删除表现为失败，
+ * 残留文件由运维按日志清理。</p>
  *
  * @author order-system
  * @date 2026-10-16
@@ -63,10 +67,9 @@ public class FileStorageServiceImpl implements FileStorageService {
     private static final int DELETED = 1;
 
     /**
-     * 存储路径按日期分层所用的格式。
+     * 当前类日志对象。
      */
-    private static final DateTimeFormatter DATE_PATH_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    private static final Logger log = LoggerFactory.getLogger(FileStorageServiceImpl.class);
 
     /**
      * 内容摘要算法名。
@@ -213,7 +216,15 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     /**
-     * {@inheritDoc}
+     * 删除文件：先逻辑删除，再按引用情况回收物理文件。
+     *
+     * <p>同一对象键可能被多条元数据记录引用（相同内容重复上传）。因此逻辑删除后必须回查
+     * 是否还有未删除记录引用该对象键，只有引用数为零时才删除物理文件；否则保留文件，
+     * 让其它记录继续可读。</p>
+     *
+     * <p>并发边界：上传端先判断文件是否存在再决定写盘，若其判断恰好发生在本次回收之前，
+     * 并发的同内容上传可能短暂指向已回收的文件。该窗口极小，且内容寻址保证再次上传同一
+     * 内容即可自愈（文件不存在时会重新写盘）；为控制改动范围，这里不引入跨表引用计数。</p>
      */
     @Override
     @Transactional
@@ -231,12 +242,31 @@ public class FileStorageServiceImpl implements FileStorageService {
             );
         }
 
-        // 只做逻辑删除，物理文件保留，避免影响引用同一内容的其他记录。
+        // 先做逻辑删除：元数据立即不可见，后续物理回收失败也不会把文件暴露给业务。
         UpdateWrapper<FileObjectDO> update = new UpdateWrapper<>();
         update.eq("file_key", fileKey)
                 .eq("is_deleted", NOT_DELETED)
                 .set("is_deleted", DELETED);
         fileObjectMapper.update(null, update);
+
+        // 回查同一对象键的未删除引用数，仍有引用时物理文件必须保留。
+        Long activeReferences = fileObjectMapper.selectCount(
+                new QueryWrapper<FileObjectDO>()
+                        .eq("object_key", fileObject.getObjectKey())
+                        .eq("is_deleted", NOT_DELETED)
+        );
+        if (activeReferences == null || activeReferences > 0L) {
+            return;
+        }
+
+        try {
+            // 没有任何未删除记录引用时才回收物理文件；介质实现本身幂等，重复调用安全。
+            fileStorage.delete(fileObject.getObjectKey());
+        } catch (RuntimeException exception) {
+            // 逻辑删除已经生效，物理回收失败只记录日志：不能把一次成功的删除操作报成失败，
+            // 残留文件可按日志与对象键人工清理。
+            log.warn("孤立文件物理回收失败，objectKey={}", fileObject.getObjectKey(), exception);
+        }
     }
 
     /**
@@ -311,21 +341,21 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     /**
-     * 按日期分层与内容摘要生成存储路径。
+     * 按内容摘要生成存储路径。
+     *
+     * <p>路径只包含摘要前两位目录与完整摘要，不含上传日期：同一内容在不同日期上传会得到
+     * 同一对象键，才能真正命中秒传与元数据复用；日期分层会让跨天重复上传产生多份物理副本。</p>
      *
      * @param sha256  内容摘要
      * @param fileExt 扩展名
-     * @return 形如 {@code yyyy/MM/dd/{摘要前2位}/{摘要}.{扩展名}} 的相对路径
+     * @return 形如 {@code {摘要前2位}/{摘要}.{扩展名}} 的相对路径
      */
     private String buildObjectKey(String sha256, String fileExt) {
-        // 取当前日期按 yyyy/MM/dd 分层，避免单目录文件过多。
-        String datePath = LocalDate.now().format(DATE_PATH_FORMATTER);
-
-        // 取摘要前两位作为二级目录，进一步分散文件。
+        // 取摘要前两位作为一级目录，避免单目录文件过多。
         String prefix = sha256.substring(0, 2);
 
         // 拼出最终相对路径，路径片段全部来自服务端生成。
-        return datePath + "/" + prefix + "/" + sha256 + "." + fileExt;
+        return prefix + "/" + sha256 + "." + fileExt;
     }
 
     /**
