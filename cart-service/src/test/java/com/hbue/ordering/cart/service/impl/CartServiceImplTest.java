@@ -6,6 +6,7 @@ import com.hbue.ordering.cart.model.CartItemDO;
 import com.hbue.ordering.cart.repository.CartRedisRepository;
 import com.hbue.ordering.cart.vo.CartItemVO;
 import com.hbue.ordering.cart.vo.CartVO;
+import com.hbue.ordering.cart.vo.CartWindowVO;
 import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
@@ -75,7 +76,8 @@ class CartServiceImplTest {
     void shouldValidateProductBeforeAdding() {
         when(products.quote(any())).thenReturn(quote(true, product(11L, "18.50")));
         service.addItem(5L, 1L, add(11L, 2));
-        verify(repository).add(5L, 1L, 11L, 2, "商品11", "P11");
+        // 当前实现会带上规格键与规格文字快照，无规格菜品固定为 base 与空文字。
+        verify(repository).add(5L, 1L, 11L, "base", 2, "商品11", "P11", "");
     }
 
     /**
@@ -104,12 +106,23 @@ class CartServiceImplTest {
     }
 
     /**
-     * 窗口停用时拒绝添加，即使响应中意外出现菜品数据。
+     * 窗口停用时返回空菜品集，添加应按"窗口或菜品不存在"拒绝，而不是当成服务故障。
      */
     @Test
     void shouldRejectDisabledWindow() {
-        when(products.quote(any())).thenReturn(quote(false, product(11L, "18.50")));
+        when(products.quote(any())).thenReturn(quote(false));
         assertEquals(CommonErrorCode.NOT_FOUND, assertThrows(BusinessException.class,
+                () -> service.addItem(5L, 1L, add(11L, 1))).getErrorCode());
+        verifyNoInteractions(repository);
+    }
+
+    /**
+     * 窗口已停用却返回菜品属于核价契约破坏，必须 Fail-Closed 为 503 而不是猜测价格。
+     */
+    @Test
+    void shouldRejectDisabledWindowThatStillReturnsProducts() {
+        when(products.quote(any())).thenReturn(quote(false, product(11L, "18.50")));
+        assertEquals(CommonErrorCode.SERVICE_UNAVAILABLE, assertThrows(BusinessException.class,
                 () -> service.addItem(5L, 1L, add(11L, 1))).getErrorCode());
         verifyNoInteractions(repository);
     }
@@ -168,6 +181,64 @@ class CartServiceImplTest {
     }
 
     /**
+     * 失效行超过逐行上限时只保留一次批量核价，不得把远程调用线性放大。
+     */
+    @Test
+    void shouldNotFanOutPerRowWhenRejectedWindowIsLarge() {
+        when(repository.findAll(5L)).thenReturn(List.of(
+                item(1L, 11L, 1, true), item(1L, 12L, 1, true),
+                item(1L, 13L, 2, true), item(1L, 14L, 1, false)));
+        when(products.quote(any())).thenReturn(ApiResponse.failure(CommonErrorCode.BAD_REQUEST));
+
+        CartVO cart = service.getCart(5L);
+
+        // 4 行已超过逐行上限：只允许最初那一次整批核价，退化分支必须直接整窗标记不可售。
+        verify(products, times(1)).quote(any());
+        CartWindowVO window = cart.windows().getFirst();
+        assertTrue(window.windowActive());
+        assertEquals(4, window.items().size());
+        assertTrue(window.items().stream().noneMatch(CartItemVO::available));
+        assertTrue(window.items().stream()
+                .allMatch(item -> "规格已失效，请返回菜单重新选择".equals(item.unavailableReason())));
+        assertNull(window.items().getFirst().unitPrice());
+        assertEquals(0L, cart.checkedQuantity());
+        assertEquals(0, cart.checkedAmount().signum());
+        // 失效项仍留在购物车，顾客可以逐项删除或回菜单重新选择规格。
+        verify(repository, never()).remove(any(), any(), any());
+    }
+
+    /**
+     * 小窗口内逐行隔离：只标记被商品服务明确 400 的行，其余行保留实时价格。
+     */
+    @Test
+    void shouldIsolateOnlyRejectedLineForSmallWindow() {
+        when(repository.findAll(5L)).thenReturn(List.of(
+                item(1L, 11L, 1, true), item(1L, 12L, 1, true), item(1L, 13L, 2, true)));
+        when(products.quote(any())).thenAnswer(invocation -> {
+            ProductQuoteRequest request = invocation.getArgument(0);
+            if (request.getItems().size() > 1) {
+                return ApiResponse.failure(CommonErrorCode.BAD_REQUEST);
+            }
+            Long productId = request.getItems().getFirst().getProductId();
+            return productId == 12L
+                    ? ApiResponse.failure(CommonErrorCode.BAD_REQUEST)
+                    : quote(true, product(productId, "5.00"));
+        });
+
+        CartVO cart = service.getCart(5L);
+
+        // 1 次整批 + 3 次逐行，调用次数有确定上界，不会随行数继续增长。
+        verify(products, times(4)).quote(any());
+        List<CartItemVO> items = cart.windows().getFirst().items();
+        assertTrue(items.get(0).available());
+        assertFalse(items.get(1).available());
+        assertEquals("规格已失效，请返回菜单重新选择", items.get(1).unavailableReason());
+        assertTrue(items.get(2).available());
+        assertEquals(3L, cart.checkedQuantity());
+        assertEquals(0, new BigDecimal("15.00").compareTo(cart.checkedAmount()));
+    }
+
+    /**
      * 无效商品价格不能被当作零元商品展示。
      */
     @Test
@@ -189,9 +260,10 @@ class CartServiceImplTest {
         service.updateChecked(5L, 1L, 11L, false);
         service.removeItem(5L, 1L, 11L);
         service.clearWindow(5L, 1L);
-        verify(repository).updateQuantity(5L, 1L, 11L, 3);
-        verify(repository).updateChecked(5L, 1L, 11L, false);
-        verify(repository).remove(5L, 1L, 11L);
+        // 服务层统一走带规格键的实现，旧路由的行身份固定为 base。
+        verify(repository).updateQuantity(5L, 1L, 11L, "base", 3);
+        verify(repository).updateChecked(5L, 1L, 11L, "base", false);
+        verify(repository).remove(5L, 1L, 11L, "base");
         verify(repository).clearWindow(5L, 1L);
         verifyNoInteractions(products);
     }

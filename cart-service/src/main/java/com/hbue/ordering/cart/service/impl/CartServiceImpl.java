@@ -33,6 +33,14 @@ import java.util.*;
 @Service
 public class CartServiceImpl implements CartService {
     /**
+     * 批量核价被整批拒绝后，允许逐行重试的最大行数。
+     *
+     * <p>逐行重试的调用次数与行数线性相关，而购物车单窗口最多 100 行，最坏情况会把一次
+     * 打开购物车放大成 101 次串行远程调用。把逐行隔离限制在很小的窗口内，可以让单次请求的
+     * 远程调用次数有确定上界；超限窗口直接整窗标记不可售，失败行为可预期且仍可清理。</p>
+     */
+    private static final int FALLBACK_LINE_LIMIT = 3;
+    /**
      * 用户隔离的购物车存储访问层。
      */
     private final CartRedisRepository repository;
@@ -213,8 +221,20 @@ public class CartServiceImpl implements CartService {
     }
 
     /**
-     * 先批量查询以减少服务间请求；如果商品服务因一个失效规格拒绝整批，则退化为逐行报价。
-     * 逐行只有 400 的行被标记不可售，其它行仍显示实时价格；网络、降级或契约异常仍返回 503。
+     * 先批量查询以减少服务间请求；如果商品服务因一个失效规格拒绝整批，则只在行数很小时逐行隔离。
+     *
+     * <p>商品服务的批量核价是"全有或全无"：只要一行规格失效就整批返回 400，无法从响应中看出是哪一行。
+     * 历史实现在收到 400 后无条件逐行重试，含 20 条失效规格的购物车打开一次就要串行发起 21 次 Feign
+     * 调用，接口直接跌到秒级并可能超时。因此逐行隔离只保留给不超过
+     * {@link #FALLBACK_LINE_LIMIT} 行的小窗口；更大的窗口不再逐行放大调用次数，而是整窗标记不可售，
+     * 由顾客回到菜单重新选择规格。这是以少量体验换取响应时间上界的有意取舍。</p>
+     *
+     * <p>行数未超限时仍逐行报价：只有被商品服务明确 400 的行标记不可售，其它行显示实时价格；
+     * 网络、降级或契约异常仍统一返回 503，不伪装成菜品下架。</p>
+     *
+     * @param windowId 当前核价的窗口编号
+     * @param rows     该窗口下的购物车行，调用方保证菜品与规格组合不重复
+     * @return 窗口启用状态、可售行报价与被明确拒绝的规格行
      */
     private QuoteBatch queryWindowQuotes(Long windowId, List<CartItemDO> rows) {
         List<ProductQuoteItemRequest> quoteLines = rows.stream()
@@ -230,6 +250,12 @@ public class CartServiceImpl implements CartService {
             ProductQuoteResponse response = callQuote(windowId, quoteLines);
             return new QuoteBatch(response.isWindowActive(), indexProducts(response, requested), Set.of());
         } catch (QuoteRejectedException exception) {
+            // 整窗行数超过逐行上限时不再逐行核价：批量请求已被 400 明确拒绝，逐行只会线性放大耗时，
+            // 因此把本窗口全部行标记为规格失效（仍保留删除与重新加入入口），一轮请求内返回。
+            // 这里能走到 400 说明窗口本身可用（停用窗口返回的是 windowActive=false 而非 400），故置为 true。
+            if (rows.size() > FALLBACK_LINE_LIMIT) {
+                return new QuoteBatch(true, Map.of(), new HashSet<>(requested));
+            }
             Map<QuoteIdentity, ProductQuoteVO> products = new HashMap<>();
             Set<QuoteIdentity> rejected = new HashSet<>();
             boolean windowActive = true;
