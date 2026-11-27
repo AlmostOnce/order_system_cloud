@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="GatewayServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="NACOS_USERNAME" value="nacos" />
+      <env name="NACOS_PASSWORD" value="root" />
+      <env name="SW_AGENT_NAME" value="gateway-service" />
+      <env name="SW_AGENT_COLLECTOR_BACKEND_SERVICES" value="127.0.0.1:11800" />
+    </envs>
+    <module name="gateway-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.hbue.ordering.gateway.GatewayServiceApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

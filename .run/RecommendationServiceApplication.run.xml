@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="RecommendationServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="NACOS_USERNAME" value="nacos" />
+      <env name="NACOS_PASSWORD" value="root" />
+      <env name="SW_AGENT_NAME" value="recommendation-service" />
+      <env name="SW_AGENT_COLLECTOR_BACKEND_SERVICES" value="127.0.0.1:11800" />
+    </envs>
+    <module name="recommendation-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.hbue.ordering.recommendation.RecommendationServiceApplication" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
