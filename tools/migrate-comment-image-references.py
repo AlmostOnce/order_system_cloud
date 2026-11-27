@@ -5,10 +5,14 @@ import argparse
 import json
 import socket
 import subprocess
+import os
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def main():
+    # 导出的评论正文备份不向其他本机用户开放。
+    os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
@@ -17,7 +21,9 @@ def main():
         if '=' in line and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
             env[key.strip()] = value.strip().strip('\"\'')
-    prefix = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker', 'exec', '-i',
+    # 同一套迁移逻辑在 Windows/WSL 和 Linux 本机均可运行。
+    docker_command = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker'] if sys.platform == 'win32' else ['docker']
+    prefix = docker_command + ['exec', '-i',
               '-e', 'MIGRATION_USER=' + env['COMMENT_MONGO_USERNAME'],
               '-e', 'MIGRATION_PASSWORD=' + env['COMMENT_MONGO_PASSWORD'],
               'order-system-cloud-mongo-1', 'mongosh', '--quiet', '--nodb', '--file', '/dev/stdin']

@@ -6,6 +6,8 @@ import json
 import re
 import socket
 import subprocess
+import os
+import sys
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,8 @@ def extract_key(value):
     return match[1].lower()
 
 def main():
+    # 备份含有账号数据，仅允许当前操作系统用户读取。
+    os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
@@ -36,7 +40,9 @@ def main():
         if '=' in line and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
             env[key.strip()] = value.strip().strip('\"\'')
-    prefix = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker', 'exec', '-i', '-e',
+    # 新设备同步时保留 Windows 的 WSL 入口，同时支持 Linux 原生 Docker。
+    docker_command = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker'] if sys.platform == 'win32' else ['docker']
+    prefix = docker_command + ['exec', '-i', '-e',
               'MYSQL_PWD=' + env['MYSQL_ROOT_PASSWORD'], 'order-system-cloud-mysql-1']
 
     def query(sql):

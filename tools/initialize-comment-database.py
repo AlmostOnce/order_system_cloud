@@ -2,11 +2,16 @@
 from pathlib import Path
 from datetime import datetime
 import subprocess
+import os
+import sys
 
 root = Path(__file__).resolve().parents[1]
 env = dict(line.split('=', 1) for line in (root / '.env').read_text(encoding='utf-8-sig').splitlines()
            if '=' in line and not line.lstrip().startswith('#'))
-prefix = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker', 'exec', '-i', '-e',
+# Windows 使用 WSL，Linux 直接使用本机 Docker；不改变迁移 SQL 和既有账号密码。
+docker_command = ['wsl', '-d', 'Ubuntu-24.04', '--', 'docker'] if sys.platform == 'win32' else ['docker']
+os.umask(0o077)
+prefix = docker_command + ['exec', '-i', '-e',
           'MYSQL_PWD=' + env['MYSQL_ROOT_PASSWORD'].strip().strip('\"\''), 'order-system-cloud-mysql-1']
 
 def mysql(sql, account='root', password=None):

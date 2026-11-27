@@ -12,7 +12,8 @@ for module in ['user-service','product-service','comment-service']:
         source = path.read_text(encoding='utf-8')
         assert '"image_url"' not in source and '"avatar_url"' not in source, str(path)
         assert '.requireImage(' not in source, str(path)
-content = next((root / 'comment-service/src/main/java').rglob('CommentContent.java')).read_text()
+# 评论聚合已按分层约定改名为 DO；审计实际持久化模型，不再查找旧类名。
+content = next((root / 'comment-service/src/main/java').rglob('CommentContentDO.java')).read_text(encoding='utf-8')
 assert 'List<String> imageFileKeys' in content
 for name in ['ProductSaveRequest','WindowSaveRequest','RestaurantSaveRequest']:
     source = next((root / 'product-service/src/main/java').rglob(name + '.java')).read_text(encoding='utf-8')
