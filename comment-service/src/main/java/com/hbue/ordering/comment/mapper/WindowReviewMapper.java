@@ -147,6 +147,33 @@ public interface WindowReviewMapper {
                            @Param("hasImages") Boolean hasImages);
 
     /**
+     * 校验分页游标是否仍属于当前查询范围与筛选条件。
+     *
+     * <p>分页 SQL 的游标子查询同样带范围与筛选条件；切换评分或图片筛选后沿用旧游标会让
+     * 子查询取不到 ID，整页静默变空。这里先按同一组条件回读游标，返回 0 时由服务层提示重新加载。</p>
+     *
+     * @param cursor    游标（评价公开标识）
+     * @param userId    本人范围，与 windowId 互斥
+     * @param windowId  档口范围，与 userId 互斥
+     * @param score     评分筛选，可空
+     * @param hasImages 是否只看带图，可空
+     * @return 命中条数，0 表示游标与当前筛选不匹配或已删除
+     */
+    @Select("""
+            SELECT COUNT(*)
+            FROM window_reviews
+            WHERE review_id = #{cursor}
+              AND status = 1
+              AND (#{userId} IS NULL OR user_id = #{userId})
+              AND (#{windowId} IS NULL OR window_id = #{windowId})
+              AND (#{score} IS NULL OR score = #{score})
+              AND (#{hasImages} IS NULL OR has_images = 1)
+            """)
+    int countScopedCursor(@Param("cursor") String cursor, @Param("userId") Long userId,
+                          @Param("windowId") Long windowId, @Param("score") Integer score,
+                          @Param("hasImages") Boolean hasImages);
+
+    /**
      * 按目标索引定位后聚合全部可见元数据，不读取正文以外的冗余列；空集合数量为0、平均分为null。
      */
     @Select("SELECT COUNT(*) AS review_count, AVG(score) AS average_score, "

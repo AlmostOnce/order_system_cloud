@@ -8,6 +8,7 @@ import com.hbue.ordering.comment.model.CommentContentDO;
 import com.hbue.ordering.comment.model.CommentRowDO;
 import com.hbue.ordering.comment.repository.CommentContentRepository;
 import com.hbue.ordering.comment.service.impl.CommentServiceImpl;
+import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
 import org.junit.jupiter.api.Test;
@@ -160,6 +161,38 @@ class CommentServiceTest {
 
         verify(writer).remove(row);
         verify(mongo, never()).removeIfPending(anyString());
+    }
+
+    /**
+     * 切换筛选后沿用旧游标必须提示重新加载，而不是静默返回空页。
+     */
+    @Test
+    void pageRejectsCursorThatDoesNotMatchCurrentFilter() {
+        String cursor = "b2222222-2222-4222-8222-222222222222";
+        // 按当前筛选回读游标为 0，说明游标属于旧筛选或已被删除。
+        when(rows.countScopedCursor(cursor, 9L, null, 5, null)).thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.page(9L, null, cursor, 20, 5, null));
+
+        assertEquals(CommonErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(rows, never()).pageByUser(anyLong(), anyString(), anyInt(), any(), any());
+    }
+
+    /**
+     * 游标仍在当前范围内时正常分页，不额外报错。
+     */
+    @Test
+    void pageAcceptsCursorWithinCurrentFilter() {
+        String cursor = "b2222222-2222-4222-8222-222222222222";
+        when(rows.countScopedCursor(cursor, 9L, null, 5, null)).thenReturn(1);
+        when(rows.pageByUser(9L, cursor, 21, 5, null)).thenReturn(List.of());
+
+        var result = service.page(9L, null, cursor, 20, 5, null);
+
+        assertFalse(result.hasMore());
+        assertNull(result.nextCursor());
+        verify(rows).pageByUser(9L, cursor, 21, 5, null);
     }
 
     /**

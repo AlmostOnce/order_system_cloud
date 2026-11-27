@@ -100,6 +100,34 @@ public interface CommentMapper {
                                      @Param("hasImages") Boolean hasImages);
 
     /**
+     * 校验分页游标是否仍属于当前查询范围与筛选条件。
+     *
+     * <p>分页 SQL 用游标子查询定位起始位置，且子查询同样带上范围与筛选条件。若用户切换评分或
+     * 图片筛选后沿用旧游标，子查询取不到 ID 会让整页静默变空；这里先按同一组条件回读游标，
+     * 返回 0 时由服务层明确提示重新加载，而不是给用户一个空页。</p>
+     *
+     * @param before    游标（评价公开标识）
+     * @param userId    本人范围，与 productId 互斥，非空时按用户过滤
+     * @param productId 商品范围，与 userId 互斥，非空时按商品过滤
+     * @param score     评分筛选，可空
+     * @param hasImages 是否只看带图，可空
+     * @return 命中条数，0 表示游标与当前筛选不匹配或已删除
+     */
+    @Select("""
+            SELECT COUNT(*)
+            FROM comments
+            WHERE comment_id = #{before}
+              AND status = 1
+              AND (#{userId} IS NULL OR user_id = #{userId})
+              AND (#{productId} IS NULL OR product_id = #{productId})
+              AND (#{score} IS NULL OR score = #{score})
+              AND (#{hasImages} IS NULL OR has_images = 1)
+            """)
+    int countScopedCursor(@Param("before") String before, @Param("userId") Long userId,
+                          @Param("productId") Long productId, @Param("score") Integer score,
+                          @Param("hasImages") Boolean hasImages);
+
+    /**
      * 按本人和订单读取已提交且未删除的商品评论，并按评论 ID 稳定排序。
      *
      * <p>订单详情会按这道菜回显"已评价"状态，已删除的评价不能再算作已评价。</p>

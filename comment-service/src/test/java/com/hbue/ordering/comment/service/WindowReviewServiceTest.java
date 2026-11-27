@@ -6,6 +6,8 @@ import com.hbue.ordering.comment.dto.CreateWindowReviewRequest;
 import com.hbue.ordering.comment.dto.UpdateWindowReviewRequest;
 import com.hbue.ordering.comment.mapper.WindowReviewMapper;
 import com.hbue.ordering.comment.service.impl.WindowReviewServiceImpl;
+import com.hbue.ordering.common.core.error.CommonErrorCode;
+import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.response.ApiResponse;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.order.api.vo.OrderReviewSnapshotVO;
@@ -34,6 +36,26 @@ class WindowReviewServiceTest {
         assertTrue(result.images().isEmpty());
         assertTrue(result.tags().isEmpty());
         verify(rows).insert(org.mockito.ArgumentMatchers.any());
+    }
+
+    /**
+     * 切换筛选后沿用旧游标必须提示重新加载，而不是静默返回空页。
+     */
+    @Test
+    void pageRejectsCursorThatDoesNotMatchCurrentFilter() {
+        var rows = mock(WindowReviewMapper.class);
+        String cursor = "a1111111-1111-4111-8111-111111111111";
+        // 按当前筛选回读游标为 0，说明游标属于旧筛选或已被删除。
+        when(rows.countScopedCursor(cursor, 9L, null, 5, null)).thenReturn(0);
+        var service = new WindowReviewServiceImpl(rows, mock(CommentOrderClient.class),
+                mock(ManagedImageClient.class), new ObjectMapper(), mock(AuthorAvatarService.class),
+                mock(ReviewAuthorityService.class), mock(ReviewDiscussionService.class));
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                () -> service.page(9L, null, cursor, 20, 5, null));
+
+        assertEquals(CommonErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(rows, never()).pageByUser(anyLong(), anyString(), anyInt(), any(), any());
     }
 
     /**

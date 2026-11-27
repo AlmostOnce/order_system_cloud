@@ -198,13 +198,18 @@ public class CommentServiceImpl implements CommentService {
         if (score != null && score != 1 && score != 5) throw bad("筛选分数仅支持1星或5星");
         if (limit < 1 || limit > 50 || (productId != null && productId <= 0)) throw bad("分页参数不正确");
         if (before != null) requireUuid(before);
+        Boolean imagesOnly = Boolean.TRUE.equals(hasImages) ? Boolean.TRUE : null;
+        // 游标必须属于当前查询范围与筛选：切换筛选后沿用旧游标会让游标子查询取不到 ID，
+        // 分页 SQL 静默返回空页；这里显式提示重新加载，避免用户误以为没有更多评价。
+        if (before != null && rows.countScopedCursor(before, userId, productId, score, imagesOnly) == 0)
+            throw bad("分页游标与当前筛选不匹配，请重新加载");
         // 未回填记录不能被默认为无图，避免旧代码运行期间漏掉带图历史评价。
         if (Boolean.TRUE.equals(hasImages) && rows.hasUnknownImages(userId, productId))
             throw new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, "评价图片信息待同步，请稍后重试");
         // 路由已确定查询范围；本人和商品分别执行显式条件的 SQL，避免在一个查询里切换范围。
         var found = userId != null
-                ? rows.pageByUser(userId, before, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null)
-                : rows.pageByProduct(productId, before, limit + 1, score, Boolean.TRUE.equals(hasImages) ? true : null);
+                ? rows.pageByUser(userId, before, limit + 1, score, imagesOnly)
+                : rows.pageByProduct(productId, before, limit + 1, score, imagesOnly);
         boolean more = found.size() > limit;
         var visible = found.stream().limit(limit).toList();
         Map<String, CommentContentDO> contents = new HashMap<>();
