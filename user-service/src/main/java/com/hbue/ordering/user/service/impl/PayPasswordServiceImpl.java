@@ -313,19 +313,26 @@ public class PayPasswordServiceImpl implements PayPasswordService {
     /**
      * 累计一次支付密码校验失败。
      *
+     * <p>使用"自增并首次设置过期时间"的原子操作，而不是先 {@code increment} 再单独 {@code expire}：
+     * 两步之间进程退出或 EXPIRE 失败会让计数键永不过期，锁定到期后一次错误就再次锁死用户，
+     * 只能人工删 Key。原子写法保证计数键一定带有 TTL，且后续失败不会刷新窗口。</p>
+     *
      * @param userId 用户 ID
      * @return 累计后的失败次数
      */
     private long incrementFailures(Long userId) {
         try {
-            String key = failKey(userId);
-            Long failures = redisOperationsService.increment(key);
-            long current = failures == null ? 0L : failures;
-            if (current == 1L) {
-                // 只在首次计数时设置 TTL，避免每次失败都重置过期时间。
-                redisOperationsService.expire(key, failureTtl);
+            Long failures = redisOperationsService.increment(failKey(userId), failureTtl);
+            if (failures == null) {
+                // 未拿到计数就无法判断是否超限，按不可用处理而不是放行。
+                throw new BusinessException(
+                        CommonErrorCode.SERVICE_UNAVAILABLE,
+                        "支付密码校验暂时不可用，请稍后重试"
+                );
             }
-            return current;
+            return failures;
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             log.error("累计支付密码失败次数失败：userId={}", userId, exception);
             throw new BusinessException(
