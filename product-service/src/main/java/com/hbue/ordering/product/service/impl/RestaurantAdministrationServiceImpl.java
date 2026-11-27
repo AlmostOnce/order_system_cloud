@@ -8,6 +8,7 @@ import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
 import com.hbue.ordering.common.web.media.FileReferences;
 import com.hbue.ordering.common.web.media.ManagedImageClient;
+import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.RestaurantMapper;
@@ -19,6 +20,8 @@ import com.hbue.ordering.product.vo.RestaurantAdminVO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -65,24 +68,32 @@ public class RestaurantAdministrationServiceImpl
     private final ProductSearchOutboxWriter searchOutbox;
 
     /**
+     * 菜单缓存服务；餐厅展示排序变化后需要失效启用窗口列表缓存。
+     */
+    private final ProductMenuCacheService menuCacheService;
+
+    /**
      * 创建餐厅管理服务。
      *
      * @param restaurantMapper   餐厅数据 Mapper
      * @param diningWindowMapper 窗口数据 Mapper
      * @param dataScopeService   数据范围判定服务
+     * @param menuCacheService   菜单缓存服务
      */
     public RestaurantAdministrationServiceImpl(
             RestaurantMapper restaurantMapper,
             DiningWindowMapper diningWindowMapper,
             DataScopeService dataScopeService,
             ManagedImageClient images,
-            ProductSearchOutboxWriter searchOutbox
+            ProductSearchOutboxWriter searchOutbox,
+            ProductMenuCacheService menuCacheService
     ) {
         this.restaurantMapper = restaurantMapper;
         this.diningWindowMapper = diningWindowMapper;
         this.dataScopeService = dataScopeService;
         this.images = images;
         this.searchOutbox = searchOutbox;
+        this.menuCacheService = menuCacheService;
     }
 
     /**
@@ -188,6 +199,8 @@ public class RestaurantAdministrationServiceImpl
             throw conflict("餐厅编码已存在");
         }
         attachedWindows.forEach(window -> searchOutbox.recordWindow(window.getWindowId()));
+        // 窗口列表按餐厅 sort_order 排序并缓存数分钟，排序或展示信息更新后必须失效，否则学生端延迟生效。
+        evictActiveWindowsAfterCommit();
         return toRestaurantVO(requireRestaurant(restaurantId));
     }
 
@@ -265,6 +278,26 @@ public class RestaurantAdministrationServiceImpl
             return false;
         }
         return requested.equals(existing);
+    }
+
+    /**
+     * 在事务提交后失效启用窗口列表缓存。
+     *
+     * <p>窗口列表按餐厅 {@code sort_order} 排序并缓存 300–420 秒。若在事务内删除，并发读者可能
+     * 立刻用尚未提交的旧排序回填，提交后缓存又变旧；注册 afterCommit 可保证删除发生在提交之后。
+     * 缓存删除失败由 TTL 兜底，不回滚餐厅更新。无事务上下文时立即删除。</p>
+     */
+    private void evictActiveWindowsAfterCommit() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    menuCacheService.evictActiveWindows();
+                }
+            });
+        } else {
+            menuCacheService.evictActiveWindows();
+        }
     }
 
     /**
