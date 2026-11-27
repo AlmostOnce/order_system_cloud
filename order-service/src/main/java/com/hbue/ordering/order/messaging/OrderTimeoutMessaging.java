@@ -96,10 +96,20 @@ public class OrderTimeoutMessaging {
 
     /**
      * 选择不超过剩余时间的最大延迟；不足1秒用1秒，消费者按数据库期限复核。
+     *
+     * <p>返回值直接作为 RocketMQ 的 {@code DELAY} 头（延迟级别），因此数组下标必须与
+     * Broker 的 {@code messageDelayLevel} 严格对齐：RocketMQ 默认只有 18 档
+     * （1s/5s/10s/30s/1m/2m/…/1h/2h），数组长度只能是 18，多出的档位会映射成越界级别
+     * 导致 Broker 拒收并反复走 outbox 重试。剩余时间超过 2 小时时钳制到最高档，消息到期后
+     * 消费端仍会用 {@code remainingMillis} 复核并重新投递，所以选择较短的档位不会提前关单。</p>
+     *
+     * @param millis 距订单支付期限的剩余毫秒数
+     * @return 1~18 的延迟级别；已到期返回 0 表示不设置延迟
      */
     static int delayLevel(long millis) {
         if (millis <= 0) return 0;
-        long[] seconds = {1, 5, 10, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 1200, 1800, 3600, 7200, 900};
+        // 与 RocketMQ 默认 18 档 messageDelayLevel 一一对应，禁止再追加自定义档位。
+        long[] seconds = {1, 5, 10, 30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 1200, 1800, 3600, 7200};
         int level = 1;
         long best = 0;
         for (int i = 0; i < seconds.length; i++)
