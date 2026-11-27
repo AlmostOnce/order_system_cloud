@@ -125,6 +125,28 @@ class UserBalanceServiceImplTest {
 
         assertTrue(result.getIdempotent());
         verify(userMapper, never()).deductBalance(any(), any());
+        // 冲突后的回查必须走加锁当前读：真实 MySQL 的普通快照读看不到对端在本事务快照之后提交的流水。
+        verify(balanceRecordMapper).selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF);
+    }
+
+    /**
+     * 唯一键冲突后当前读仍查不到业务流水，说明不是同号重放（例如主键等其它约束冲突），
+     * 必须把原始异常抛出触发回滚，不能伪装成幂等成功。
+     */
+    @Test
+    void shouldRethrowDuplicateKeyWhenCurrentReadStillMissing() {
+        when(balanceRecordMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(balanceRecordMapper.insert(any(BalanceRecordDO.class)))
+                .thenThrow(new DuplicateKeyException(
+                        "uk_balance_records_user_biz"
+                ));
+        when(balanceRecordMapper.selectPayForUpdate(USER_ID, BIZ_TYPE, BIZ_REF))
+                .thenReturn(null);
+
+        assertThrows(DuplicateKeyException.class,
+                () -> userBalanceService.deduct(USER_ID, command(AMOUNT)));
+
+        verify(userMapper, never()).deductBalance(any(), any());
     }
 
     @Test
