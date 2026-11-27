@@ -10,6 +10,10 @@ import java.util.List;
 public interface RatingBatchMapper {
     /**
      * 批量读取窗口评分；调用方限制 ID 数量和取值，foreach 中的 ID 仍使用绑定参数。
+     *
+     * <p>必须带 {@code status = 1}：窗口评价采用软删除，删除后正文与评分仍留在表里。若这里不过滤，
+     * 批量接口会把已删除的评分算进平均分与数量，而单条详情接口已按 {@code status = 1} 过滤，
+     * 两个入口出现口径不一致（例如删掉一条 1 星评价后，批量分仍被拉低）。</p>
      */
     @Select("""
             <script>
@@ -19,6 +23,7 @@ public interface RatingBatchMapper {
             <foreach collection="ids" item="id" open="(" separator="," close=")">
                 #{id}
             </foreach>
+              AND status = 1
             GROUP BY window_id
             </script>
             """)
