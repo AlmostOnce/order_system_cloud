@@ -45,6 +45,21 @@ public class WindowInternalClientFallbackFactory
                 return serviceUnavailable();
             }
 
+            /**
+             * 按餐厅查询档口 ID 的降级处理。
+             *
+             * @param restaurantIds 餐厅 ID 集合
+             * @param internalToken 服务间共享密钥
+             * @return 服务不可用响应
+             */
+            @Override
+            public ApiResponse<java.util.List<Long>> getWindowIdsByRestaurants(
+                    java.util.List<Long> restaurantIds,
+                    String internalToken
+            ) {
+                return serviceUnavailable();
+            }
+
 
             /**
              * 档口查询降级处理。

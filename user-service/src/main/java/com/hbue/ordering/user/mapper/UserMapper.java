@@ -615,4 +615,112 @@ public interface UserMapper extends BaseMapper<UserDO> {
             @Param("passwordHash") String passwordHash,
             @Param("deletedAt") java.time.LocalDateTime deletedAt
     );
+
+    /**
+     * 系统管理员账号目录的游标分页查询。
+     *
+     * <p>只读取账号摘要字段，不查询密码、支付密码和完整邮箱等敏感列；已软删除账号
+     * 不进入结果集。排序固定为 {@code user_id DESC}，游标使用上一页末条的
+     * {@code user_id}，配合“多取一条”判断是否还有下一页，避免翻页期间新增账号造成
+     * 重复或漏项。空筛选条件由动态 SQL 跳过，关键词同时匹配用户名、邮箱和完整用户号。</p>
+     *
+     * @param pattern  已转义并加前后通配符的关键词匹配串；null 表示不按关键词筛选
+     * @param keyword  去空格后的原始关键词，用于用户号精确匹配；与 pattern 同时为 null
+     * @param roleCode 角色编码精确筛选；null 表示不限
+     * @param status   账号状态精确筛选；null 表示不限
+     * @param beforeId 上一页末条主键，查询比它更小的记录；null 表示第一页
+     * @param limit    Service 已限制的取数上限，包含用于判断 hasMore 的额外一条
+     * @return 按主键倒序排列的账号记录，最多 limit 条
+     */
+    @Select("""
+            <script>
+            SELECT
+                user_id, user_uuid, user_no, username, role_code, email,
+                email_verified_at, status, created_at
+            FROM users
+            WHERE deleted_at IS NULL
+            <if test="roleCode != null">AND role_code = #{roleCode}</if>
+            <if test="status != null">AND status = #{status}</if>
+            <if test="pattern != null">
+                AND (
+                    username LIKE #{pattern} ESCAPE '!'
+                    OR email LIKE #{pattern} ESCAPE '!'
+                    OR user_no = #{keyword}
+                )
+            </if>
+            <if test="beforeId != null">AND user_id &lt; #{beforeId}</if>
+            ORDER BY user_id DESC
+            LIMIT #{limit}
+            </script>
+            """)
+    java.util.List<UserDO> selectAdminDirectoryPage(
+            @Param("pattern") String pattern,
+            @Param("keyword") String keyword,
+            @Param("roleCode") String roleCode,
+            @Param("status") Integer status,
+            @Param("beforeId") Long beforeId,
+            @Param("limit") int limit
+    );
+
+    /**
+     * 餐厅经理的候选账号游标分页查询。
+     *
+     * <p>只返回“已持有本餐厅或其下属档口范围”的账号：通过 {@code EXISTS} 子查询
+     * 匹配 {@code user_data_scopes}，范围集合完全来自操作者的范围快照，不接受客户端
+     * 传入。调用方必须保证餐厅集合与档口集合至少一个非空；两者都为空时不应执行本查询，
+     * 否则会退化为全表扫描并产生空授权集合。</p>
+     *
+     * <p>排序与游标语义与 {@link #selectAdminDirectoryPage} 一致，保证翻页稳定。</p>
+     *
+     * @param restaurantIds 操作者持有的餐厅范围；空集合表示没有餐厅范围
+     * @param windowIds     操作者持有的档口范围；空集合表示没有档口范围
+     * @param pattern       已转义并加前后通配符的关键词匹配串；null 表示不按关键词筛选
+     * @param keyword       去空格后的原始关键词，用于用户号精确匹配
+     * @param beforeId      上一页末条主键；null 表示第一页
+     * @param limit         Service 已限制的取数上限，包含用于判断 hasMore 的额外一条
+     * @return 按主键倒序排列的候选账号记录，最多 limit 条
+     */
+    @Select("""
+            <script>
+            SELECT
+                u.user_id, u.user_uuid, u.user_no, u.username, u.role_code, u.email,
+                u.email_verified_at, u.status, u.created_at
+            FROM users u
+            WHERE u.deleted_at IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM user_data_scopes s
+                  WHERE s.user_id = u.user_id
+                    AND (
+                        <trim prefixOverrides="OR ">
+                        <if test="restaurantIds != null and restaurantIds.size() > 0">
+                            (s.scope_type = 'RESTAURANT' AND s.scope_ref IN
+                            <foreach collection="restaurantIds" item="rid" open="(" separator="," close=")">#{rid}</foreach>)
+                        </if>
+                        <if test="windowIds != null and windowIds.size() > 0">
+                            OR (s.scope_type = 'WINDOW' AND s.scope_ref IN
+                            <foreach collection="windowIds" item="wid" open="(" separator="," close=")">#{wid}</foreach>)
+                        </if>
+                        </trim>
+                    )
+              )
+            <if test="pattern != null">
+                AND (
+                    u.username LIKE #{pattern} ESCAPE '!'
+                    OR u.email LIKE #{pattern} ESCAPE '!'
+                    OR u.user_no = #{keyword}
+                )
+            </if>
+            <if test="beforeId != null">AND u.user_id &lt; #{beforeId}</if>
+            ORDER BY u.user_id DESC
+            LIMIT #{limit}
+            </script>
+            """)
+    java.util.List<UserDO> selectScopedUserCandidates(
+            @Param("restaurantIds") java.util.List<Long> restaurantIds,
+            @Param("windowIds") java.util.List<Long> windowIds,
+            @Param("pattern") String pattern,
+            @Param("keyword") String keyword,
+            @Param("beforeId") Long beforeId,
+            @Param("limit") int limit
+    );
 }

@@ -73,6 +73,34 @@ public class InternalCatalogController {
     }
 
     /**
+     * 按餐厅批量查询其全部档口 ID。
+     *
+     * <p>供 user-service 把餐厅经理持有的餐厅范围展开为档口集合，用于收敛
+     * “数据范围候选账号”的检索口径。该接口只返回档口主键，不返回名称、图片或
+     * 菜单等业务数据；调用方仍需自行校验其是否有权访问对应餐厅。餐厅集合为空时
+     * 直接返回空列表，不执行 SQL，避免生成 `IN ()` 语法错误。</p>
+     *
+     * @param restaurantIds 餐厅 ID 集合
+     * @param token         服务间共享密钥
+     * @return 这些餐厅下的档口 ID 列表
+     */
+    @GetMapping("/windows/ids")
+    public ApiResponse<java.util.List<Long>> windowIdsByRestaurants(
+            @org.springframework.web.bind.annotation.RequestParam("restaurantIds")
+            java.util.List<Long> restaurantIds,
+            @RequestHeader(value = "X-Internal-Token", required = false) String token
+    ) {
+        // 内部调用必须携带正确的共享密钥，失败时统一返回 401。
+        internalScopeTokenVerifier.verify(token);
+        if (restaurantIds == null || restaurantIds.isEmpty()) {
+            return ApiResponse.success(java.util.List.of());
+        }
+        return ApiResponse.success(
+                diningWindowMapper.selectIdsByRestaurantIds(restaurantIds)
+        );
+    }
+
+    /**
      * 查询档口基本信息。
      *
      * @param windowId      档口 ID

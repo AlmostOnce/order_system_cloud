@@ -34,6 +34,21 @@ public interface WindowInternalClient {
             @org.springframework.web.bind.annotation.RequestParam("windowIds") java.util.List<Long> windowIds,
             @RequestHeader("X-Internal-Token") String internalToken);
 
+    /**
+     * 按餐厅批量查询档口 ID。
+     *
+     * <p>user-service 用于把餐厅经理的餐厅范围展开成档口集合，从而把候选账号
+     * 收敛到本餐厅范围内。返回结果只含档口主键，不包含名称或菜单数据。</p>
+     *
+     * @param restaurantIds 餐厅 ID 集合，调用方保证非空
+     * @param internalToken 服务间共享密钥
+     * @return 档口 ID 列表；远程不可用时返回服务不可用响应
+     */
+    @GetMapping("/internal/windows/ids")
+    ApiResponse<java.util.List<Long>> getWindowIdsByRestaurants(
+            @org.springframework.web.bind.annotation.RequestParam("restaurantIds") java.util.List<Long> restaurantIds,
+            @RequestHeader("X-Internal-Token") String internalToken);
+
 
     /**
      * 查询档口基本信息。

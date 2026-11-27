@@ -152,3 +152,45 @@ GET/PUT成功时 `data` 为如下数组（示例编号以实际返回值为准�
 
 兼容旧请求 `{ "windowId": 3, "productIds": [101] }`
 ，其语义为无规格选择；新增必选规格后旧请求会因缺少选择被拒绝。新旧字段只能提交一个非空列表，每次最多100行，选择ID最多10个，服务端排序ID后用短横线生成稳定键。所有金额来自商品服务数据库，菜单只供预览，订单应保存规格文字和价格快照。
+
+## 管理端账号目录与数据范围候选（2026-11-28）
+
+新增前已核对：现有 `/api/users/{userUuid}/role`、`/status`、`/scopes` 只接受已知道用户 UUID，
+没有任何账号列表或检索能力；本组接口补齐“先找到用户再操作”的前置步骤，不重复既有写接口。
+经 Gateway 调用时，路径前加 `/api`。
+
+| 方法与路径 | 权限及行为 |
+| --- | --- |
+| `GET /users/admin/directory?keyword&roleCode&status&cursor&size` | 仅 `SYSTEM_ADMIN`；按用户名/邮箱/完整用户号模糊检索，可按角色、状态过滤，游标分页 |
+| `GET /users/admin/scope-candidates?keyword&cursor&size` | `RESTAURANT_MANAGER`、`GENERAL_MANAGER`；总经理检索全平台，经理只检索已在本餐厅或其档口范围内的账号 |
+| `GET /internal/windows/ids?restaurantIds=1,2` | 内部共享密钥；仅供 user-service 把经理的餐厅范围展开为档口集合，不经 Gateway 公开 |
+
+分页响应统一为：
+
+```json
+{
+  "items": [
+    {
+      "userUuid": "9f1c...",
+      "userNo": "1234567890",
+      "username": "档口小李",
+      "roleCode": "STALL_MANAGER",
+      "status": 1,
+      "email": "li***@example.com",
+      "emailVerified": true,
+      "createdAt": "2026-11-01T09:30:00"
+    }
+  ],
+  "nextCursor": "1024",
+  "hasMore": true
+}
+```
+
+约定：
+
+- `size` 默认 20，服务端限制在 1～50；`cursor` 只接受上一页 `nextCursor` 的十进制字符串，非法游标返回 400。
+- 切换 `keyword`、`roleCode`、`status` 后必须丢弃旧游标并从第一页重新读取。
+- 邮箱始终脱敏返回；系统管理员需要完整邮箱时应走账号本人流程，不在管理目录暴露。
+- 角色编码只接受 `RoleCode` 中的值，非法值返回 400。
+- 经理的候选口径为“已持有本餐厅（含展开后的档口）范围”，避免借检索枚举全平台账号；首次给新员工授予范围由总经理完成。
+- product-service 不可用时候选接口返回 503，不返回未经范围收敛的数据。
