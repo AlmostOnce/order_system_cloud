@@ -8,7 +8,7 @@
 
 | 类别 | 技术 | 作用 |
 |---|---|---|
-| 语言与运行时 | Java 21 | 全部后端服务与共享模块 |
+| 语言与运行时 | Java 25 | 全部后端服务与共享模块 |
 | 应用框架 | Spring Boot 3.5 | Web、安全、配置与自动装配 |
 | 微服务 | Spring Cloud 2025 + Spring Cloud Alibaba | 网关、注册配置中心、服务调用、熔断限流 |
 | 网关 | Spring Cloud Gateway（WebFlux） | 统一入口、认证、限流、路由 |

@@ -114,7 +114,7 @@
 
 ### 4.1 按顺序执行
 
-1. **前置工具链**：JDK 21、Maven 3.9.x（本地仓库可写）、Ubuntu-24.04（WSL2）内的 docker engine。
+1. **前置工具链**：JDK 25、Maven 3.9.x（本地仓库可写）、Ubuntu-24.04（WSL2）内的 docker engine。
 2. **外部密钥**：JWT RSA 密钥对放到 `E:\home\user\.config\order-system\keys\`（`jwt-private.pem` / `jwt-public.pem`）。服务
    yml 写的是 `file:/home/user/.config/...`，Windows 下按当前工作目录所在盘符解析，因此 IDEA 的工作目录必须在 E 盘项目内。
 3. **准备 `.env`**：复制 `.env.example`，填 MySQL、Redis、四个库账号密码、Nacos 账号与鉴权密钥、引导账号、

@@ -41,9 +41,13 @@
     </modules>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>25</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
-        <spring-boot.version>3.5.6</spring-boot.version>
+        <!--
+            3.5.16 是 3.5 线中官方声明兼容 Java 25 的补丁版本（依赖 Spring Framework 6.2.19）；
+            原 3.5.6 只声明到更低 JDK，升级可避免 JDK 25 下的代理/字节码边界问题。
+        -->
+        <spring-boot.version>3.5.16</spring-boot.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
         <spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
         <!-- MySQL 连接池，统一使用适配 Spring Boot 3 的 Druid Starter。 -->
@@ -53,6 +57,13 @@
         <springdoc.version>2.9.1</springdoc.version>
         <!-- 覆盖 Spring Boot 管理的 Lombok 版本，适配本机 JDK 25 编译环境 -->
         <lombok.version>1.18.48</lombok.version>
+        <!--
+            覆盖 Spring Boot 3.5.x 默认的 Mockito 5.17.0：
+            该版本内嵌的 Byte Buddy 无法在 JDK 25 上生成 mock 类，会在所有使用 @Mock 的测试中
+            抛出“Mockito cannot mock this class”。5.19.0 已适配 JDK 25，且与 BOM 管理的
+            Byte Buddy 1.17.8 配套；仅影响测试作用域，不改变生产运行时依赖。
+        -->
+        <mockito.version>5.19.0</mockito.version>
         <!-- 取餐二维码渲染：ZXing 只负责把六位取餐码编码为 PNG，不引入扫码端依赖。 -->
         <zxing.version>3.5.3</zxing.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -107,6 +118,8 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
+                    <!-- 固定编译器插件版本，确保编译参数 release 25 与注解处理开关在不同 Maven 默认版本下表现一致 -->
+                    <version>3.14.0</version>
                     <configuration>
                         <!-- JDK 23+ 默认禁用注解处理，必须显式开启，否则 Lombok 不生效 -->
                         <proc>full</proc>
