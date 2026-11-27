@@ -27,7 +27,11 @@ public enum PaymentStatus {
     FAILED("FAILED"),
 
     /**
-     * 支付单已关闭的终态，预留给超时关单场景，当前版本不会产生。
+     * 支付单已关闭的终态。
+     *
+     * <p>用户取消订单或支付超时关单时，{@code PaymentMapper.closePayment} 会把仍为 CREATED 的支付单
+     * 改为 CLOSED，因此线上会真实产生该状态。它与 SUCCESS / FAILED 一样不可再流转：
+     * 关单后才到达的支付通知不会被改写为成功，避免已取消订单被"迟到支付"复活。</p>
      */
     CLOSED("CLOSED");
 
