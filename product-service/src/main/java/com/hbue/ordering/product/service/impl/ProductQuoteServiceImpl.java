@@ -12,9 +12,11 @@ import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductQuoteService;
 import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
@@ -71,6 +73,11 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
     private final DiningWindowMapper diningWindowMapper;
 
     /**
+     * 餐厅数据 Mapper，用于确认档口所属餐厅仍处于启用状态。
+     */
+    private final RestaurantMapper restaurantMapper;
+
+    /**
      * 分类数据 Mapper。
      */
     private final ProductCategoryMapper productCategoryMapper;
@@ -94,6 +101,7 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
      * 创建商品核价服务。
      *
      * @param diningWindowMapper    窗口数据 Mapper
+     * @param restaurantMapper      餐厅数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper         菜品数据 Mapper
      * @param bloomFilterManager    商品布隆过滤器管理器
@@ -101,12 +109,14 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
      */
     public ProductQuoteServiceImpl(
             DiningWindowMapper diningWindowMapper,
+            RestaurantMapper restaurantMapper,
             ProductCategoryMapper productCategoryMapper,
             ProductMapper productMapper,
             ProductBloomFilterManager bloomFilterManager,
             ProductSpecificationService specifications
     ) {
         this.diningWindowMapper = diningWindowMapper;
+        this.restaurantMapper = restaurantMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
         this.bloomFilterManager = bloomFilterManager;
@@ -131,7 +141,9 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
         if (window == null
                 || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())
                 // 停用与休息都必须拒绝：前端禁用只是体验，下单正确性以这里为准。
-                || !Integer.valueOf(OPEN_STATUS).equals(window.getIsOpen())) {
+                || !Integer.valueOf(OPEN_STATUS).equals(window.getIsOpen())
+                // 所属餐厅停用后，即使档口状态残留为启用也必须拒绝核价，避免对停用餐厅下单。
+                || !restaurantActive(window.getRestaurantId())) {
             // 用窗口状态标记拒绝本次核价，调用方据此中止订单创建。
             return new ProductQuoteResponse(false, List.of());
         }
@@ -196,6 +208,21 @@ public class ProductQuoteServiceImpl implements ProductQuoteService {
         }
 
         return new ProductQuoteResponse(true, quotes);
+    }
+
+    /**
+     * 判断窗口所属餐厅是否可用：未挂餐厅的历史窗口保持可用，挂了餐厅则必须存在且启用。
+     *
+     * <p>餐厅停用后 `/products/restaurants` 不再返回它，若核价仍放行会产生"列表看不到、却能下单"的
+     * 不一致状态，因此这里与菜单读取使用同一判定。</p>
+     *
+     * @param restaurantId 窗口所属餐厅 ID，可为空
+     * @return 可以继续核价时返回 true
+     */
+    private boolean restaurantActive(Long restaurantId) {
+        if (restaurantId == null) return true;
+        RestaurantDO restaurant = restaurantMapper.selectById(restaurantId);
+        return restaurant != null && Integer.valueOf(ACTIVE_STATUS).equals(restaurant.getStatus());
     }
 
     /**

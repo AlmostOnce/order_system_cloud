@@ -195,7 +195,14 @@ public class ProductMenuServiceImpl implements ProductMenuService {
         // 先取启用餐厅的展示排序，让同一餐厅的档口在列表中相邻出现。
         Map<Long, Integer> restaurantSortOrders = loadRestaurantSortOrders();
 
-        List<DiningWindowDO> orderedWindows = new ArrayList<>(windows);
+        // 所属餐厅已停用或不存在的档口不能再出现在顾客列表；未挂餐厅的历史档口保持可见，避免旧数据消失。
+        List<DiningWindowDO> orderedWindows = new ArrayList<>();
+        for (DiningWindowDO window : windows) {
+            if (window.getRestaurantId() != null && !restaurantSortOrders.containsKey(window.getRestaurantId())) {
+                continue;
+            }
+            orderedWindows.add(window);
+        }
         orderedWindows.sort(new Comparator<DiningWindowDO>() {
             @Override
             public int compare(DiningWindowDO left, DiningWindowDO right) {
@@ -356,7 +363,9 @@ public class ProductMenuServiceImpl implements ProductMenuService {
     private WindowMenuVO loadWindowMenu(Long windowId) {
         DiningWindowDO window = diningWindowMapper.selectById(windowId);
         if (window == null
-                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())) {
+                || !Integer.valueOf(ACTIVE_STATUS).equals(window.getStatus())
+                // 所属餐厅停用后不再返回菜单，即使档口状态残留为启用也不能继续浏览或下单。
+                || !restaurantActive(window.getRestaurantId())) {
             return null;
         }
 
@@ -499,6 +508,20 @@ public class ProductMenuServiceImpl implements ProductMenuService {
             return UNRANKED_SORT_ORDER;
         }
         return sortOrder;
+    }
+
+    /**
+     * 判断档口所属餐厅是否可用：未挂餐厅的历史档口保持可用，挂了餐厅则必须存在且启用。
+     *
+     * <p>与核价、窗口列表使用同一口径，避免出现"列表已隐藏但菜单仍可浏览"的入口不一致。</p>
+     *
+     * @param restaurantId 档口所属餐厅 ID，可为空
+     * @return 可以继续返回菜单时返回 true
+     */
+    private boolean restaurantActive(Long restaurantId) {
+        if (restaurantId == null) return true;
+        RestaurantDO restaurant = restaurantMapper.selectById(restaurantId);
+        return restaurant != null && Integer.valueOf(ACTIVE_STATUS).equals(restaurant.getStatus());
     }
 
     /**

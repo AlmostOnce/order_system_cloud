@@ -6,8 +6,10 @@ import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.dto.request.WindowSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.model.DiningWindowDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.impl.ProductAdministrationServiceImpl;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +33,12 @@ class WindowGalleryUpdateTest {
             assertFalse(update.getSqlSet().contains("image_file_key"));
             return 1;
         }).when(mapper).update(isNull(), any(UpdateWrapper.class));
-        ProductAdministrationServiceImpl service = new ProductAdministrationServiceImpl(mapper, null, null,
+        RestaurantMapper restaurants = mock(RestaurantMapper.class);
+        RestaurantDO active = new RestaurantDO();
+        active.setRestaurantId(1L);
+        active.setStatus(1);
+        when(restaurants.selectById(1L)).thenReturn(active);
+        ProductAdministrationServiceImpl service = new ProductAdministrationServiceImpl(mapper, restaurants, null, null,
                 mock(DataScopeService.class), mock(ProductMenuCacheService.class),
                 mock(ProductBloomFilterManager.class), null, mock(ProductSearchOutboxWriter.class));
         WindowSaveRequest request = new WindowSaveRequest();

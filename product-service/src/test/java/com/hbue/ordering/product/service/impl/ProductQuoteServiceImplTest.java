@@ -10,9 +10,11 @@ import com.hbue.ordering.product.cache.ProductBloomFilterManager;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductSpecificationService;
 import com.hbue.ordering.product.vo.ProductSpecificationGroupVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +38,9 @@ class ProductQuoteServiceImplTest {
 
     @Mock
     private DiningWindowMapper diningWindowMapper;
+
+    @Mock
+    private RestaurantMapper restaurantMapper;
 
     /**
      * 规格服务独立mock，原有菜单和核价用例默认无规格配置。
@@ -65,6 +70,7 @@ class ProductQuoteServiceImplTest {
         DiningWindowDO window = new DiningWindowDO();
         window.setWindowId(3L);
         window.setStatus(1);
+        window.setIsOpen(1);
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         when(productMapper.selectList(any())).thenReturn(List.of(
                 product(101L, 3L, "A101", "鸡肉饭", "18.50"),
@@ -109,6 +115,7 @@ class ProductQuoteServiceImplTest {
         DiningWindowDO window = new DiningWindowDO();
         window.setWindowId(3L);
         window.setStatus(1);
+        window.setIsOpen(1);
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         ProductDO product = product(101L, 3L, "A101", "鸡肉饭", "18.50");
         product.setCategoryId(9L);
@@ -127,6 +134,7 @@ class ProductQuoteServiceImplTest {
         DiningWindowDO window = new DiningWindowDO();
         window.setWindowId(3L);
         window.setStatus(1);
+        window.setIsOpen(1);
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         ProductDO product = product(101L, 3L, "A101", "鸡肉饭", "18.50");
         product.setCategoryId(9L);
@@ -163,6 +171,7 @@ class ProductQuoteServiceImplTest {
     void shouldQuoteDifferentSelectionsAndNormalizeIds() {
         DiningWindowDO window = new DiningWindowDO();
         window.setStatus(1);
+        window.setIsOpen(1);
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         when(productMapper.selectList(any())).thenReturn(List.of(product(101L, 3L, "P101", "面", "12.00")));
         when(specifications.loadActive(any())).thenReturn(Map.of(101L, List.of(
@@ -198,6 +207,7 @@ class ProductQuoteServiceImplTest {
     void shouldRejectMissingRequiredSelectionForLegacyRequest() {
         DiningWindowDO window = new DiningWindowDO();
         window.setStatus(1);
+        window.setIsOpen(1);
         when(diningWindowMapper.selectById(3L)).thenReturn(window);
         when(productMapper.selectList(any())).thenReturn(List.of(product(101L, 3L, "P101", "面", "12.00")));
         when(specifications.loadActive(any())).thenReturn(Map.of(101L, List.of(
@@ -226,11 +236,35 @@ class ProductQuoteServiceImplTest {
     private ProductQuoteServiceImpl service() {
         return new ProductQuoteServiceImpl(
                 diningWindowMapper,
+                restaurantMapper,
                 productCategoryMapper,
                 productMapper,
                 bloomFilterManager,
                 specifications
         );
+    }
+
+    /**
+     * 档口状态残留为启用、但所属餐厅已停用时，核价必须拒绝，避免对停用餐厅下单。
+     */
+    @Test
+    void shouldReturnInactiveWhenWindowRestaurantIsDisabled() {
+        DiningWindowDO window = new DiningWindowDO();
+        window.setWindowId(3L);
+        window.setStatus(1);
+        window.setIsOpen(1);
+        window.setRestaurantId(5L);
+        when(diningWindowMapper.selectById(3L)).thenReturn(window);
+        RestaurantDO restaurant = new RestaurantDO();
+        restaurant.setRestaurantId(5L);
+        restaurant.setStatus(0);
+        when(restaurantMapper.selectById(5L)).thenReturn(restaurant);
+
+        ProductQuoteResponse response = service().quote(request(101L));
+
+        assertFalse(response.isWindowActive());
+        assertTrue(response.getProducts().isEmpty());
+        verify(productMapper, never()).selectList(any());
     }
 
     private ProductQuoteRequest request(Long... productIds) {

@@ -16,10 +16,12 @@ import com.hbue.ordering.product.dto.request.WindowSaveRequest;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
 import com.hbue.ordering.product.mapper.ProductCategoryMapper;
 import com.hbue.ordering.product.mapper.ProductMapper;
+import com.hbue.ordering.product.mapper.RestaurantMapper;
 import com.hbue.ordering.product.messaging.ProductSearchOutboxWriter;
 import com.hbue.ordering.product.model.DiningWindowDO;
 import com.hbue.ordering.product.model.ProductCategoryDO;
 import com.hbue.ordering.product.model.ProductDO;
+import com.hbue.ordering.product.model.RestaurantDO;
 import com.hbue.ordering.product.service.ProductAdministrationService;
 import com.hbue.ordering.product.util.WindowImageGallery;
 import com.hbue.ordering.product.vo.ProductAdminVO;
@@ -63,6 +65,11 @@ public class ProductAdministrationServiceImpl
     private final DiningWindowMapper diningWindowMapper;
 
     /**
+     * 餐厅数据 Mapper，用于新建/修改档口前确认目标餐厅存在且启用。
+     */
+    private final RestaurantMapper restaurantMapper;
+
+    /**
      * 分类数据 Mapper。
      */
     private final ProductCategoryMapper productCategoryMapper;
@@ -93,6 +100,7 @@ public class ProductAdministrationServiceImpl
      * 创建目录管理服务。
      *
      * @param diningWindowMapper    窗口数据 Mapper
+     * @param restaurantMapper      餐厅数据 Mapper
      * @param productCategoryMapper 分类数据 Mapper
      * @param productMapper         菜品数据 Mapper
      * @param dataScopeService      数据范围判定服务
@@ -101,6 +109,7 @@ public class ProductAdministrationServiceImpl
      */
     public ProductAdministrationServiceImpl(
             DiningWindowMapper diningWindowMapper,
+            RestaurantMapper restaurantMapper,
             ProductCategoryMapper productCategoryMapper,
             ProductMapper productMapper,
             DataScopeService dataScopeService,
@@ -110,6 +119,7 @@ public class ProductAdministrationServiceImpl
             ProductSearchOutboxWriter searchOutbox
     ) {
         this.diningWindowMapper = diningWindowMapper;
+        this.restaurantMapper = restaurantMapper;
         this.productCategoryMapper = productCategoryMapper;
         this.productMapper = productMapper;
         this.dataScopeService = dataScopeService;
@@ -227,6 +237,8 @@ public class ProductAdministrationServiceImpl
                 operatorId,
                 request.getRestaurantId()
         );
+        // 管辖范围之外还需确认目标餐厅仍处于启用状态，否则会制造停用餐厅下的可下单档口。
+        requireActiveRestaurant(request.getRestaurantId());
 
         DiningWindowDO window = new DiningWindowDO();
         window.setRestaurantId(request.getRestaurantId());
@@ -274,6 +286,8 @@ public class ProductAdministrationServiceImpl
                 operatorId,
                 request.getRestaurantId()
         );
+        // 改挂或保持餐厅都必须满足"餐厅存在且启用"，避免把档口启用状态带回已停用餐厅。
+        requireActiveRestaurant(request.getRestaurantId());
         DiningWindowDO existingWindow = requireWindow(windowId);
         List<String> keys = requestedWindowImages(request, existingWindow, operatorId, windowId);
         // 省略图片字段的普通资料更新不能把较早读取的图片写回，避免覆盖并发完成的图片保存。
@@ -654,6 +668,26 @@ public class ProductAdministrationServiceImpl
             throw notFound("窗口不存在");
         }
         return window;
+    }
+
+    /**
+     * 校验目标餐厅存在且启用，防止在已停用餐厅下新建或恢复可下单档口。
+     *
+     * <p>数据范围校验只能确认操作者能管哪个餐厅，不能证明该餐厅仍启用；餐厅停用后若仍允许把其下
+     * 档口置为启用，学生可从 `/products/windows` 看到并核价下单，而 `/products/restaurants` 又不返回
+     * 该餐厅，形成不一致入口。这里在写入前统一拦截。</p>
+     *
+     * @param restaurantId 目标餐厅 ID
+     * @throws BusinessException 餐厅不存在返回 404，已停用返回 409
+     */
+    private void requireActiveRestaurant(Long restaurantId) {
+        RestaurantDO restaurant = restaurantId == null ? null : restaurantMapper.selectById(restaurantId);
+        if (restaurant == null) {
+            throw notFound("餐厅不存在");
+        }
+        if (!Integer.valueOf(ACTIVE_STATUS).equals(restaurant.getStatus())) {
+            throw conflict("餐厅已停用，不能在该餐厅下维护档口");
+        }
     }
 
     /**
