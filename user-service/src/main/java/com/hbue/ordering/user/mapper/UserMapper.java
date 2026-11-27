@@ -207,6 +207,28 @@ public interface UserMapper extends BaseMapper<UserDO> {
     UserDO selectByUsername(@Param("username") String username);
 
     /**
+     * 为引导创建的管理员账号补写邮箱验证时间。
+     *
+     * <p>引导账号的邮箱来自部署配置，无法走用户端“收验证码证明邮箱归属”的流程。
+     * 历史库中这类账号的 {@code email_verified_at} 可能为空，认证服务会一直返回
+     * “需要验证邮箱”且不下发登录令牌，导致管理端无法登录。</p>
+     *
+     * <p>只在验证时间为空时写入，重复执行无副作用，也不会覆盖用户后续的真实验证时间；
+     * 账号已删除时同样不处理，避免给无效账号补状态。</p>
+     *
+     * @param userId 用户主键
+     * @return 受影响行数，0 表示账号不存在、已删除或已有验证时间
+     */
+    @Update("""
+            UPDATE users
+            SET email_verified_at = CURRENT_TIMESTAMP
+            WHERE user_id = #{userId}
+              AND deleted_at IS NULL
+              AND email_verified_at IS NULL
+            """)
+    int markBootstrapEmailVerified(@Param("userId") Long userId);
+
+    /**
      * 按邮箱精确查询用户。
      *
      * <p>引导流程用它判断邮箱是否已被其他账号占用：被占用时必须显式报错，

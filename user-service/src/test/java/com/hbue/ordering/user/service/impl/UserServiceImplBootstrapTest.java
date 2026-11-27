@@ -80,6 +80,8 @@ class UserServiceImplBootstrapTest {
         assertEquals(Integer.valueOf(1), captor.getValue().getStatus());
         assertEquals(Integer.valueOf(0), captor.getValue().getVersion());
         assertEquals("$2a$10$encoded-hash", captor.getValue().getPasswordHash());
+        // 引导账号的邮箱来自部署配置，创建时就必须标记已验证，否则认证服务不下发令牌。
+        assertNotNull(captor.getValue().getEmailVerifiedAt());
 
         // 系统管理员不需要业务数据范围。
         verify(userDataScopeService, never()).grantPlatformScope(any());
@@ -127,6 +129,42 @@ class UserServiceImplBootstrapTest {
         );
 
         assertFalse(created);
+        verify(userMapper, never()).insert(any(UserDO.class));
+    }
+
+    @Test
+    void shouldBackfillEmailVerificationForExistingBootstrapAccount() {
+        // 历史引导账号可能创建于“引导即标记已验证”的逻辑之前，邮箱验证时间为空。
+        UserDO existingUser = existingUser("admin", "SYSTEM_ADMIN", 1);
+        when(userMapper.selectByUsername("admin")).thenReturn(existingUser);
+
+        boolean created = userService.bootstrapSystemAdmin(
+                "admin",
+                "100000001@qq.com",
+                "admin_password_dev_2026"
+        );
+
+        assertFalse(created);
+        // 必须补写验证时间，否则认证服务持续要求验证邮箱、管理端拿不到令牌。
+        verify(userMapper).markBootstrapEmailVerified(9L);
+        verify(userMapper, never()).insert(any(UserDO.class));
+    }
+
+    @Test
+    void shouldKeepExistingEmailVerificationTime() {
+        // 已有验证时间说明账号已完成验证，引导不能覆盖该时间。
+        UserDO existingUser = existingUser("admin", "SYSTEM_ADMIN", 1);
+        existingUser.setEmailVerifiedAt(java.time.LocalDateTime.of(2026, 11, 1, 10, 0));
+        when(userMapper.selectByUsername("admin")).thenReturn(existingUser);
+
+        boolean created = userService.bootstrapSystemAdmin(
+                "admin",
+                "100000001@qq.com",
+                "admin_password_dev_2026"
+        );
+
+        assertFalse(created);
+        verify(userMapper, never()).markBootstrapEmailVerified(anyLong());
         verify(userMapper, never()).insert(any(UserDO.class));
     }
 

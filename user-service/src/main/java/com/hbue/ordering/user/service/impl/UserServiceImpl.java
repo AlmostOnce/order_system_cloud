@@ -630,6 +630,11 @@ public class UserServiceImpl
                     && existingByUsername.getDeletedAt() == null;
             if (sameActiveRole) {
                 // 已存在启用且未删除的目标账号：跳过且不覆盖密码。
+                // 但历史引导账号可能没有邮箱验证时间，认证服务会因此始终要求验证邮箱、
+                // 不下发登录令牌，管理端无法登录；这里只在为空时补写，重复启动无副作用。
+                if (existingByUsername.getEmailVerifiedAt() == null) {
+                    baseMapper.markBootstrapEmailVerified(existingByUsername.getUserId());
+                }
                 return null;
             }
             // 禁止通过引导把已被占用的账号自动提权。
@@ -665,6 +670,9 @@ public class UserServiceImpl
         LocalDateTime now = LocalDateTime.now();
         userDO.setCreatedAt(now);
         userDO.setUpdatedAt(now);
+        // 引导账号的邮箱来自受信部署配置，无法像自助注册那样收验证码完成验证。
+        // 直接标记已验证，否则登录会被认证服务的“邮箱未验证”分支拦截且不下发令牌。
+        userDO.setEmailVerifiedAt(now);
 
         try {
             // 保存引导账号。
