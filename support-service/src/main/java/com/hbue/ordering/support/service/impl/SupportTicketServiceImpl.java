@@ -38,6 +38,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -47,7 +48,8 @@ import java.util.regex.Pattern;
  * <p>实现 {@link SupportTicketService} 定义的学生侧边界，所有方法都以 JWT 中的
  * 学生内部编号为归属依据，不接受客户端指定他人身份。
  * 创建接口同时使用请求头幂等键与内容摘要，保证网络重试不重复建单、同键不同内容
- * 不会被静默覆盖；补充说明使用工单内幂等键。数据权限在 SQL 条件中绑定学生编号，
+ * 不会被静默覆盖；补充说明把幂等键限定在单张工单内，并在重放时比对正文与图片，
+ * 不一致返回 409。数据权限在 SQL 条件中绑定学生编号，
  * 越权访问统一返回「反馈不存在」，不暴露他人工单是否存在。</p>
  *
  * @author order-system
@@ -266,7 +268,8 @@ public class SupportTicketServiceImpl implements SupportTicketService {
      * 学生补充说明。
      *
      * <p>只有未关闭工单可以补充。请求头幂等键与工单内部主键共同保证同一次重试
-     * 只写入一条消息；已写入时直接返回当前详情，不重复刷新工单更新时间。</p>
+     * 只写入一条消息；已写入时先比对正文与图片，确认是同一次提交才返回当前详情，
+     * 内容不一致则返回 409，避免复用幂等键的新内容被静默丢弃。</p>
      *
      * @param customerId 学生内部用户编号
      * @param ticketId   公开工单标识
@@ -284,7 +287,7 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         // 不能因为当前已关闭而把一次已经成功的补充误报为 409。
         SupportTicketMessageDO existing = messageMapper.byRequest(ticket.getId(), normalizedKey);
         if (existing != null) {
-            return loadCustomerDetail(ticketId, customerId);
+            return replayExistingMessage(existing, request, ticketId, customerId);
         }
         if (!SupportStatus.PENDING.getCode().equals(ticket.getStatus())
                 && !SupportStatus.PROCESSING.getCode().equals(ticket.getStatus())) {
@@ -305,14 +308,69 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         try {
             messageMapper.insert(message);
         } catch (DuplicateKeyException exception) {
-            // 并发重试同一补充说明时返回当前详情，不把唯一键冲突暴露给客户端。
-            if (messageMapper.byRequest(ticket.getId(), normalizedKey) == null) {
+            // 并发重试同一补充说明时回查获胜记录；仍需比对内容，避免同键不同正文被静默吞掉。
+            SupportTicketMessageDO winner = messageMapper.byRequest(ticket.getId(), normalizedKey);
+            if (winner == null) {
                 throw exception;
             }
-            return loadCustomerDetail(ticketId, customerId);
+            return replayExistingMessage(winner, request, ticketId, customerId);
         }
         ticketMapper.touchUpdatedAt(ticket.getId());
         return loadCustomerDetail(ticketId, customerId);
+    }
+
+    /**
+     * 处理幂等键已命中的补充说明重放。
+     *
+     * <p>只有规整后的正文与图片键完全一致，才视为同一次提交的重复请求并返回当前详情；
+     * 任一不一致说明客户端复用了幂等键提交另一条内容，直接返回旧详情会让新内容永久丢失，
+     * 因此返回 409 让客户端换用新的幂等键重新提交。</p>
+     *
+     * <p>比对不调用文件服务：重放请求不应再次校验图片归属，也不应因为图片已过期或已被
+     * 清理而把一次成功提交误报为失败。图片键只做去空白与去重后按顺序比较。</p>
+     *
+     * @param existing   已写入的消息记录
+     * @param request    本次重放请求
+     * @param ticketId   公开工单标识
+     * @param customerId 学生内部用户编号
+     * @return 当前工单详情
+     * @throws BusinessException 幂等键已用于其它内容时抛出 409
+     */
+    private SupportTicketDetailVO replayExistingMessage(SupportTicketMessageDO existing,
+                                                        AddSupportMessageRequest request,
+                                                        String ticketId, Long customerId) {
+        String replayContent = request == null ? null : trimToNull(request.getContent());
+        List<String> replayImages = request == null ? List.of()
+                : normalizeImageKeysForComparison(request.getImageFileKeys());
+        boolean sameContent = Objects.equals(replayContent, existing.getContent());
+        boolean sameImages = replayImages.equals(imageService.parseKeys(existing.getImageFileKeys()));
+        if (!sameContent || !sameImages) {
+            throw new BusinessException(CommonErrorCode.CONFLICT,
+                    "幂等键已用于其它补充内容，请刷新后重试");
+        }
+        return loadCustomerDetail(ticketId, customerId);
+    }
+
+    /**
+     * 规整重放比对用的图片键：去除首尾空白、按首次出现去重并保持提交顺序。
+     *
+     * <p>与 {@link SupportImageService#validateAndNormalize} 的规整规则一致，但跳过文件归属
+     * 校验，保证重放比对是纯本地操作、可重复执行且不受上游文件服务状态影响。</p>
+     *
+     * @param rawKeys 客户端提交的图片键
+     * @return 规整后的不可变列表
+     */
+    private List<String> normalizeImageKeysForComparison(List<String> rawKeys) {
+        if (rawKeys == null || rawKeys.isEmpty()) {
+            return List.of();
+        }
+        java.util.LinkedHashSet<String> unique = new java.util.LinkedHashSet<>();
+        for (String rawKey : rawKeys) {
+            if (rawKey != null && !rawKey.isBlank()) {
+                unique.add(rawKey.trim());
+            }
+        }
+        return List.copyOf(unique);
     }
 
     /**
