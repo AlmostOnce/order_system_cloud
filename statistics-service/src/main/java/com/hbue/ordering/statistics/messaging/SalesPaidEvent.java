@@ -9,6 +9,10 @@ import java.util.List;
  * RocketMQ 已支付事件的统计侧反序列化契约。
  *
  * <p>V1 仅含订单 ID，历史兼容时由订单内部接口补齐；V2 自带完整购买快照，减少新消息消费对订单服务的同步依赖。</p>
+ *
+ * <p>销量口径：事件在支付成功时投递且每单只投递一次，统计侧只累加原始购买份数（毛销量）；
+ * 退款不会产生回冲事件，也不会减少已累计的销量。推荐服务的热榜同步读取同一口径，
+ * 因此本事件刻意不携带退款信息，退款口径变更只能由统计服务统一发布新契约。</p>
  */
 public record SalesPaidEvent(int version, String eventId, Long orderId, LocalDateTime paidAt,
                              Long windowId, List<Item> items) {

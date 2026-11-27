@@ -22,7 +22,7 @@ public class RecommendationHotProductDO {
      */
     private Long windowId;
     /**
-     * 统计服务定义的累计已支付销量。
+     * 统计服务定义的累计已支付销量（毛销量，退款不冲减）。
      */
     private Long sales;
     /**

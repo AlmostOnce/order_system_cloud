@@ -132,6 +132,9 @@ public class RecommendationAlgorithmImpl implements RecommendationAlgorithm {
         Map<Long, Map<String, Double>> vectors = contentVectors(featureById.values());
         Map<String, Double> profile = userProfile(vectors, itemInterest);
         Map<Long, Double> queryScores = searchScores(searches, now, restaurantId);
+        // 热度分直接使用统计服务的毛销量口径（已支付份数，退款不冲减）；上方用户兴趣分则用
+        // "购买份数 - 退款份数"的净量。两者口径不同是有意为之：热榜衡量菜品整体受欢迎程度，
+        // 兴趣刻画用户实际消费，不能互相替代，也不应在本服务内改算统计口径。
         Map<Long, Long> salesByProduct = new HashMap<>();
         long maximumSales = 0;
         for (RecommendationHotProductDO item : hot) {
