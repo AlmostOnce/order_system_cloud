@@ -55,6 +55,19 @@ public interface RestaurantAdministrationService {
     );
 
     /**
+     * 仅绑定门面图片，不覆盖餐厅名称、位置等其他字段。
+     *
+     * <p>餐厅经理可维护本餐厅门面图，总经理可维护任意餐厅；文件键必须是当前操作者
+     * 上传且未绑定到其他业务的受控图片。图片属公开展示字段，越权统一返回 403。</p>
+     *
+     * @param operatorId   当前登录操作者 ID
+     * @param restaurantId 餐厅 ID
+     * @param fileKey      已上传的受控图片文件键
+     * @return 更新后的餐厅
+     */
+    RestaurantAdminVO updateRestaurantImage(Long operatorId, Long restaurantId, String fileKey);
+
+    /**
      * 停用餐厅；餐厅下仍有启用档口时返回 409。
      *
      * @param operatorId   当前登录操作者 ID

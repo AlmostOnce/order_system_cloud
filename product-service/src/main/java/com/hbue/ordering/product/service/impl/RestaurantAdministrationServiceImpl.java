@@ -209,8 +209,36 @@ public class RestaurantAdministrationServiceImpl
      */
     @Override
     @Transactional
-    public void disableRestaurant(Long operatorId, Long restaurantId) {
+    public RestaurantAdminVO updateRestaurantImage(
+            Long operatorId,
+            Long restaurantId,
+            String fileKey
+    ) {
         validateId(restaurantId);
+        // 先确认餐厅存在，再校验范围，避免对不存在的餐厅返回越权提示。
+        requireRestaurant(restaurantId);
+        dataScopeService.checkRestaurantAccess(operatorId, restaurantId);
+        // 图片必须由当前操作者上传且业务类型匹配，防止引用他人上传的文件。
+        int updated = restaurantMapper.update(null, new UpdateWrapper<RestaurantDO>()
+                .eq("restaurant_id", restaurantId)
+                .set("image_file_key", images.requireImageKey(
+                        fileKey,
+                        operatorId,
+                        "RESTAURANT_IMAGE",
+                        restaurantId
+                )));
+        if (updated != 1) {
+            throw notFound("餐厅不存在");
+        }
+        return toRestaurantVO(requireRestaurant(restaurantId));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public void disableRestaurant(Long operatorId, Long restaurantId) {        validateId(restaurantId);
         requirePlatformScope(operatorId, "停用餐厅");
         RestaurantDO existing = requireRestaurant(restaurantId);
         List<DiningWindowDO> attachedWindows = diningWindowMapper.selectList(new QueryWrapper<DiningWindowDO>().eq("restaurant_id", restaurantId));

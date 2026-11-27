@@ -6,6 +6,7 @@ import com.hbue.ordering.common.core.error.CommonErrorCode;
 import com.hbue.ordering.common.core.exception.BusinessException;
 import com.hbue.ordering.common.core.scope.DataScopeService;
 import com.hbue.ordering.common.core.scope.UserScopeSnapshot;
+import com.hbue.ordering.common.web.media.ManagedImageClient;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
 import com.hbue.ordering.product.cache.ProductMenuCacheService;
 import com.hbue.ordering.product.mapper.DiningWindowMapper;
@@ -54,6 +55,9 @@ class RestaurantAdministrationServiceImplTest {
 
     @Mock
     private ProductMenuCacheService menuCacheService;
+
+    @Mock
+    private ManagedImageClient images;
 
     @Test
     void shouldRejectCreateWithoutPlatformScope() {
@@ -244,12 +248,60 @@ class RestaurantAdministrationServiceImplTest {
         verify(menuCacheService).evictActiveWindows();
     }
 
+    /**
+     * 餐厅图片绑定只更新图片列，并要求文件归属当前操作者与餐厅业务类型。
+     */
+    @Test
+    void shouldBindRestaurantImageWithinScope() {
+        String fileKey = "a".repeat(32);
+        when(restaurantMapper.selectById(RESTAURANT_ID))
+                .thenReturn(restaurant(RESTAURANT_ID, "R0001", 10));
+        when(images.requireImageKey(fileKey, OPERATOR_ID, "RESTAURANT_IMAGE", RESTAURANT_ID))
+                .thenReturn(fileKey);
+        when(restaurantMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+
+        RestaurantAdminVO result = service().updateRestaurantImage(
+                OPERATOR_ID,
+                RESTAURANT_ID,
+                fileKey
+        );
+
+        assertNotNull(result);
+        verify(dataScopeService).checkRestaurantAccess(OPERATOR_ID, RESTAURANT_ID);
+        verify(images).requireImageKey(
+                fileKey,
+                OPERATOR_ID,
+                "RESTAURANT_IMAGE",
+                RESTAURANT_ID
+        );
+    }
+
+    /**
+     * 餐厅越权时必须在写入前返回 403，不能只依赖前端隐藏入口。
+     */
+    @Test
+    void shouldRejectRestaurantImageOutsideScope() {
+        when(restaurantMapper.selectById(5L))
+                .thenReturn(restaurant(5L, "R0005", 0));
+        doThrow(new BusinessException(CommonErrorCode.FORBIDDEN, "无权操作该餐厅"))
+                .when(dataScopeService)
+                .checkRestaurantAccess(OPERATOR_ID, 5L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service().updateRestaurantImage(OPERATOR_ID, 5L, "a".repeat(32))
+        );
+
+        assertEquals(CommonErrorCode.FORBIDDEN.code(), exception.getErrorCode().code());
+        verify(restaurantMapper, never()).update(any(), any());
+    }
+
     private RestaurantAdministrationService service() {
         return new RestaurantAdministrationServiceImpl(
                 restaurantMapper,
                 diningWindowMapper,
                 dataScopeService,
-                org.mockito.Mockito.mock(com.hbue.ordering.common.web.media.ManagedImageClient.class),
+                images,
                 org.mockito.Mockito.mock(com.hbue.ordering.product.messaging.ProductSearchOutboxWriter.class),
                 menuCacheService
         );

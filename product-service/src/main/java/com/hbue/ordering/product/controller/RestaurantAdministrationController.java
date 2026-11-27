@@ -1,6 +1,7 @@
 package com.hbue.ordering.product.controller;
 
 import com.hbue.ordering.common.response.ApiResponse;
+import com.hbue.ordering.common.web.media.ImageFileRequest;
 import com.hbue.ordering.product.dto.request.RestaurantSaveRequest;
 import com.hbue.ordering.product.service.RestaurantAdministrationService;
 import com.hbue.ordering.product.vo.RestaurantAdminVO;
@@ -101,6 +102,32 @@ public class RestaurantAdministrationController {
                         operatorId(jwt),
                         restaurantId,
                         request
+                )
+        );
+    }
+
+    /**
+     * 仅更新餐厅门面图片，不覆盖名称等字段。
+     *
+     * <p>角色门禁沿用餐厅管理；Service 会校验餐厅是否在操作者范围内，并要求文件键
+     * 由当前操作者上传且业务类型为 {@code RESTAURANT_IMAGE}。</p>
+     *
+     * @param jwt          当前登录操作者 JWT
+     * @param restaurantId 餐厅 ID
+     * @param request      受控图片文件键
+     * @return 更新后的餐厅
+     */
+    @PutMapping("/{restaurantId}/image")
+    public ApiResponse<RestaurantAdminVO> updateRestaurantImage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("restaurantId") @Positive Long restaurantId,
+            @Valid @RequestBody ImageFileRequest request
+    ) {
+        return ApiResponse.success(
+                restaurantAdministrationService.updateRestaurantImage(
+                        operatorId(jwt),
+                        restaurantId,
+                        request.fileKey()
                 )
         );
     }
