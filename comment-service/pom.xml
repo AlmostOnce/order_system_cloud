@@ -40,6 +40,30 @@
             <artifactId>common-redis</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
+        <!--
+            Redisson 分布式锁客户端。
+            DiscussionGuard 依赖 common-redis 的 DistributedLockService，而该组件仅在
+            运行期存在 RedissonClient 时才会被 RedissonInfrastructureConfig 注册；
+            common-redis 将 Redisson 声明为 optional 不会传递，因此这里必须显式引入。
+            Spring Boot 3.5 需排除 redisson-spring-data-41，改用 redisson-spring-data-35，
+            避免与 Spring Data Redis 3.5 的自动装配版本冲突。
+        -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>${redisson.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.redisson</groupId>
+                    <artifactId>redisson-spring-data-41</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-data-35</artifactId>
+            <version>${redisson.version}</version>
+        </dependency>
         <dependency>
             <groupId>com.hbue.ordering</groupId>
             <artifactId>order-api</artifactId>
