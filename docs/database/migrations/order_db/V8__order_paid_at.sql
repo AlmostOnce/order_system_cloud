@@ -24,7 +24,7 @@ DEALLOCATE PREPARE paid_at_statement;
 -- 历史仅采用真实成功支付记录；若同一订单存在多笔成功流水，取最早成功时间作为首次付款时刻。
 UPDATE order_db.orders AS o
     JOIN (
-    SELECT order_id, MIN (success_time) AS paid_at
+    SELECT order_id, MIN(success_time) AS paid_at
     FROM payment_db.payments
     WHERE status = 'SUCCESS'
     AND success_time IS NOT NULL
